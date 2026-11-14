@@ -508,8 +508,8 @@ uint32_t I2cClose(uint8_t instance) noexcept {
 uint32_t I2cTransmit(uint8_t instance, uint8_t address, std::span<const uint8_t> tx,
                      uint32_t timeout_ms) noexcept {
   I2C_HandleTypeDef& h = I2cs()[instance];
-  // The HAL's transmit takes a non-const pointer but only reads through it (DEV-002).
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast): DEV-002
+  // The HAL's transmit takes a non-const pointer but only reads through it.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast): DEV-002, the HAL lacks the const
   auto* data = const_cast<uint8_t*>(tx.data());
   const HAL_StatusTypeDef s =
       HAL_I2C_Master_Transmit(&h, Address8(address), data, Size16(tx.size()), timeout_ms);

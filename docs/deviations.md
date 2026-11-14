@@ -29,9 +29,10 @@ that stops the build.
 | DEV-002 | Rule 8.2.3 (casts that remove const) | the bus boundary file, one call | `HAL_I2C_Master_Transmit` takes `uint8_t*` for data it only reads; the contract hands the port `std::span<const uint8_t>`, and a write cannot be split into copies | One call site; the pinned HAL only reads through the pointer; the tests check the bytes reach the bus and the caller's buffer is unchanged |
 
 The records are in `deviations/deviations.yml`. A marker `// codeql::misra_deviation_next_line(DEV-001)` stands
-on the line before each finding it covers; a clang-tidy suppression of a check the MISRA matrix relies on names its
-record (`// NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast): DEV-002`). A marker that covers nothing, an
-unknown id or a lapsed record (`review_by` passed) fails the scan.
+on the line before each finding it covers. A clang-tidy suppression of a check the MISRA matrix relies on names its
+record inside the comment, never as its first or last word (a bare id there would be read as a CodeQL marker):
+`// NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast): DEV-002, the HAL lacks the const`. A marker that covers
+nothing, an unknown id or a lapsed record (`review_by` passed) fails the scan.
 
 ## Findings avoided by design
 
