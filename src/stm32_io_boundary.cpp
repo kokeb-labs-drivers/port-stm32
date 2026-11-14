@@ -200,7 +200,7 @@ void PortClock(GpioPort port) noexcept {
 }
 
 std::array<uint16_t, kPorts>& Claims() noexcept {
-  // codeql::misra_deviation_next_line(DEV-KBP-STM32-002)
+  // codeql::misra_deviation_next_line(DEV-001)
   static std::array<uint16_t, kPorts> claims{};
   return claims;
 }
@@ -212,7 +212,7 @@ struct ExtiSlot {
 };
 
 std::array<ExtiSlot, kLines>& Exti() noexcept {
-  // codeql::misra_deviation_next_line(DEV-KBP-STM32-002)
+  // codeql::misra_deviation_next_line(DEV-001)
   static std::array<ExtiSlot, kLines> lines{};
   return lines;
 }
@@ -245,7 +245,7 @@ struct AdcSlot {
 };
 
 std::array<AdcSlot, kAdcs>& Adcs() noexcept {
-  // codeql::misra_deviation_next_line(DEV-KBP-STM32-002)
+  // codeql::misra_deviation_next_line(DEV-001)
   static std::array<AdcSlot, kAdcs> adcs{};
   return adcs;
 }
@@ -411,13 +411,13 @@ struct TimerSlot {
 };
 
 std::array<TimerSlot, kTimers>& Timers() noexcept {
-  // codeql::misra_deviation_next_line(DEV-KBP-STM32-002)
+  // codeql::misra_deviation_next_line(DEV-001)
   static std::array<TimerSlot, kTimers> timers{};
   return timers;
 }
 
 std::array<uint32_t, kTimers>& Wraps() noexcept {
-  // codeql::misra_deviation_next_line(DEV-KBP-STM32-002)
+  // codeql::misra_deviation_next_line(DEV-001)
   static std::array<uint32_t, kTimers> wraps{};
   return wraps;
 }

@@ -366,13 +366,13 @@ namespace family = bxcan;
 #endif
 
 std::array<family::Handle, kControllers>& Handles() noexcept {
-  // codeql::misra_deviation_next_line(DEV-KBP-STM32-002)
+  // codeql::misra_deviation_next_line(DEV-001)
   static std::array<family::Handle, kControllers> handles{};
   return handles;
 }
 
 std::array<bool, kControllers>& Owned() noexcept {
-  // codeql::misra_deviation_next_line(DEV-KBP-STM32-002)
+  // codeql::misra_deviation_next_line(DEV-001)
   static std::array<bool, kControllers> owned{};
   return owned;
 }

@@ -25,11 +25,14 @@ that stops the build.
 
 | Id | Guideline | Where | Why | How the risk is held |
 | --- | --- | --- | --- | --- |
-| DEV-KBP-STM32-002 | Rule 6.7.1 (local variables with static storage) | the bus, io and CAN boundary files | The HAL keeps each peripheral's state in a handle that outlives each call and is reached from the interrupt handlers, and no HAL type may reach a public header: the handles live in one function-local static table per peripheral (also the pin claims, EXTI lines, ADC locks, timer wrap counters, CAN owners) | One accessor per table in an anonymous namespace; entries written by the owner's `EnsureReady()`, cleared by `Release()`; a second owner refused with `Busy`; entries shared with an interrupt changed with it masked; every accessor exercised by the host tests |
+| DEV-001 | Rule 6.7.1 (local variables with static storage) | the bus, io and CAN boundary files | The HAL keeps each peripheral's state in a handle that outlives each call and is reached from the interrupt handlers, and no HAL type may reach a public header: the handles live in one function-local static table per peripheral (also the pin claims, EXTI lines, ADC locks, timer wrap counters, CAN owners) | One accessor per table in an anonymous namespace; entries written by the owner's `EnsureReady()`, cleared by `Release()`; a second owner refused with `Busy`; entries shared with an interrupt changed with it masked; every accessor exercised by the host tests |
+| DEV-002 | Rule 8.2.3 (casts that remove const) | the bus boundary file, one call | `HAL_I2C_Master_Transmit` takes `uint8_t*` for data it only reads; the contract hands the port `std::span<const uint8_t>`, and a write cannot be split into copies | One call site; the pinned HAL only reads through the pointer; the tests check the bytes reach the bus and the caller's buffer is unchanged |
 
-The record is in `deviations/deviations.yml`; a marker `// codeql::misra_deviation_next_line(<id>)` stands on the
-line before each finding it covers. A marker that covers nothing, an unknown id or a lapsed record (`review_by`
-passed) fails the scan.
+The records are in `deviations/deviations.yml`. A marker `// codeql::misra_deviation_next_line(DEV-001)` stands
+on the line before each finding it covers. A clang-tidy suppression of a check the MISRA matrix relies on names its
+record inside the comment, never as its first or last word (a bare id there would be read as a CodeQL marker):
+`// NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast): DEV-002, the HAL lacks the const`. A marker that covers
+nothing, an unknown id or a lapsed record (`review_by` passed) fails the scan.
 
 ## Findings avoided by design
 
@@ -48,5 +51,4 @@ passed) fails the scan.
 | Rule 6.5.1 (external linkage not declared in a header) | The interrupt vectors in `src/stm32_vectors_boundary.cpp`; `HandleExtiIrq`, `HandleClockIrq` | The vector names are fixed by the startup file's table, which declares them weak; the entry points are declared in `irq.hpp` |
 | Rule 10.1.1 (parameter could be const) | The ADC conversion helper | `HAL_ADC_GetValue` takes a non-const handle on F4 |
 
-The one `const_cast` of the port (the data of `HAL_I2C_Master_Transmit`, which the HAL only reads) raises no finding
-of the scanned guidelines and needs no record. Advisory findings are reported and do not block.
+Advisory findings are reported and do not block.

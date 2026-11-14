@@ -3,7 +3,7 @@
 # file; a marker in code, `// codeql::misra_deviation_next_line(<id>)`, cites the id on the line before each
 # finding it covers. The platform-free logic has no record.
 deviations:
-  - id: DEV-KBP-STM32-002
+  - id: DEV-001
     check: misra/Rule 6.7.1
     where: >-
       src/stm32_bus_boundary.cpp
@@ -26,3 +26,21 @@ deviations:
     approved_by: maintainer
     date: 2026-11-14
     review_by: 2027-11-14
+  - id: DEV-002
+    check: misra/Rule 8.2.3
+    where: >-
+      src/stm32_bus_boundary.cpp
+    reason: >-
+      HAL_I2C_Master_Transmit takes the data to send as `uint8_t*` although it only reads it; the port's
+      I2cBus::Write receives the caller's bytes as std::span<const uint8_t>, as the kb::iface contract requires. A
+      copy into a writable buffer would bound the length of a write by that buffer (a write is one START to STOP
+      transaction and cannot be split) and cost a copy per transfer. clang-tidy's cppcoreguidelines-pro-type-const-cast
+      reports the cast; the CodeQL query of Rule 8.2.3 does not, and the suppression cites this record.
+    mitigation: >-
+      One call site (I2cTransmit). The pinned HAL (docs/soup.md) only reads through the pointer in its blocking
+      transmit (each byte is copied from *pBuffPtr to TXDR or DR). The host tests check that the bytes reach the bus
+      unchanged and that the caller's buffer is not written.
+    approved_by: maintainer
+    date: 2026-11-14
+    review_by: 2027-11-14
+
