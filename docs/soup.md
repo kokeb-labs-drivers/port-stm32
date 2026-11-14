@@ -27,7 +27,7 @@ headers reach the port as system headers. Known anomalies the port handles:
 | --- | --- |
 | One `HAL_I2C_ERROR_AF` bit for address and data NACK | One `HAL_I2C_IsDeviceReady` probe tells them apart |
 | `HAL_I2C_Mem_Read` takes a 1- or 2-byte register address | `WriteRead()` with more is `Unsupported` |
-| `HAL_I2C_Master_Transmit` takes a non-const data pointer | One `const_cast` at that call; the HAL only reads the data |
+| `HAL_I2C_Master_Transmit` takes a non-const data pointer | One `const_cast` at that call (DEV-002); the HAL only reads the data |
 | The HAL I2C has no bus recovery | The port clocks SCL itself on the pins as GPIO |
 | HAL lengths are `uint16_t` | I2C refuses spans above 65535 bytes; SPI and UART transfer in chunks |
 | `HAL_UART_IRQHandler` and its callbacks expect the HAL's interrupt receive state machine | The port's own handler reads the data and flag registers |

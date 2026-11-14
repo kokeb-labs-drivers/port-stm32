@@ -43,7 +43,7 @@ constexpr std::size_t kLpuartSlot = 11U;
 
 // --- I2C -----------------------------------------------------------------------------------------
 std::array<I2C_HandleTypeDef, kI2cs>& I2cs() noexcept {
-  // codeql::misra_deviation_next_line(DEV-KBP-STM32-002)
+  // codeql::misra_deviation_next_line(DEV-001)
   static std::array<I2C_HandleTypeDef, kI2cs> handles{};
   return handles;
 }
@@ -96,7 +96,7 @@ void I2cClock(uint8_t instance) noexcept {
 
 // --- SPI -----------------------------------------------------------------------------------------
 std::array<SPI_HandleTypeDef, kSpis>& Spis() noexcept {
-  // codeql::misra_deviation_next_line(DEV-KBP-STM32-002)
+  // codeql::misra_deviation_next_line(DEV-001)
   static std::array<SPI_HandleTypeDef, kSpis> handles{};
   return handles;
 }
@@ -197,7 +197,7 @@ struct UartSlot {
 };
 
 std::array<UartSlot, kUarts>& Uarts() noexcept {
-  // codeql::misra_deviation_next_line(DEV-KBP-STM32-002)
+  // codeql::misra_deviation_next_line(DEV-001)
   static std::array<UartSlot, kUarts> slots{};
   return slots;
 }
@@ -508,8 +508,9 @@ uint32_t I2cClose(uint8_t instance) noexcept {
 uint32_t I2cTransmit(uint8_t instance, uint8_t address, std::span<const uint8_t> tx,
                      uint32_t timeout_ms) noexcept {
   I2C_HandleTypeDef& h = I2cs()[instance];
-  // The HAL's transmit takes a non-const pointer but only reads through it.
-  auto* data = const_cast<uint8_t*>(tx.data()); // NOLINT(cppcoreguidelines-pro-type-const-cast)
+  // The HAL's transmit takes a non-const pointer but only reads through it (DEV-002).
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast): DEV-002
+  auto* data = const_cast<uint8_t*>(tx.data());
   const HAL_StatusTypeDef s =
       HAL_I2C_Master_Transmit(&h, Address8(address), data, Size16(tx.size()), timeout_ms);
   return Code(s, h.ErrorCode);
