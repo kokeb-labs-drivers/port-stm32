@@ -1,0 +1,28 @@
+---
+# The all_drivers firmware (the port, the pinned STM32Cube HAL and CMSIS, kb-core and three drivers) compiled and
+# linked with the Arm GNU toolchain for one device of each family: STM32G474, STM32H743, STM32F446 and STM32L476.
+# Calls kokeb-labs/ci-tools ru-cmake-matrix (its toolchain file per core; the example adds the link options).
+name: STM32 families
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  targets:
+    name: all_drivers per family
+    uses: kokeb-labs/ci-tools/.github/workflows/ru-cmake-matrix.yml@v1
+    permissions:
+      contents: read
+    with:
+      submodules: "true"
+      source_dir: examples/stm32
+      build_type: Release
+      max_parallel: "4"
+      matrix: >-
+        [{"name": "stm32g4", "toolchain": "arm-none-eabi", "core": "cortex-m4f", "cmake_args": "-DEXAMPLE_BOARD=g4"},
+         {"name": "stm32h7", "toolchain": "arm-none-eabi", "core": "cortex-m7f", "cmake_args": "-DEXAMPLE_BOARD=h7"},
+         {"name": "stm32f4", "toolchain": "arm-none-eabi", "core": "cortex-m4f", "cmake_args": "-DEXAMPLE_BOARD=f4"},
+         {"name": "stm32l4", "toolchain": "arm-none-eabi", "core": "cortex-m4f", "cmake_args": "-DEXAMPLE_BOARD=l4"}]

@@ -1,0 +1,81 @@
+---
+# port-stm32 CI: every check, then the one gate a ruleset can require ("CI gate / gate"). Each check is its own
+# caller of a kokeb-labs/ci-tools reusable workflow at @v1 (v1.19 or later). Level high (kb-core ADR-0011).
+name: CI
+
+on:
+  push:
+    branches: [main, 'release/*']
+    tags: ['v*']
+  pull_request:
+    branches: [main, 'release/*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  host:
+    name: Host
+    uses: ./.github/workflows/ci-host.yml
+
+  quality:
+    name: Host quality
+    uses: ./.github/workflows/ci-quality.yml
+
+  misra:
+    name: MISRA
+    uses: ./.github/workflows/ci-misra.yml
+
+  lint:
+    name: C++ lint
+    uses: ./.github/workflows/ci-cpp-lint.yml
+
+  cross:
+    name: Cross-compile
+    uses: ./.github/workflows/ci-cross-build.yml
+
+  targets:
+    name: STM32 families
+    uses: ./.github/workflows/ci-cmake-matrix.yml
+
+  layering:
+    name: Layering
+    uses: ./.github/workflows/ci-layering.yml
+
+  pins:
+    name: Pin hygiene
+    uses: ./.github/workflows/ci-pins.yml
+
+  docs:
+    name: Docs
+    uses: ./.github/workflows/ci-docs.yml
+    permissions:
+      contents: write  # the reusable workflow's publish job declares it; with deploy: false nothing is published
+
+  handbook:
+    name: Handbook
+    uses: ./.github/workflows/ci-handbook.yml
+
+  dco:
+    name: DCO
+    if: ${{ github.event_name == 'pull_request' }}
+    uses: ./.github/workflows/ci-dco.yml
+    permissions:
+      contents: read
+      pull-requests: read
+
+  ci-gate:
+    name: CI gate
+    needs: [host, quality, misra, lint, cross, targets, layering, pins, docs, handbook, dco]
+    if: always()
+    uses: kokeb-labs/ci-tools/.github/workflows/ru-ci-gate.yml@v1
+    permissions:
+      contents: read
+    with:
+      needs_json: ${{ toJSON(needs) }}
+      # The DCO check runs on pull requests only; on a push it is skipped.
+      allow_skipped: dco

@@ -1,0 +1,23 @@
+---
+# Documentation: the drift checks and the strict MkDocs build on the shared theme. The repository is private, so
+# nothing is published. Calls kokeb-labs/ci-tools ru-mkdocs-publish.
+name: Docs
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    uses: kokeb-labs/ci-tools/.github/workflows/ru-mkdocs-publish.yml@v1
+    permissions:
+      contents: write  # the publish job declares it; deploy: false publishes nothing
+    with:
+      mkdocs_config: _config/mkdocs.yml
+      deploy: false
+      # Links to the private organisation and the not yet published site cannot be checked from CI.
+      link_check: false
+      lighthouse: false
+      screenshots: false

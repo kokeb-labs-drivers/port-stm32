@@ -1,0 +1,25 @@
+---
+# The layering rules (tools/layering/rules.yml): STM32Cube HAL headers only in the boundary files, kb-core only through
+# its public headers, no platform macro above the boundary, no `virtual`; and the poison build of the platform-free
+# code. Calls kokeb-labs/ci-tools ru-layering.
+name: Layering
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  layering:
+    name: Includes and poison build
+    uses: kokeb-labs/ci-tools/.github/workflows/ru-layering.yml@v1
+    permissions:
+      contents: read
+    with:
+      rules: tools/layering/rules.yml
+      boundary_files: deviations/boundary-files.yml
+      poison_cmake_args: "-DKB_PORT_STM32_BUILD_TESTS=ON"
+      build_target: kb_port_stm32_platform_free
+      # The fakes carry the HAL's header names on purpose; the examples are built by ci-cmake-matrix.yml.
+      exclude: "tests/fakes/** examples/**"

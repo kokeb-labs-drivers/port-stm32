@@ -1,0 +1,21 @@
+---
+# Coverage, sanitizers and complexity of the port's own code at level high (kb-core ADR-0011). Calls
+# kokeb-labs/ci-tools ru-host-quality.
+name: Host quality
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Quality gates
+    uses: kokeb-labs/ci-tools/.github/workflows/ru-host-quality.yml@v1
+    permissions:
+      contents: read
+    with:
+      level: high
+      cmake_args: "-DKB_PORT_STM32_BUILD_TESTS=ON"
+      library_paths: "inc src"

@@ -1,0 +1,28 @@
+# MISRA C++:2023 deviation records of the STM32 port (format: kb-core deviations/README.md), read by the MISRA
+# workflow (ci-misra.yml, input repo_deviations). Each record names only files of boundary-files.yml next to this
+# file; a marker in code, `// codeql::misra_deviation_next_line(<id>)`, cites the id on the line before each
+# finding it covers. The platform-free logic has no record.
+deviations:
+  - id: DEV-KBP-STM32-002
+    check: misra/Rule 6.7.1
+    where: >-
+      src/stm32_bus_boundary.cpp
+      src/stm32_io_boundary.cpp
+      src/stm32_can_boundary.cpp
+    reason: >-
+      The HAL keeps each peripheral's state in a handle (I2C_HandleTypeDef, SPI_HandleTypeDef,
+      UART_HandleTypeDef, ADC_HandleTypeDef, TIM_HandleTypeDef, FDCAN_HandleTypeDef or CAN_HandleTypeDef) that
+      must outlive every call of the port object that opened it and be reachable from the interrupt handlers,
+      and no HAL type may appear in the port's public headers. The boundary files keep the handles in one table
+      per peripheral, indexed by the instance number; a function-local static is the form with a defined
+      initialisation point (constant initialisation, no static-order dependency). The pin claims, the EXTI
+      line table, the ADC locks, the timer wrap counters and the CAN owners are tables of the same kind.
+    mitigation: >-
+      Each table is reached only through one accessor in an anonymous namespace of its boundary file; every
+      entry is written by the owning object's EnsureReady() and cleared by its Release(); a second object on the
+      same hardware is refused (port code 0xF5, kb::Status::Busy); entries shared with an interrupt are changed
+      only with that interrupt masked or inside a kb::rtos critical section; the host tests exercise every
+      accessor over the HAL fakes, including the refusal of a second owner and the release paths.
+    approved_by: maintainer
+    date: 2026-11-14
+    review_by: 2027-11-14

@@ -1,0 +1,6 @@
+build*/
+/site/
+__pycache__/
+.cache/
+*.elf
+*.map

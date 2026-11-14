@@ -1,0 +1,24 @@
+---
+# GCC and Clang builds and the host tests (the port over the HAL fakes), then clang-tidy and cppcheck over the
+# port's own code. Calls kokeb-labs/ci-tools ru-host-ci.
+name: Host
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  host:
+    name: Host build, tests and analysis
+    uses: kokeb-labs/ci-tools/.github/workflows/ru-host-ci.yml@v1
+    permissions:
+      contents: read
+    with:
+      cmake_args: "-DKB_PORT_STM32_BUILD_TESTS=ON"
+      tidy_paths: "^(inc|src)/"
+      clang_tidy_config: "_config/.clang-tidy"
+      # The kb-core copy is checked by kb-core's CI; test fakes and compile-fail tests are test code.
+      exclude_paths: "(^|/)(third_party|drivers|examples|tests)/"
+      fail_on_findings: true

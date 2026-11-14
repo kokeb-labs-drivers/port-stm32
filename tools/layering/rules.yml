@@ -1,0 +1,45 @@
+# Zones of the STM32 port and what each may include (ci-tools ru-layering, tools/layering/layering.py). Paths are
+# globs from the repository root. "sdk" is a header named in sdk_headers, allowed only in a file listed in
+# deviations/boundary-files.yml (kb-core ADR-0007, ADR-0011).
+zones:
+  # The port: public headers and sources. It sees kb-core only through the public kb/<part>/ headers.
+  port:
+    paths: ["inc/**", "src/**"]
+    may_include: [port, kb_utils, kb_rtos, kb_interfaces, std_subset, sdk]
+  # Host tests: the port, kb-core's host port and harness, and the HAL fakes (named like the HAL headers).
+  tests:
+    paths: ["tests/**"]
+    may_include: [port, kb_utils, kb_rtos, kb_interfaces, kb_host, kb_harness, sdk_fakes, tests, std_any, sdk_any]
+  # Bare-metal applications: they may call the HAL in their own files (clock tree, SysTick).
+  examples:
+    paths: ["examples/**"]
+    may_include: [port, kb_utils, kb_rtos, kb_interfaces, drivers, examples, std_any, sdk_any]
+  # The pinned kb-core copy and the pinned drivers: checked by their own CI.
+  kb_core:
+    paths: ["third_party/kb-core/**"]
+    may_include: [kb_core, std_any, sdk_any]
+  drivers:
+    paths: ["drivers/**"]
+    may_include: [drivers, std_any, sdk_any]
+external_zones: [kb_core, drivers]
+public_headers:
+  kb_utils: "third_party/kb-core/lib/utils/inc/kb/utils/**"
+  kb_rtos: "third_party/kb-core/lib/rtos/inc/kb/rtos/**"
+  kb_interfaces: "third_party/kb-core/lib/interfaces/inc/kb/interfaces/**"
+  kb_host: "third_party/kb-core/lib/interfaces/host/inc/kb/interfaces/host/**"
+  kb_harness: "third_party/kb-core/tests/harness/**"
+# The HAL fakes (tests/fakes/stm32) carry the HAL's header names; the check excludes that folder (ci-layering.yml)
+# so a HAL name always means the HAL, and the tests reach the fakes' own control headers through this group.
+header_groups:
+  sdk_fakes: ["fake_stm32_hal.hpp", "stm32_hal_fake.h"]
+boundary_files: deviations/boundary-files.yml
+sdk_headers:
+  - "stm32*"
+  - "core_cm*"
+  - "cmsis_*"
+  - "system_stm32*"
+forbidden_keywords: [virtual]
+platform_macros: ["STM32*", USE_HAL_DRIVER, "KB_PORT_STM32_G4", "KB_PORT_STM32_H7", "KB_PORT_STM32_F4",
+                  "KB_PORT_STM32_L4", "FDCAN*", "CAN1", "CAN2", "CAN3", "GPIO*", "LPUART*", "USART*", "UART*",
+                  "TIM*", "ADC*", "I2C*", "SPI*"]
+denylist_file: null

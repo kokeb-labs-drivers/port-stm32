@@ -1,0 +1,7 @@
+---
+# What this repository is, for the handbook check (kokeb-labs/ci-tools ru-handbook-check, handbook KB-REPO-002).
+# An MCU port is a library at level high, like kb-core (kb-core ADR-0011): its calls are bounded building blocks,
+# never a product's safety layer. No virtual-function boundary folder is listed, so `virtual` is rejected everywhere.
+handbook: "1.0"
+kind: library
+level: high

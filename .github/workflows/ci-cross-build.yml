@@ -1,0 +1,19 @@
+---
+# The port's platform-free logic compiled for Cortex-M cores with Arm GCC and kb-core's strict flags: the code
+# above the SDK seam is portable. Calls kokeb-labs/ci-tools ru-cross-build.
+name: Cross-compile
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  cross:
+    name: Cortex-M
+    uses: kokeb-labs/ci-tools/.github/workflows/ru-cross-build.yml@v1
+    permissions:
+      contents: read
+    with:
+      build_target: kb_port_stm32_platform_free

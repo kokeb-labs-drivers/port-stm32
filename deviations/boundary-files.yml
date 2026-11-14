@@ -1,0 +1,16 @@
+# The only files of the STM32 port that may include an STM32Cube HAL or CMSIS header (kb-core ADR-0001, ADR-0007,
+# ADR-0011). The layering check (ci-layering.yml, rules tools/layering/rules.yml) fails on a HAL include anywhere
+# else and on a listed file that is missing. Every MISRA record in deviations.yml names files from this list only.
+boundary_files:
+  - path: src/stm32_bus_boundary.cpp
+    sdk: stm32cube-hal
+    status: present
+  - path: src/stm32_io_boundary.cpp
+    sdk: stm32cube-hal
+    status: present
+  - path: src/stm32_can_boundary.cpp
+    sdk: stm32cube-hal
+    status: present
+  - path: src/stm32_vectors_boundary.cpp
+    sdk: stm32cube-hal
+    status: present

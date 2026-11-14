@@ -1,0 +1,239 @@
+// SpiBus and SpiDevice over the fake HAL SPI: the prescaler, chip select around frames, per-device
+// mode and clock, chunks, timeouts with abort and re-initialisation, and every refusal. Test code.
+// SPDX-License-Identifier: MIT Copyright (c) 2026 The port-stm32 authors
+#include <vector>
+
+#include "support.hpp"
+
+namespace {
+constexpr int kPortA = 0;
+constexpr int kPortB = 1;
+
+stm::SpiBusConfig BusConfig() {
+  stm::SpiBusConfig c{};
+  c.instance = 1U;
+  c.sck = PinId{GpioPort::A, 5U, 5U};
+  c.miso = PinId{GpioPort::A, 6U, 5U};
+  c.mosi = PinId{GpioPort::A, 7U, 5U};
+  return c;
+}
+
+stm::SpiDeviceConfig DevConfig() {
+  stm::SpiDeviceConfig c{};
+  c.cs = PinId{GpioPort::B, 6U, 0U};
+  c.mode = 3U;
+  c.clock_hz = 4000000U;
+  return c;
+}
+
+void CheckCsLow(void*) {
+  KB_CHECK_EQ(fake::Driven(1, 6), 0); // chip select held low during the frame
+}
+} // namespace
+
+KB_TEST("spi prescaler: the fastest SCK at or below the asked clock") {
+  bool ok = false;
+  KB_CHECK_EQ(stm::SpiPrescalerExponent(160000000U, 80000000U, ok), 0U);
+  KB_CHECK(ok);
+  KB_CHECK_EQ(stm::SpiPrescalerExponent(160000000U, 4000000U, ok), 5U); // 160 / 64 = 2.5 MHz
+  KB_CHECK(ok);
+  KB_CHECK_EQ(stm::SpiPrescalerExponent(160000000U, 625000U, ok), 7U);
+  KB_CHECK(ok);
+  static_cast<void>(stm::SpiPrescalerExponent(160000000U, 600000U, ok)); // 256 is not enough
+  KB_CHECK(!ok);
+  static_cast<void>(stm::SpiPrescalerExponent(160000000U, 0U, ok));
+  KB_CHECK(!ok);
+  static_cast<void>(stm::SpiPrescalerExponent(0U, 1000U, ok));
+  KB_CHECK(!ok);
+}
+
+KB_TEST("spi: bad bus and device configurations are refused") {
+  Fresh();
+  stm::SpiBusConfig b = BusConfig();
+  b.instance = 9U;
+  stm::SpiBus none{b};
+  KB_CHECK_EQ(none.EnsureReady(), Status::InvalidArgument);
+  b = BusConfig();
+  b.mosi = PinId{};
+  b.miso = PinId{};
+  stm::SpiBus no_data{b};
+  KB_CHECK_EQ(no_data.EnsureReady(), Status::InvalidArgument);
+  b = BusConfig();
+  b.miso.pin = 16U;
+  stm::SpiBus bad_pin{b};
+  KB_CHECK_EQ(bad_pin.EnsureReady(), Status::InvalidArgument);
+  stm::SpiBus bus{BusConfig()};
+  const auto status = [&bus](stm::SpiDeviceConfig c) {
+    stm::SpiDevice dev{bus, c};
+    return dev.EnsureReady();
+  };
+  stm::SpiDeviceConfig d = DevConfig();
+  d.mode = 4U;
+  KB_CHECK_EQ(status(d), Status::InvalidArgument);
+  d = DevConfig();
+  d.cs = PinId{};
+  KB_CHECK_EQ(status(d), Status::InvalidArgument);
+  d = DevConfig();
+  d.clock_hz = 0U;
+  KB_CHECK_EQ(status(d), Status::InvalidArgument);
+  d = DevConfig();
+  d.timeout = kb::Milliseconds{0U};
+  KB_CHECK_EQ(status(d), Status::InvalidArgument);
+  fake::Fail("HAL_SPI_Init", HAL_ERROR);
+  KB_CHECK_EQ(status(DevConfig()), Status::NotReady);
+  KB_CHECK(FailedWith(bus.LastError(), Status::Fault, Code(HAL_ERROR)));
+  d = DevConfig();
+  d.clock_hz = 1000U; // below what a prescaler of 256 reaches
+  KB_CHECK_EQ(status(d), Status::InvalidArgument);
+}
+
+KB_TEST("spi: a frame drives chip select around it at the device's mode and clock") {
+  Fresh();
+  stm::SpiBus bus{BusConfig()};
+  stm::SpiDevice dev{bus, DevConfig()};
+  const std::array<uint8_t, 5> tx{0x80U, 1U, 2U, 3U, 4U};
+  std::array<uint8_t, 5> rx{};
+  KB_CHECK_EQ(dev.Transfer(tx, rx), Status::NotReady);
+  KB_REQUIRE(dev.EnsureReady() == Status::Ok);
+  KB_CHECK_EQ(dev.EnsureReady(), Status::Ok);
+  KB_CHECK(bus.IsReady());
+  KB_CHECK_EQ(bus.KernelClockHz(), 160000000U);
+  KB_CHECK_EQ(dev.ActualClockHz(), 2500000U);
+  KB_CHECK_EQ(fake::Driven(kPortB, 6), 1); // released
+  KB_CHECK_EQ(fake::ModeOf(kPortA, 5), GPIO_MODE_AF_PP);
+  const std::array<uint8_t, 5> reply{0x0FU, 0x11U, 0x22U, 0x33U, 0x44U};
+  fake::SpiReply(reply);
+  fake::Hook("HAL_SPI_TransmitReceive", CheckCsLow, nullptr);
+  KB_CHECK_EQ(dev.Transfer(tx, rx), Status::Ok);
+  KB_CHECK_EQ(rx[4], 0x44U);
+  KB_CHECK_EQ(fake::Driven(kPortB, 6), 1);
+  KB_CHECK_EQ(fake::SpiInit().CLKPolarity, SPI_POLARITY_HIGH);
+  KB_CHECK_EQ(fake::SpiInit().CLKPhase, SPI_PHASE_2EDGE);
+  KB_CHECK_EQ(fake::SpiInit().BaudRatePrescaler, SPI_BAUDRATEPRESCALER_64);
+  const uint32_t inits = fake::Calls("HAL_SPI_Init");
+  KB_CHECK_EQ(dev.Transfer(tx, rx), Status::Ok);
+  KB_CHECK_EQ(fake::Calls("HAL_SPI_Init"), inits); // same device: no re-initialisation
+  KB_CHECK_EQ(dev.Stats().transfers, 2U);
+  KB_CHECK(dev.LastError().IsOk());
+  KB_CHECK(bus.LastError().IsOk());
+  KB_CHECK(bus.Config().instance == 1U);
+}
+
+KB_TEST("spi: two devices with different modes switch the peripheral; write-only and read-only "
+        "frames") {
+  Fresh();
+  stm::SpiBus bus{BusConfig()};
+  stm::SpiDevice a{bus, DevConfig()};
+  stm::SpiDeviceConfig other = DevConfig();
+  other.cs = PinId{GpioPort::B, 7U, 0U};
+  other.mode = 0U;
+  stm::SpiDevice b{bus, other};
+  KB_REQUIRE(a.EnsureReady() == Status::Ok);
+  KB_REQUIRE(b.EnsureReady() == Status::Ok);
+  const std::array<uint8_t, 2> tx{0xAAU, 0xBBU};
+  KB_CHECK_EQ(a.Transfer(tx, std::span<uint8_t>{}), Status::Ok);
+  KB_CHECK_EQ(fake::SpiInit().CLKPolarity, SPI_POLARITY_HIGH);
+  std::array<uint8_t, 2> rx{0x55U, 0x55U};
+  KB_CHECK_EQ(b.Transfer(std::span<const uint8_t>{}, rx), Status::Ok);
+  KB_CHECK_EQ(fake::SpiInit().CLKPolarity, SPI_POLARITY_LOW);
+  KB_CHECK_EQ(fake::SpiSent()[2], 0x00U); // zeros clocked out for the read
+  KB_CHECK_EQ(fake::Calls("HAL_SPI_Transmit"), 1U);
+  KB_CHECK_EQ(fake::Calls("HAL_SPI_Receive"), 1U);
+  KB_CHECK_EQ(a.Transfer(tx, std::span<uint8_t>{}), Status::Ok);
+  KB_CHECK_EQ(fake::SpiInit().CLKPolarity, SPI_POLARITY_HIGH);
+  stm::SpiDevice same_cs{bus, DevConfig()};
+  KB_CHECK_EQ(same_cs.EnsureReady(), Status::Busy); // the chip select pin belongs to `a`
+}
+
+KB_TEST("spi: frames above 65535 bytes are chunked; spans are checked") {
+  Fresh();
+  stm::SpiBus bus{BusConfig()};
+  stm::SpiDevice dev{bus, DevConfig()};
+  KB_REQUIRE(dev.EnsureReady() == Status::Ok);
+  std::vector<uint8_t> tx(70000U, 0x5AU);
+  KB_CHECK_EQ(dev.Transfer(tx, std::span<uint8_t>{}), Status::Ok);
+  KB_CHECK_EQ(fake::SpiTransfers(), 2U);
+  const std::array<uint8_t, 2> two{};
+  std::array<uint8_t, 3> three{};
+  KB_CHECK_EQ(dev.Transfer(two, three), Status::InvalidArgument);
+  KB_CHECK_EQ(dev.Transfer(std::span<const uint8_t>{}, std::span<uint8_t>{}),
+              Status::InvalidArgument);
+}
+
+KB_TEST("spi: a timeout aborts and re-initialises before the next frame; errors are BusError") {
+  Fresh();
+  stm::SpiBus bus{BusConfig()};
+  stm::SpiDevice dev{bus, DevConfig()};
+  KB_REQUIRE(dev.EnsureReady() == Status::Ok);
+  const std::array<uint8_t, 2> tx{1U, 2U};
+  fake::Fail("HAL_SPI_Transmit", HAL_TIMEOUT);
+  KB_CHECK_EQ(dev.Transfer(tx, std::span<uint8_t>{}), Status::Timeout);
+  KB_CHECK_EQ(fake::Calls("HAL_SPI_Abort"), 1U);
+  KB_CHECK_EQ(dev.Stats().rebuilds, 1U);
+  KB_CHECK_EQ(fake::Driven(kPortB, 6), 1); // released after the failure too
+  const uint32_t inits = fake::Calls("HAL_SPI_Init");
+  KB_CHECK_EQ(dev.Transfer(tx, std::span<uint8_t>{}), Status::Ok);
+  KB_CHECK_EQ(fake::Calls("HAL_SPI_Init"), inits + 1U);
+  fake::Fail("HAL_SPI_Transmit", HAL_TIMEOUT);
+  fake::Fail("HAL_SPI_Abort", HAL_ERROR); // the abort failing too is reported in ErrorCode
+  KB_CHECK_EQ(dev.Transfer(tx, std::span<uint8_t>{}), Status::Timeout);
+  KB_CHECK(FailedWith(dev.LastError(), Status::Timeout, Code(HAL_TIMEOUT, HAL_SPI_ERROR_ABORT)));
+  KB_CHECK_EQ(dev.Transfer(tx, std::span<uint8_t>{}), Status::Ok);
+  fake::Fail("HAL_SPI_Transmit", HAL_ERROR, HAL_SPI_ERROR_OVR);
+  KB_CHECK_EQ(dev.Transfer(tx, std::span<uint8_t>{}), Status::BusError);
+  KB_CHECK(FailedWith(dev.LastError(), Status::BusError, Code(HAL_ERROR, HAL_SPI_ERROR_OVR)));
+  fake::Fail("HAL_SPI_DeInit", HAL_BUSY); // the next selection fails
+  stm::SpiDeviceConfig other = DevConfig();
+  other.cs = PinId{GpioPort::B, 7U, 0U};
+  other.mode = 0U;
+  stm::SpiDevice b{bus, other};
+  KB_REQUIRE(b.EnsureReady() == Status::Ok);
+  KB_CHECK_EQ(b.Transfer(tx, std::span<uint8_t>{}), Status::Busy);
+  KB_CHECK_EQ(dev.Stats().failures, 3U);
+}
+
+KB_TEST("spi: SetClockHz before and after EnsureReady; Release") {
+  Fresh();
+  stm::SpiBus bus{BusConfig()};
+  stm::SpiDevice dev{bus, DevConfig()};
+  KB_CHECK_EQ(dev.SetClockHz(0U), Status::InvalidArgument);
+  KB_CHECK_EQ(dev.SetClockHz(1000000U), Status::Ok);
+  KB_REQUIRE(dev.EnsureReady() == Status::Ok);
+  KB_CHECK_EQ(dev.ActualClockHz(), 625000U);
+  KB_CHECK_EQ(dev.SetClockHz(20000000U), Status::Ok);
+  KB_CHECK_EQ(dev.ActualClockHz(), 20000000U);
+  KB_CHECK(dev.Config().clock_hz == 20000000U);
+  KB_CHECK_EQ(dev.SetClockHz(100U), Status::InvalidArgument);
+  const std::array<uint8_t, 1> tx{1U};
+  KB_CHECK_EQ(dev.Transfer(tx, std::span<uint8_t>{}), Status::Ok);
+  KB_CHECK_EQ(fake::SpiInit().BaudRatePrescaler, SPI_BAUDRATEPRESCALER_8);
+  KB_CHECK_EQ(dev.Release(), Status::Ok);
+  KB_CHECK_EQ(fake::ModeOf(kPortB, 6), GPIO_MODE_ANALOG);
+  fake::Fail("HAL_SPI_DeInit", HAL_ERROR);
+  KB_CHECK_EQ(bus.Release(), Status::Fault);
+}
+
+KB_TEST("spi: a held bus makes a transfer Busy") {
+  Fresh();
+  stm::SpiBus bus{BusConfig()};
+  stm::SpiDevice dev{bus, DevConfig()};
+  KB_REQUIRE(dev.EnsureReady() == Status::Ok);
+  KB_REQUIRE(bus.TryLockFor(kb::Milliseconds{1U}));
+  const std::array<uint8_t, 1> tx{1U};
+  KB_CHECK_EQ(dev.Transfer(tx, std::span<uint8_t>{}), Status::Busy);
+  KB_CHECK_EQ(dev.Stats().lock_timeouts, 1U);
+  bus.Unlock();
+  KB_CHECK_EQ(dev.Transfer(tx, std::span<uint8_t>{}), Status::Ok);
+}
+
+KB_TEST("spi: one bus object per instance; free again after Release or a failed start") {
+  Fresh();
+  stm::SpiBus first{BusConfig()};
+  stm::SpiBus second{BusConfig()};
+  fake::Fail("HAL_SPI_Init", HAL_ERROR);
+  KB_CHECK_EQ(first.EnsureReady(), Status::Fault);
+  KB_REQUIRE(second.EnsureReady() == Status::Ok);
+  KB_CHECK_EQ(first.EnsureReady(), Status::Busy);
+  KB_CHECK_EQ(second.Release(), Status::Ok);
+  KB_CHECK_EQ(first.EnsureReady(), Status::Ok);
+}

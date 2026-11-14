@@ -1,0 +1,21 @@
+---
+# clang-format 20 and clang-tidy 20 with the org configuration in _config/. Calls kokeb-labs/ci-tools ru-cpp-lint.
+name: C++ lint
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: clang-format and clang-tidy
+    uses: kokeb-labs/ci-tools/.github/workflows/ru-cpp-lint.yml@v1
+    permissions:
+      contents: read
+    with:
+      clang_version: "20"
+      cmake_args: "-DKB_PORT_STM32_BUILD_TESTS=ON"
+      # kb-core and the drivers have their own CI; ci-cmake-matrix.yml builds the examples; tests are test code.
+      ignore: "build|.git|third_party|drivers|examples|tests"

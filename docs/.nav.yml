@@ -1,0 +1,24 @@
+---
+# Site navigation (mkdocs-awesome-nav): every page, in reading order.
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Families: families.md
+  - Peripherals:
+      - I2C: peripherals/i2c.md
+      - SPI: peripherals/spi.md
+      - UART: peripherals/uart.md
+      - GPIO and EXTI: peripherals/gpio.md
+      - ADC: peripherals/adc.md
+      - PWM (TIM): peripherals/pwm.md
+      - CAN (FDCAN, bxCAN): peripherals/can.md
+      - Clock, delay and log: peripherals/time-log.md
+      - Interrupts: peripherals/interrupts.md
+  - Error mapping: error-mapping.md
+  - Thread safety: thread-safety.md
+  - Examples: examples.md
+  - Quality:
+      - Testing and CI: testing.md
+      - MISRA boundary and deviations: deviations.md
+      - SOUP and kb-core: soup.md
+  - Changelog: changelog.md
