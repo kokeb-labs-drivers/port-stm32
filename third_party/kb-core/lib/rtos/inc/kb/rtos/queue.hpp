@@ -57,32 +57,56 @@ public:
 
   /** @brief Copies `item` to the back, waiting at most `timeout` for room. */
   [[nodiscard]] bool SendFor(const T& item, Milliseconds timeout) noexcept {
-    return created_ && backend::QueueSend(storage_, &item, ToTicksAtLeast(timeout));
+    bool done = false;
+    if (created_) {
+      done = backend::QueueSend(storage_, &item, ToTicksAtLeast(timeout));
+    }
+    return done;
   }
 
   /** @brief Copies `item` to the back if there is room now. */
   [[nodiscard]] bool TrySend(const T& item) noexcept {
-    return created_ && backend::QueueSend(storage_, &item, 0U);
+    bool done = false;
+    if (created_) {
+      done = backend::QueueSend(storage_, &item, 0U);
+    }
+    return done;
   }
 
   /** @brief Copies `item` to the back from an interrupt handler (ISR-safe); false when full. */
   [[nodiscard]] bool SendFromIsr(const T& item) noexcept {
-    return created_ && backend::QueueSendFromIsr(storage_, &item);
+    bool done = false;
+    if (created_) {
+      done = backend::QueueSendFromIsr(storage_, &item);
+    }
+    return done;
   }
 
   /** @brief Moves the front item into `item`, waiting at most `timeout` for one. */
   [[nodiscard]] bool ReceiveFor(T& item, Milliseconds timeout) noexcept {
-    return created_ && backend::QueueReceive(storage_, &item, ToTicksAtLeast(timeout));
+    bool done = false;
+    if (created_) {
+      done = backend::QueueReceive(storage_, &item, ToTicksAtLeast(timeout));
+    }
+    return done;
   }
 
   /** @brief Moves the front item into `item` if there is one now. */
   [[nodiscard]] bool TryReceive(T& item) noexcept {
-    return created_ && backend::QueueReceive(storage_, &item, 0U);
+    bool done = false;
+    if (created_) {
+      done = backend::QueueReceive(storage_, &item, 0U);
+    }
+    return done;
   }
 
   /** @brief Items waiting; 0 when not created. */
   [[nodiscard]] std::size_t Size() noexcept {
-    return created_ ? backend::QueueSize(storage_) : 0U;
+    std::size_t value = 0U;
+    if (created_) {
+      value = backend::QueueSize(storage_);
+    }
+    return value;
   }
 
   /** @brief The capacity N. */

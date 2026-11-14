@@ -9,6 +9,10 @@ third_party/kb-core.lock (any difference stops the build), and this tool is the 
     python3 tools/kb_core_snapshot.py --check                     # the copy equals the lock (CI and pre-flight)
     python3 tools/kb_core_snapshot.py --update /path/to/kb-core   # copy from a checkout at its HEAD commit
 
+--update refuses a commit that is not on kb-core's origin/main. This copy is the interim method while kb-core is
+private and untagged; docs/kb-core-dependency.md is the plan that replaces it (a release tag, find_package or
+FetchContent, no copy).
+
 The lock records the source repository, the commit and the SHA-256 of every file.
 
 SPDX-License-Identifier: MIT
@@ -27,18 +31,16 @@ ROOT = Path(__file__).resolve().parent.parent
 DEST = ROOT / "third_party" / "kb-core"
 LOCK = ROOT / "third_party" / "kb-core.lock"
 REPO = "https://github.com/kokeb-labs/kb-core"
+# The branch the copied commit must be on: the port never builds against an unmerged kb-core state.
+BRANCH = "main"
 # What the port builds against: the CMake entry and modules, the three parts it uses, the RTOS-free and FreeRTOS
 # backends, the host test port and the test harness. Documentation, drivers and the other parts are not copied.
 PATHS = (
     "LICENSE",
     "CMakeLists.txt",
-    "cmake/kbConfig.cmake.in",
-    "cmake/kb_build_settings.cmake",
-    "cmake/kb_drivers.cmake",
-    "cmake/kb_mcu_gates.cmake",
-    "cmake/kb_part.cmake",
-    "cmake/kb_testing.cmake",
-    "cmake/kb_version.cmake",
+    # The whole cmake/ folder: the root CMakeLists.txt includes modules from it by name, and a hand-kept list of
+    # them broke when kb-core added one (cmake/kb_tool_tests.cmake).
+    "cmake",
     "lib/utils/CMakeLists.txt",
     "lib/utils/inc",
     "lib/rtos/CMakeLists.txt",
@@ -78,7 +80,7 @@ def read_lock() -> tuple[str, dict[str, str]]:
     for line in LOCK.read_text(encoding="utf-8").splitlines():
         if line.startswith("commit "):
             commit = line.split()[1]
-        elif line and not line.startswith(("#", "repo ")):
+        elif line and not line.startswith(("#", "repo ", "branch ")):
             digest, rel = line.split(None, 1)
             entries[rel] = digest
     return commit, entries
@@ -102,6 +104,11 @@ def check() -> int:
 def update(src: Path) -> int:
     commit = subprocess.run(["git", "-C", str(src), "rev-parse", "HEAD"], check=True, capture_output=True,
                             text=True).stdout.strip()
+    on_main = subprocess.run(["git", "-C", str(src), "merge-base", "--is-ancestor", commit, f"origin/{BRANCH}"],
+                             capture_output=True, text=True)
+    if on_main.returncode != 0:
+        raise SystemExit(f"kb_core_snapshot: {commit[:12]} is not on kb-core origin/{BRANCH} (fetch, then check out a "
+                         f"commit of {BRANCH})")
     dirty = subprocess.run(["git", "-C", str(src), "status", "--porcelain", "--", *PATHS], check=True,
                            capture_output=True, text=True).stdout.strip()
     if dirty:
@@ -110,7 +117,7 @@ def update(src: Path) -> int:
     if DEST.exists():
         shutil.rmtree(DEST)
     lines = ["# The kb-core files in third_party/kb-core, written by tools/kb_core_snapshot.py --update. Never edit.",
-             f"repo {REPO}", f"commit {commit}"]
+             f"repo {REPO}", f"branch {BRANCH}", f"commit {commit}"]
     for rel in rels:
         (DEST / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src / rel, DEST / rel)

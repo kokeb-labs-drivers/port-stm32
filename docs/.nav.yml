@@ -21,4 +21,5 @@ nav:
       - Testing and CI: testing.md
       - MISRA boundary and deviations: deviations.md
       - SOUP and kb-core: soup.md
+      - kb-core dependency plan: kb-core-dependency.md
   - Changelog: changelog.md

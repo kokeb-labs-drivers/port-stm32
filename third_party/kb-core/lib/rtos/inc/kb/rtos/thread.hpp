@@ -34,6 +34,7 @@
 #ifndef KB_RTOS_THREAD_HPP
 #define KB_RTOS_THREAD_HPP
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <concepts>
@@ -220,7 +221,7 @@ private:
 
   void record(uint64_t step_us) noexcept {
     constexpr uint64_t kMax = std::numeric_limits<uint32_t>::max();
-    const auto clipped = static_cast<uint32_t>((step_us > kMax) ? kMax : step_us);
+    const auto clipped = static_cast<uint32_t>(std::min(step_us, kMax));
     if (clipped > max_step_us_.load(std::memory_order_relaxed)) {
       max_step_us_.store(clipped, std::memory_order_relaxed);
     }

@@ -54,7 +54,11 @@ public:
 
   /** @brief Sets `bits` from an interrupt handler (ISR-safe). */
   [[nodiscard]] bool SetFromIsr(uint32_t bits) noexcept {
-    return created_ && backend::EventFlagsSetFromIsr(storage_, bits & kAllFlags);
+    bool done = false;
+    if (created_) {
+      done = backend::EventFlagsSetFromIsr(storage_, bits & kAllFlags);
+    }
+    return done;
   }
 
   /** @brief Clears `bits`. */
@@ -66,7 +70,11 @@ public:
 
   /** @brief The flags now; 0 when not created. */
   [[nodiscard]] uint32_t Get() noexcept {
-    return created_ ? backend::EventFlagsGet(storage_) : 0U;
+    uint32_t value = 0U;
+    if (created_) {
+      value = backend::EventFlagsGet(storage_);
+    }
+    return value;
   }
 
   /** @brief Waits at most `timeout` for any of `bits`; returns the flags seen (see the file note).

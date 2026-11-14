@@ -68,6 +68,16 @@ inline void ReportFailureValues(const char* file, int line, const char* what, lo
   static_cast<void>(std::printf("    FAIL %s:%d: %s (%lld vs %lld)\n", file, line, what, a, b));
 }
 
+/**
+ * A value the compiler cannot see through: tests pass their inputs through Rt() so that constexpr
+ * functions run at run time (and are measured by coverage) instead of being folded at compile time.
+ */
+template <typename T>
+T Rt(T value) {
+  volatile T copy = value;
+  return copy;
+}
+
 } // namespace kb_test
 
 #define KB_TEST_CONCAT2(a, b) a##b

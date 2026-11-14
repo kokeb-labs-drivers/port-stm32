@@ -36,20 +36,20 @@ headers reach the port as system headers. Known anomalies the port handles:
 
 ## kb-core
 
-kb-core (`kokeb-labs/kb-core`) is a private repository of another organisation, so this repository's CI cannot
-fetch it. The port therefore carries an **unchanged copy** of the kb-core files it builds against in
-`third_party/kb-core`, at the commit recorded in `third_party/kb-core.lock` with the SHA-256 of every file:
+kb-core (`kokeb-labs/kb-core`) is private and not yet tagged, so this repository's CI cannot fetch it. The port
+therefore carries an **unchanged copy** of the kb-core files it builds against in `third_party/kb-core`, at a commit
+of kb-core's `main` recorded in `third_party/kb-core.lock` with the SHA-256 of every file:
 
-- `tools/kb_core_snapshot.py --update <kb-core checkout>` is the only writer (it refuses a checkout with local
-  changes in the copied paths);
+- `tools/kb_core_snapshot.py --update <kb-core checkout>` is the only writer; it refuses a commit that is not on
+  kb-core's `origin/main` and a checkout with local changes in the copied paths;
 - `tools/kb_core_snapshot.py --check` and every CMake configure re-hash every file against the lock; a difference
   stops the build;
 - the port uses kb-core only through its public `kb/<part>/` headers (kb-core ADR-0007), checked by the layering
   rules (`tools/layering/rules.yml`).
 
-When kb-core becomes readable from this organisation's CI, the copy is replaced by a submodule pinned to a kb-core
-release tag, with no change to the port's code.
+The copy is interim. [How the port depends on kb-core](kb-core-dependency.md) is the plan that replaces it with a
+release tag fetched by `find_package` or `FetchContent`.
 
 | kb-core | Commit | Parts used |
 | --- | --- | --- |
-| `m3-interfaces` (the M3 contracts) | see `third_party/kb-core.lock` | `utils`, `rtos` (none or FreeRTOS backend on target, none on the host), `interfaces` |
+| `main` (M1 to M5: utils, rtos, interfaces, handlers) | `efd67da9b3c8`, see `third_party/kb-core.lock` | `utils`, `rtos` (none or FreeRTOS backend on target, none on the host), `interfaces` |

@@ -55,63 +55,6 @@ concept UartTxDrain = UartPort<U> && requires(U& port, kb::Milliseconds t) {
   { port.WaitTxDone(t) } noexcept -> std::same_as<kb::Status>;
 };
 
-/** @brief The function table behind a UartPortRef. */
-struct UartPortOps {
-  kb::Status (*ensure_ready)(void* self) noexcept;                       ///< EnsureReady.
-  kb::Status (*write)(void* self, std::span<const uint8_t> tx) noexcept; ///< Write.
-  kb::Result<std::size_t> (*read)(void* self, std::span<uint8_t> rx,
-                                  kb::Milliseconds t) noexcept; ///< Read.
-  kb::Status (*flush_input)(void* self) noexcept;               ///< FlushInput.
-};
-
-namespace detail {
-/// The UartPortOps of an implementation type T.
-template <UartPort T>
-inline constexpr UartPortOps kUartPortOps{
-    // codeql::misra_deviation_next_line(DEV-KBC-004)
-    .ensure_ready = [](void* self) noexcept { return static_cast<T*>(self)->EnsureReady(); },
-    .write = [](void* self,
-                // codeql::misra_deviation_next_line(DEV-KBC-004)
-                std::span<const uint8_t> tx) noexcept { return static_cast<T*>(self)->Write(tx); },
-    .read = [](void* self, std::span<uint8_t> rx,
-               // codeql::misra_deviation_next_line(DEV-KBC-004)
-               kb::Milliseconds t) noexcept { return static_cast<T*>(self)->Read(rx, t); },
-    // codeql::misra_deviation_next_line(DEV-KBC-004)
-    .flush_input = [](void* self) noexcept { return static_cast<T*>(self)->FlushInput(); },
-};
-} // namespace detail
-
-/** @brief A non-owning, run-time chosen reference to any UartPort. */
-class UartPortRef {
-public:
-  /** @brief Refers to `port`, which must outlive the reference. */
-  template <UartPort T>
-  constexpr explicit UartPortRef(T& port) noexcept : self_(&port), ops_(&detail::kUartPortOps<T>) {}
-  /** @brief UartPort::EnsureReady. */
-  [[nodiscard]] kb::Status EnsureReady() noexcept {
-    return ops_->ensure_ready(self_);
-  }
-  /** @brief UartPort::Write. */
-  [[nodiscard]] kb::Status Write(std::span<const uint8_t> tx) noexcept {
-    return ops_->write(self_, tx);
-  }
-  /** @brief UartPort::Read. */
-  [[nodiscard]] kb::Result<std::size_t> Read(std::span<uint8_t> rx,
-                                             kb::Milliseconds timeout) noexcept {
-    return ops_->read(self_, rx, timeout);
-  }
-  /** @brief UartPort::FlushInput. */
-  [[nodiscard]] kb::Status FlushInput() noexcept {
-    return ops_->flush_input(self_);
-  }
-
-private:
-  void* self_;
-  const UartPortOps* ops_;
-};
-
-static_assert(UartPort<UartPortRef>, "UartPortRef satisfies the contract it erases");
-
 } // namespace kb::iface
 
 #endif // KB_INTERFACES_UART_HPP

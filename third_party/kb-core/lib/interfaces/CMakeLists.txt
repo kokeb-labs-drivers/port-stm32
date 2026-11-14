@@ -7,7 +7,7 @@ kb_add_part(interfaces DEPENDS rtos utils)
 
 kb_header_checks(interfaces _kb_interfaces_checks HEADERS
   kb/interfaces/adc.hpp kb/interfaces/can.hpp kb/interfaces/gpio.hpp kb/interfaces/i2c.hpp
-  kb/interfaces/interfaces.hpp kb/interfaces/log.hpp kb/interfaces/pwm.hpp kb/interfaces/spi.hpp
+  kb/interfaces/interfaces.hpp kb/interfaces/log.hpp kb/interfaces/pwm.hpp kb/interfaces/refs.hpp kb/interfaces/spi.hpp
   kb/interfaces/time.hpp kb/interfaces/types.hpp kb/interfaces/uart.hpp)
 set_property(GLOBAL APPEND PROPERTY KB_CROSS_SOURCES ${_kb_interfaces_checks})
 set_property(GLOBAL APPEND PROPERTY KB_CROSS_LIBS kb_interfaces_contracts)

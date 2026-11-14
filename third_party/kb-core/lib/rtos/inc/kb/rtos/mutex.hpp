@@ -55,13 +55,21 @@ public:
 
   /** @brief Takes the mutex if it is free now. */
   [[nodiscard]] bool TryLock() noexcept {
-    return created_ && backend::MutexLock(storage_, 0U);
+    bool done = false;
+    if (created_) {
+      done = backend::MutexLock(storage_, 0U);
+    }
+    return done;
   }
 
   /** @brief Takes the mutex, waiting at most `timeout`; false (after at least `timeout`) when it
    * stayed held. */
   [[nodiscard]] bool TryLockFor(Milliseconds timeout) noexcept {
-    return created_ && backend::MutexLock(storage_, ToTicksAtLeast(timeout));
+    bool done = false;
+    if (created_) {
+      done = backend::MutexLock(storage_, ToTicksAtLeast(timeout));
+    }
+    return done;
   }
 
   /** @brief Gives the mutex back. Precondition: the caller holds it. */
