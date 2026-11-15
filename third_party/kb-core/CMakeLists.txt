@@ -1,9 +1,11 @@
 # kb-core: utils, rtos, interfaces and handlers, one version (cmake/kb_version.cmake). Host build:
 #   cmake -S . -B build                       KB_MCU=HOST, KB_RTOS=NONE, every part, no driver
 #   cmake -S . -B build -DKB_PARTS=rtos       one part and its dependencies (utils)
-#   cmake -S . -B build -DKB_ENABLE_PF1550=ON a driver binding (needs drivers/driver-pf1550)
+#   cmake -S . -B build -DKB_ENABLE_PF1550=ON a driver binding (needs the pf1550 driver checkout, see
+#                                                KB_DRIVER_<NAME>_DIR; its default is under the drivers folder of paths.yml)
 # Under ESP-IDF this file is the kb component (ESP_PLATFORM); KB_MCU becomes ESP32 and KB_RTOS FREERTOS. The ESP32
-# port is a separate component in ports/esp32/ (ADR-0007); this file never adds ports/.
+# port is a separate component in components/ports/esp32/ (ADR-0007); this file never adds the MCU ports. Where
+# things live is named once, in tools/layout/paths.yml (cmake/kb_layout.cmake reads it).
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 The kb-core authors
 cmake_minimum_required(VERSION 3.24)
@@ -11,18 +13,18 @@ cmake_minimum_required(VERSION 3.24)
 if(ESP_PLATFORM)
   include("${CMAKE_CURRENT_LIST_DIR}/cmake/kb_build_settings.cmake")
   # Absolute paths: the component may be registered through a forwarding folder named `kb`
-  # (ports/esp32/examples/components/kb), whose own directory is not this one.
+  # (components/ports/esp32/examples/components/kb), whose own directory is not this one.
   set(_kb_idf_includes "")
   foreach(_part IN LISTS KB_PARTS)
-    if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/lib/${_part}/inc/kb/${_part}")
-      list(APPEND _kb_idf_includes "${CMAKE_CURRENT_LIST_DIR}/lib/${_part}/inc")
+    if(EXISTS "${KB_LIB_DIR}/${_part}/inc/kb/${_part}")
+      list(APPEND _kb_idf_includes "${KB_LIB_DIR}/${_part}/inc")
     endif()
   endforeach()
   # kb::rtos on ESP-IDF is the FreeRTOS backend: its two boundary files are the component's only sources.
   set(_kb_idf_sources "")
   if("rtos" IN_LIST KB_PARTS)
-    list(APPEND _kb_idf_sources "${CMAKE_CURRENT_LIST_DIR}/lib/rtos/backends/freertos/freertos_boundary.cpp"
-         "${CMAKE_CURRENT_LIST_DIR}/lib/rtos/backends/freertos/freertos_isr.cpp")
+    list(APPEND _kb_idf_sources "${KB_LIB_DIR}/rtos/backends/freertos/freertos_boundary.cpp"
+         "${KB_LIB_DIR}/rtos/backends/freertos/freertos_isr.cpp")
   endif()
   idf_component_register(SRCS ${_kb_idf_sources} INCLUDE_DIRS ${_kb_idf_includes} REQUIRES ${KB_IDF_REQUIRES})
   if(_kb_idf_sources)
@@ -51,12 +53,12 @@ option(KB_INSTALL "Generate the install and package rules" ${PROJECT_IS_TOP_LEVE
 include("${CMAKE_CURRENT_LIST_DIR}/cmake/kb_build_settings.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/cmake/kb_part.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/cmake/kb_testing.cmake")
-if(KB_BUILD_TESTS)
+if(KB_BUILD_TESTS OR KB_BUILD_EXAMPLES)
   enable_testing()
 endif()
 
 foreach(_part IN LISTS KB_PARTS)
-  add_subdirectory(lib/${_part})
+  add_subdirectory("${KB_LIB_DIR}/${_part}")
 endforeach()
 
 # kb_parts_cross: every public header of the selected parts on its own, plus the platform-free boundary sources the
@@ -72,12 +74,17 @@ target_link_libraries(kb_parts_cross PRIVATE ${_kb_cross_libs})
 target_include_directories(kb_parts_cross PRIVATE ${_kb_cross_includes})
 target_include_directories(kb_parts_cross SYSTEM PRIVATE ${_kb_cross_system_includes})
 
-# Test and example folders get their CMakeLists.txt with the first source; until then they are only described.
-foreach(_dir IN ITEMS tests/integration tests/standalone tests/install_consumer tests/docs examples/host)
-  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${_dir}/CMakeLists.txt")
-    add_subdirectory(${_dir})
+# Test folders get their CMakeLists.txt with the first source; until then they are only described.
+foreach(_dir IN ITEMS integration standalone install_consumer docs)
+  if(EXISTS "${KB_TESTS_DIR}/${_dir}/CMakeLists.txt")
+    add_subdirectory("${KB_TESTS_DIR}/${_dir}")
   endif()
 endforeach()
+
+# Examples (examples/README.md): real programs, each built here when KB_BUILD_EXAMPLES is ON.
+if(KB_BUILD_EXAMPLES)
+  add_subdirectory("${KB_EXAMPLES_DIR}" "${CMAKE_BINARY_DIR}/examples")
+endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/cmake/kb_tool_tests.cmake")
 

@@ -68,6 +68,27 @@ cmake -S examples/stm32 -B build-g4 -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/arm-no
 cmake --build build-g4                                    # firmware against the pinned HAL
 ```
 
+## Source layout
+
+| Header (`inc/kb/port/stm32/`) | Logic (`src/`) | HAL boundary (`src/boundary/`, the only files that include HAL or CMSIS headers) |
+| --- | --- | --- |
+| `adc.hpp` | `adc.cpp` | `adc.cpp` |
+| `can.hpp` | `can.cpp` | `can.cpp` |
+| `completion.hpp` | `completion.cpp` | none (no HAL call) |
+| `error.hpp` | `error.cpp` | `error.cpp` (the HAL status values) |
+| `gpio.hpp` | `gpio.cpp` | `gpio.cpp` |
+| `i2c.hpp` | `i2c.cpp` | `i2c.cpp` |
+| `irq.hpp` | header-only (declarations) | the entry points sit in the component files; `vectors.cpp` defines the device's vectors |
+| `log.hpp` | `log.cpp` | `log.cpp` (ITM) |
+| `port.hpp`, `version.hpp` | `port.cpp` | none |
+| `pwm.hpp` | `pwm.cpp` | `timer.cpp` (the TIM handles, shared with the clock) |
+| `spi.hpp` | `spi.cpp` | `spi.cpp` |
+| `time.hpp` | `time.cpp` | `time.cpp` (tick, core clock, DWT, PRIMASK) and `timer.cpp` (the clock's counter) |
+| `uart.hpp` | `uart.cpp` | `uart.cpp` |
+
+`tools/check_layout.py` (run by `tools/preflight.sh` and `ctest`) fails when a header has no source of its name or a
+file matches no header, so a combined file cannot come back.
+
 ## Documentation
 
 The site (`docs/`, `mkdocs build -f _config/mkdocs.yml --strict`) has one page per peripheral with the HAL calls,

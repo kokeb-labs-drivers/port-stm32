@@ -33,8 +33,8 @@ kb_port_stm32_variant(kb_port_stm32_f4 DEFINES KB_PORT_STM32_F4 KB_FAKE_STM32F4)
 add_custom_target(kb_port_stm32_scan)
 add_dependencies(kb_port_stm32_scan kb_port_stm32_g4 kb_port_stm32_f4)
 
-set(_tests test_error.cpp test_i2c.cpp test_spi.cpp test_uart.cpp test_gpio.cpp test_adc_pwm.cpp test_can.cpp
-    test_time_log.cpp test_clock_read.cpp test_wait.cpp test_contracts.cpp)
+set(_tests test_error.cpp test_i2c.cpp test_spi.cpp test_uart.cpp test_gpio.cpp test_adc.cpp test_pwm.cpp test_can.cpp
+    test_time.cpp test_log.cpp test_clock_read.cpp test_completion.cpp test_contracts.cpp)
 foreach(_v IN ITEMS g4 f4)
   set(_name kb_port_stm32_tests_${_v})
   add_executable(${_name} "${_harness}/kb_test_main.cpp" ${_tests})
@@ -75,3 +75,18 @@ foreach(_file IN ITEMS ref_from_wrong_contract.cpp controller_copied.cpp output_
   add_test(NAME ${_target} COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target ${_target})
   set_tests_properties(${_target} PROPERTIES PASS_REGULAR_EXPRESSION "${_expect}")
 endforeach()
+
+# The source layout (tools/check_layout.py): one source per public header, one boundary file per HAL component;
+# and the checker's own test. Needs python3 with PyYAML (the preflight and the CI images have it).
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+  execute_process(COMMAND "${Python3_EXECUTABLE}" -c "import yaml" RESULT_VARIABLE _kb_yaml OUTPUT_QUIET ERROR_QUIET)
+endif()
+if(Python3_Interpreter_FOUND AND _kb_yaml EQUAL 0)
+  add_test(NAME kb_port_stm32_layout
+           COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tools/check_layout.py" --root "${PROJECT_SOURCE_DIR}")
+  add_test(NAME kb_port_stm32_layout_checker
+           COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tools/test_check_layout.py")
+else()
+  message(STATUS "kb_port_stm32: python3 with PyYAML not found, the layout tests are not registered")
+endif()

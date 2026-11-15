@@ -1,5 +1,5 @@
 // OutputPin and InputPin: pin claims, level conversion, the EXTI line table and its dispatch from
-// the interrupt. Platform-free; every HAL call goes through sdk.hpp (src/stm32_io_boundary.cpp).
+// the interrupt. Platform-free; every HAL call goes through sdk.hpp (src/boundary/gpio.cpp).
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The port-stm32 authors
 // State shared with interrupts needs lock-free std::atomic (as kb-core's SpscRing does).

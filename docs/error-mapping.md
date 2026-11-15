@@ -18,7 +18,7 @@ For example `0x0401` is `HAL_ERROR` with `HAL_I2C_ERROR_AF` (bit 2) set.
 ## The general mapping
 
 `MapHalStatus()`; the four HAL values are checked against `HAL_StatusTypeDef` by a `static_assert` in
-`src/stm32_io_boundary.cpp`, so a HAL change stops the build.
+`src/boundary/error.cpp`, so a HAL change stops the build.
 
 | Code | Value | kb::Status |
 | --- | --- | --- |

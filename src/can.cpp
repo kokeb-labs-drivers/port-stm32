@@ -1,6 +1,6 @@
 // CanController: the CAN bit timing, frame checks, the receive ring fed by the interrupt, the
 // bounded waits for a frame or a transmit slot on the port's clock, and bus-off recovery.
-// Platform-free; every HAL call goes through sdk.hpp (src/stm32_can_boundary.cpp).
+// Platform-free; every HAL call goes through sdk.hpp (src/boundary/can.cpp).
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The port-stm32 authors
 #include <algorithm>

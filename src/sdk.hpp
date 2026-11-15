@@ -1,7 +1,7 @@
 /**
  * @file sdk.hpp
  * @brief The seam between the port's platform-free logic (the src/ files outside the boundary list)
- * and its boundary files (src/stm32_<area>_boundary.cpp): one function per HAL operation, in kb
+ * and its boundary files (src/boundary/<component>.cpp): one function per HAL operation, in kb
  * types only. Each returns the vendor code (`VendorCode(HAL status, ErrorCode)`; 0 is success).
  * Private to the port.
  *

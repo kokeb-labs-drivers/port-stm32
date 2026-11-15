@@ -6,21 +6,32 @@ port over the HAL fakes, both family variants: `kb_port_stm32_scan`).
 
 ## The boundary
 
-STM32Cube HAL and CMSIS headers are included only by the files of `deviations/boundary-files.yml`:
+STM32Cube HAL and CMSIS headers are included only by the files of `src/boundary/` (`deviations/boundary-files.yml`):
+one file per HAL component, named after the public header it serves, next to the logic file `src/<name>.cpp` of the
+same name (`tools/check_layout.py` fails on a header without its source, on a combined file and on a file that
+matches no header):
 
 | File | HAL areas |
 | --- | --- |
-| `src/stm32_bus_boundary.cpp` | `hal_i2c`, `hal_spi`, `hal_uart`; the I2C and SPI HAL callbacks and interrupt entries; the UART interrupt's register reads |
-| `src/stm32_io_boundary.cpp` | `hal_gpio` and EXTI, `hal_cortex` (NVIC, PRIMASK), `hal_adc` and its callbacks, `hal_tim`, `hal_rcc`, DWT, ITM, the `HAL_StatusTypeDef` value check, the one instance of the shared state |
-| `src/stm32_can_boundary.cpp` | `hal_fdcan` (G4, H7) or `hal_can` (F4, L4), their callbacks and interrupt entry |
-| `src/stm32_vectors_boundary.cpp` | The device header's instance macros, for the interrupt vectors |
+| `src/boundary/i2c.cpp` | `hal_i2c`; the I2C HAL callbacks and interrupt entry |
+| `src/boundary/spi.cpp` | `hal_spi`; the SPI HAL callbacks and interrupt entry |
+| `src/boundary/uart.cpp` | `hal_uart`; the UART interrupt's register reads and entry |
+| `src/boundary/gpio.cpp` | `hal_gpio` and EXTI, `hal_rcc` (the port clocks) |
+| `src/boundary/adc.cpp` | `hal_adc`, its callbacks and interrupt entry |
+| `src/boundary/timer.cpp` | `hal_tim`: the PWM channels and the clock's counter share one table of handles |
+| `src/boundary/can.cpp` | `hal_fdcan` (G4, H7) or `hal_can` (F4, L4), their callbacks and interrupt entry |
+| `src/boundary/time.cpp` | `hal_cortex` (PRIMASK), the HAL tick, `SystemCoreClock`, DWT |
+| `src/boundary/log.cpp` | ITM stimulus port 0 |
+| `src/boundary/error.cpp` | The `HAL_StatusTypeDef` value check against `error.hpp` |
+| `src/boundary/state.cpp` | The one instance of the shared state (includes no HAL header) |
+| `src/boundary/vectors.cpp` | The device header's instance macros, for the interrupt vectors |
 
 Each boundary function converts its arguments, makes one HAL call (or a fixed short sequence) and returns the
 vendor code; a callback or an interrupt entry finds the owner of the handle and passes the event on. Every decision
 is in the platform-free files, which include no HAL header and have **no deviation**: what a code means, retries,
 recovery and the BUSY reset, locking, timing arithmetic and the waits (`src/time.cpp`), the UART's byte handling,
 the CAN receive ring, pin claims and the EXTI table (`src/gpio.cpp`), timer ownership and the shared ADC instances
-(`src/adc_pwm.cpp`), the clock's read rule (`src/clock_read.hpp`) and its wrap count. The layering check (`ci-layering.yml`)
+(`src/adc.cpp`, `src/pwm.cpp`), the clock's read rule (`src/clock_read.hpp`) and its wrap count. The layering check (`ci-layering.yml`)
 enforces the boundary, and its poison build compiles the platform-free code with every HAL header replaced by one
 that stops the build.
 
@@ -28,9 +39,9 @@ that stops the build.
 
 | Id | Guideline | Where | Why | How the risk is held |
 | --- | --- | --- | --- | --- |
-| DEV-001 | Rule 6.7.1 (local variables with static storage) | the bus, io and CAN boundary files | The HAL keeps each peripheral's state in a handle that outlives each call and is reached from the interrupt handlers and HAL callbacks, and no HAL type may reach a public header: the handles live in one function-local static table per peripheral, and the one instance of the platform-free shared state (`src/state.hpp`) in the same form | One accessor per table in an anonymous namespace; entries written by the owner's `EnsureReady()`, cleared by `Release()`; a second owner refused with `Busy`; entries shared with an interrupt are atomic and changed only with interrupts masked (`IrqGuard`); every accessor exercised by the host tests |
-| DEV-002 | Rule 8.2.3 (casts that remove const) | the bus boundary file, one call | `HAL_I2C_Master_Seq_Transmit_IT` takes `uint8_t*` for data it only reads; the contract hands the port `std::span<const uint8_t>`, and a write cannot be split into copies | One call site; the pinned HAL only reads through the pointer; the tests check the bytes reach the bus and the caller's buffer is unchanged |
-| DEV-003 | Rule 10.2.3 (unscoped enum without a fixed underlying type) | the bus boundary file, two stores in `I2cRestore` | `I2C_HandleTypeDef::State` and `::Mode` are volatile fields of the HAL's unscoped enumerations; the pinned HAL has no call that returns a handle to ready without a re-initialisation | Only the field's own enumerators are stored (no conversion); bus lock held and the instance's interrupts disabled; the tests start a transfer from ready after a NACK, a timeout and a recovery |
+| DEV-001 | Rule 6.7.1 (local variables with static storage) | the I2C, SPI, UART, ADC, timer, CAN and shared-state boundary files | The HAL keeps each peripheral's state in a handle that outlives each call and is reached from the interrupt handlers and HAL callbacks, and no HAL type may reach a public header: the handles live in one function-local static table per peripheral, and the one instance of the platform-free shared state (`src/state.hpp`) in the same form | One accessor per table in an anonymous namespace; entries written by the owner's `EnsureReady()`, cleared by `Release()`; a second owner refused with `Busy`; entries shared with an interrupt are atomic and changed only with interrupts masked (`IrqGuard`); every accessor exercised by the host tests |
+| DEV-002 | Rule 8.2.3 (casts that remove const) | the I2C boundary file, one call | `HAL_I2C_Master_Seq_Transmit_IT` takes `uint8_t*` for data it only reads; the contract hands the port `std::span<const uint8_t>`, and a write cannot be split into copies | One call site; the pinned HAL only reads through the pointer; the tests check the bytes reach the bus and the caller's buffer is unchanged |
+| DEV-003 | Rule 10.2.3 (unscoped enum without a fixed underlying type) | the I2C boundary file, two stores in `I2cRestore` | `I2C_HandleTypeDef::State` and `::Mode` are volatile fields of the HAL's unscoped enumerations; the pinned HAL has no call that returns a handle to ready without a re-initialisation | Only the field's own enumerators are stored (no conversion); bus lock held and the instance's interrupts disabled; the tests start a transfer from ready after a NACK, a timeout and a recovery |
 
 The records are in `deviations/deviations.yml`. A marker `// codeql::misra_deviation_next_line(DEV-001)` stands
 on the line before each finding it covers. A clang-tidy suppression of a check the MISRA matrix relies on names its
@@ -53,7 +64,7 @@ nothing, an unknown id or a lapsed record (`review_by` passed) fails the scan.
 
 | Guideline | Where | Why it stays |
 | --- | --- | --- |
-| Rule 6.5.1 (external linkage not declared in a header) | The interrupt vectors in `src/stm32_vectors_boundary.cpp`; the HAL callbacks the port defines (I2C, SPI, ADC, CAN) | The vector names are fixed by the startup file's table, which declares them weak; the callback names and signatures are the HAL's (declared in its headers); the entry points are declared in `irq.hpp` |
+| Rule 6.5.1 (external linkage not declared in a header) | The interrupt vectors in `src/boundary/vectors.cpp`; the HAL callbacks the port defines (I2C, SPI, ADC, CAN) | The vector names are fixed by the startup file's table, which declares them weak; the callback names and signatures are the HAL's (declared in its headers); the entry points are declared in `irq.hpp` |
 | Rule 10.1.1 (parameter could be const) | The HAL callbacks | Their signatures are the HAL's |
 
 Advisory findings are reported and do not block.

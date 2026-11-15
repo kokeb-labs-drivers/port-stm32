@@ -1,7 +1,7 @@
 // Uart: argument checks, the reader and writer locks, the interrupt's decisions (the receive ring,
 // the data mask, latched errors, the transmit byte by byte), RS-485 direction and the bounded
 // waits on the port's clock. Platform-free; every HAL call goes through sdk.hpp
-// (src/stm32_bus_boundary.cpp). SPDX-License-Identifier: MIT Copyright (c) 2026 The port-stm32
+// (src/boundary/uart.cpp). SPDX-License-Identifier: MIT Copyright (c) 2026 The port-stm32
 // authors
 // State shared with interrupts needs lock-free std::atomic (as kb-core's SpscRing does).
 // misra-lint: ignore KB-CPP-012

@@ -23,10 +23,10 @@ zones:
     may_include: [drivers, std_any, sdk_any]
 external_zones: [kb_core, drivers]
 public_headers:
-  kb_utils: "third_party/kb-core/lib/utils/inc/kb/utils/**"
-  kb_rtos: "third_party/kb-core/lib/rtos/inc/kb/rtos/**"
-  kb_interfaces: "third_party/kb-core/lib/interfaces/inc/kb/interfaces/**"
-  kb_host: "third_party/kb-core/lib/interfaces/host/inc/kb/interfaces/host/**"
+  kb_utils: "third_party/kb-core/components/lib/utils/inc/kb/utils/**"
+  kb_rtos: "third_party/kb-core/components/lib/rtos/inc/kb/rtos/**"
+  kb_interfaces: "third_party/kb-core/components/lib/interfaces/inc/kb/interfaces/**"
+  kb_host: "third_party/kb-core/components/lib/interfaces/host/inc/kb/interfaces/host/**"
   kb_harness: "third_party/kb-core/tests/harness/**"
 # The HAL fakes (tests/fakes/stm32) carry the HAL's header names; the check excludes that folder (ci-layering.yml)
 # so a HAL name always means the HAL, and the tests reach the fakes' own control headers through this group.

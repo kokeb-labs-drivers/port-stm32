@@ -6,9 +6,13 @@ deviations:
   - id: DEV-001
     check: misra/Rule 6.7.1
     where: >-
-      src/stm32_bus_boundary.cpp
-      src/stm32_io_boundary.cpp
-      src/stm32_can_boundary.cpp
+      src/boundary/adc.cpp
+      src/boundary/can.cpp
+      src/boundary/i2c.cpp
+      src/boundary/spi.cpp
+      src/boundary/state.cpp
+      src/boundary/timer.cpp
+      src/boundary/uart.cpp
     reason: >-
       The HAL keeps each peripheral's state in a handle (I2C_HandleTypeDef, SPI_HandleTypeDef,
       UART_HandleTypeDef, ADC_HandleTypeDef, TIM_HandleTypeDef, FDCAN_HandleTypeDef or CAN_HandleTypeDef) that
@@ -18,7 +22,7 @@ deviations:
       a function-local static is the form with a defined initialisation point (constant initialisation, no
       static-order dependency). The port's shared state (src/state.hpp: pin claims, the EXTI line table, timer
       ownership, the clock's wrap counters, the shared ADC instances), whose type and every rule are in the
-      platform-free files, has its one instance in the same form in src/stm32_io_boundary.cpp (sdk::State()).
+      platform-free files, has its one instance in the same form in src/boundary/state.cpp (sdk::State()).
     mitigation: >-
       Each table is reached only through one accessor in an anonymous namespace of its boundary file (the shared
       state through sdk::State()); every handle entry is written by the owning object's EnsureReady() and
@@ -36,7 +40,7 @@ deviations:
   - id: DEV-002
     check: misra/Rule 8.2.3
     where: >-
-      src/stm32_bus_boundary.cpp
+      src/boundary/i2c.cpp
     reason: >-
       HAL_I2C_Master_Seq_Transmit_IT takes the data to send as `uint8_t*` although it only reads it; the port's
       I2cBus::Write receives the caller's bytes as std::span<const uint8_t>, as the kb::iface contract requires. A
@@ -54,7 +58,7 @@ deviations:
   - id: DEV-003
     check: misra/Rule 10.2.3
     where: >-
-      src/stm32_bus_boundary.cpp
+      src/boundary/i2c.cpp
     reason: >-
       I2C_HandleTypeDef keeps its state in two volatile fields of the HAL's unscoped enumerations without a
       fixed underlying type (HAL_I2C_StateTypeDef State, HAL_I2C_ModeTypeDef Mode); the vendor types cannot be

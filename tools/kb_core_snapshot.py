@@ -41,16 +41,19 @@ PATHS = (
     # The whole cmake/ folder: the root CMakeLists.txt includes modules from it by name, and a hand-kept list of
     # them broke when kb-core added one (cmake/kb_tool_tests.cmake).
     "cmake",
-    "lib/utils/CMakeLists.txt",
-    "lib/utils/inc",
-    "lib/rtos/CMakeLists.txt",
-    "lib/rtos/inc",
-    "lib/rtos/backends/none",
-    "lib/rtos/backends/freertos",
-    "lib/interfaces/CMakeLists.txt",
-    "lib/interfaces/inc",
-    "lib/interfaces/host",
-    "host/rtos",
+    # cmake/kb_layout.cmake reads it; a copy that vendors cmake/ must vendor it too.
+    "tools/layout/paths.yml",
+    "components/lib/utils/CMakeLists.txt",
+    "components/lib/utils/inc",
+    "components/lib/rtos/CMakeLists.txt",
+    "components/lib/rtos/inc",
+    "components/lib/rtos/backends/none",
+    "components/lib/rtos/backends/freertos",
+    "components/lib/interfaces/CMakeLists.txt",
+    "components/lib/interfaces/inc",
+    "components/lib/interfaces/host",
+    "components/ports/host/CMakeLists.txt",
+    "components/ports/host/src",
     "tests/harness",
 )
 SKIP_NAMES = {"README.md"}

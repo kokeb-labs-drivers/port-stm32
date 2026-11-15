@@ -7,7 +7,8 @@
 #                        THREADX (planned: refused with a "not yet" message)
 #   KB_PARTS             any of utils;rtos;interfaces;handlers (default: all); dependencies are added
 #   KB_ENABLE_<DRIVER>   ON to bind a driver (names in cmake/kb_drivers.cmake); adds the handlers part
-#   KB_DRIVER_<DRIVER>_DIR  where that driver's checkout is (default drivers/driver-<slug>)
+#   KB_DRIVER_<DRIVER>_DIR  where that driver's checkout is (default: <drivers folder>/driver-<slug>; the folders
+#                        are named in tools/layout/paths.yml)
 #
 # Results: KB_MCU, KB_RTOS, KB_PARTS (resolved, in dependency order), KB_ENABLED_DRIVERS, KB_IDF_REQUIRES.
 # No platform macro is produced on purpose: code never tests the MCU (ADR-0001); the build picks the folders.
@@ -16,6 +17,7 @@
 include_guard(GLOBAL)
 
 get_filename_component(KB_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+include("${CMAKE_CURRENT_LIST_DIR}/kb_layout.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/kb_version.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/kb_drivers.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/kb_mcu_gates.cmake")
@@ -49,7 +51,7 @@ if(NOT DEFINED KB_RTOS OR KB_RTOS STREQUAL "")
 endif()
 string(TOUPPER "${KB_RTOS}" KB_RTOS)
 if(KB_RTOS IN_LIST _KB_PLANNED_RTOS)
-  message(FATAL_ERROR "[kb] KB_RTOS=${KB_RTOS}: not yet. The ThreadX backend is planned (lib/rtos/backends/threadx/"
+  message(FATAL_ERROR "[kb] KB_RTOS=${KB_RTOS}: not yet. The ThreadX backend is planned (${KB_LIB_REL}/rtos/backends/threadx/"
                       "README.md: the same API, static allocation, its own boundary files). Supported: ${_KB_SUPPORTED_RTOS}")
 elseif(NOT KB_RTOS IN_LIST _KB_SUPPORTED_RTOS)
   message(FATAL_ERROR "[kb] Unknown KB_RTOS '${KB_RTOS}'. Supported: ${_KB_SUPPORTED_RTOS}")
@@ -72,7 +74,7 @@ foreach(_entry IN LISTS KB_KNOWN_DRIVERS)
   list(APPEND _KB_DRIVER_NAMES "${_upper}")
   option(KB_ENABLE_${_upper} "Bind the ${_name} driver (${_folder})" OFF)
   if(NOT DEFINED KB_DRIVER_${_upper}_DIR)
-    set(KB_DRIVER_${_upper}_DIR "${KB_ROOT}/drivers/${_folder}")
+    set(KB_DRIVER_${_upper}_DIR "${KB_DRIVERS_DIR}/${_folder}")
   endif()
   set(_KB_FOLDER_${_upper} "${_folder}")
   if(KB_ENABLE_${_upper})
@@ -109,7 +111,7 @@ foreach(_name IN LISTS KB_ENABLED_DRIVERS)
   if(NOT EXISTS "${KB_DRIVER_${_upper}_DIR}/driver.yml")
     message(FATAL_ERROR
       "[kb] KB_ENABLE_${_upper}=ON but ${KB_DRIVER_${_upper}_DIR} is not a driver checkout. Run "
-      "'git submodule update --init drivers/${_KB_FOLDER_${_upper}}' or set KB_DRIVER_${_upper}_DIR.")
+      "'git submodule update --init ${KB_DRIVERS_REL}/${_KB_FOLDER_${_upper}}' or set KB_DRIVER_${_upper}_DIR.")
   endif()
 endforeach()
 
@@ -144,7 +146,7 @@ endforeach()
 
 # -- ESP-IDF component requirements of the kb component (consumed by the ESP-IDF component registration, later) ------
 # Only the FreeRTOS backend touches ESP-IDF here; the peripheral components belong to the MCU port, which is its own
-# component in ports/esp32/ (ADR-0007).
+# component in the esp32 folder of the ports (ADR-0007).
 set(KB_IDF_REQUIRES "")
 if(KB_MCU STREQUAL "ESP32")
   if("rtos" IN_LIST KB_PARTS)

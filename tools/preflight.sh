@@ -8,8 +8,9 @@
 # python3 with PyYAML, and a ci-tools checkout (CI_TOOLS_DIR, for the handbook, layering and misra_lint include
 # lists). Steps: kb-core copy, format, host tests (Clang strict and GCC -O2), ASan and UBSan, coverage at the
 # high level's limits (lines 85 %, branches 75 %), complexity (CCN 15, 60 lines, 6 parameters), clang-tidy,
-# misra_lint --strict, the handbook check and the layering check. Builds go to $PREFLIGHT_DIR (default
-# build-preflight) and are removed at the end unless KEEP=1. The firmware builds are docs/examples.md.
+# misra_lint --strict, the handbook check, the layering check and the source layout check (tools/check_layout.py:
+# one src/<stem>.cpp per public header, one src/boundary/<component>.cpp per HAL component). Builds go to
+# $PREFLIGHT_DIR (default build-preflight) and are removed at the end unless KEEP=1. The firmware builds are docs/examples.md.
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 The port-stm32 authors
 set -uo pipefail
@@ -27,6 +28,7 @@ step() { local name="$1"; shift; echo "== $name"; if "$@" >"$out/$name.log" 2>&1
 
 sources() { find inc src tests -name '*.cpp' -o -name '*.hpp' -o -name '*.h' | sort; }
 library() { find inc src -name '*.cpp' -o -name '*.hpp' | sort; }
+layout() { python3 tools/check_layout.py && python3 tools/test_check_layout.py; }
 
 snapshot() { python3 tools/kb_core_snapshot.py --check; }
 format() { sources | xargs clang-format --dry-run --Werror --style=file:_config/.clang-format; }
@@ -58,7 +60,7 @@ tidy_run() {
   if [ -n "$tidy18" ] && "$tidy18" --verify-config --config-file=_config/.clang-tidy 2>&1 | grep -E 'error:'; then
     bad=1
   fi
-  for f in src/*.cpp; do
+  for f in src/*.cpp src/boundary/*.cpp; do
     # stderr kept: a configuration error is an error, not silence. Compiler warnings echoed by clang-tidy are
     # not findings; "N warnings generated" lines are dropped.
     clang-tidy -p "$out/clang" --config-file=_config/.clang-tidy "${sdk[@]}" --quiet "$f" 2>&1 |
@@ -78,6 +80,7 @@ layering() {
 }
 
 step snapshot snapshot
+step layout layout
 step format format
 step clang host clang "$CLANG" -DCMAKE_BUILD_TYPE=Debug
 if [ "$quick" = 0 ]; then

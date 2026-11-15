@@ -2,15 +2,39 @@
 # ADR-0011). The layering check (ci-layering.yml, rules tools/layering/rules.yml) fails on a HAL include anywhere
 # else and on a listed file that is missing. Every MISRA record in deviations.yml names files from this list only.
 boundary_files:
-  - path: src/stm32_bus_boundary.cpp
+  - path: src/boundary/adc.cpp
     sdk: stm32cube-hal
     status: present
-  - path: src/stm32_io_boundary.cpp
+  - path: src/boundary/can.cpp
     sdk: stm32cube-hal
     status: present
-  - path: src/stm32_can_boundary.cpp
+  - path: src/boundary/error.cpp
     sdk: stm32cube-hal
     status: present
-  - path: src/stm32_vectors_boundary.cpp
+  - path: src/boundary/gpio.cpp
+    sdk: stm32cube-hal
+    status: present
+  - path: src/boundary/i2c.cpp
+    sdk: stm32cube-hal
+    status: present
+  - path: src/boundary/log.cpp
+    sdk: stm32cube-hal
+    status: present
+  - path: src/boundary/spi.cpp
+    sdk: stm32cube-hal
+    status: present
+  - path: src/boundary/state.cpp
+    sdk: stm32cube-hal
+    status: present
+  - path: src/boundary/time.cpp
+    sdk: stm32cube-hal
+    status: present
+  - path: src/boundary/timer.cpp
+    sdk: stm32cube-hal
+    status: present
+  - path: src/boundary/uart.cpp
+    sdk: stm32cube-hal
+    status: present
+  - path: src/boundary/vectors.cpp
     sdk: stm32cube-hal
     status: present
