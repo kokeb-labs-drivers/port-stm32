@@ -274,6 +274,10 @@ KB_TEST("spi: the SCK of interrupt transfers is limited to the family's ceiling"
   KB_CHECK(dev.Config().clock_hz == 40000000U); // what was asked is kept
   KB_CHECK_EQ(dev.SetClockHz(80000000U), Status::Ok);
   KB_CHECK(dev.ActualClockHz() <= ceiling);
+  KB_CHECK_EQ(dev.Stats().clamps, 2U);
+  KB_CHECK_EQ(dev.SetClockHz(1000000U), Status::Ok); // below the ceiling: not a clamp
+  KB_CHECK_EQ(dev.Stats().clamps, 2U);
+  KB_CHECK_EQ(dev.Stats().actual_clock_hz, dev.ActualClockHz());
   KB_CHECK_EQ(dev.Release(), Status::Ok);
   KB_CHECK_EQ(bus.Release(), Status::Ok);
   // A core so slow that even the largest prescaler is above the ceiling: refused.
@@ -301,4 +305,20 @@ KB_TEST("spi: an abort makes every device's next frame initialise the peripheral
   const uint32_t inits = fake::Calls("HAL_SPI_Init");
   KB_CHECK_EQ(b.Transfer(tx, std::span<uint8_t>{}), Status::Ok); // b, not a: still re-initialised
   KB_CHECK_EQ(fake::Calls("HAL_SPI_Init"), inits + 1U);
+}
+
+KB_TEST("spi: an interrupt priority outside the RTOS-callable range is refused") {
+  Fresh();
+  SystemCoreClock = 640000000U;
+  stm::SpiBusConfig b = BusConfig();
+  b.irq_priority = 16U;
+  stm::SpiBus bus{b};
+  KB_CHECK_EQ(bus.EnsureReady(), Status::InvalidArgument);
+}
+
+KB_TEST("spi: an interrupt of an instance the port does not own is switched off") {
+  Fresh();
+  HAL_NVIC_EnableIRQ(SPI3_IRQn);
+  stm::HandleSpiIrq(3U);
+  KB_CHECK(!fake::IrqEnabled(SPI3_IRQn));
 }

@@ -5,7 +5,23 @@ All notable changes of port-stm32. The format follows Keep a Changelog; versions
 
 ## [Unreleased]
 
+### Known limits
+
+- The SPI interrupt ceilings are estimates; a bench measurement per family is not yet done. A long critical section
+  or a higher-priority interrupt can still overrun an F4 frame at the ceiling (`BusError`).
+- A shared ADC vector with an application instance on it must be excluded (`KB_PORT_STM32_VECTORS_EXCLUDE`); the port
+  does not clear the application instance's flags.
+- No CodeQL MISRA scan of the current code yet (the pull request's CI produces it).
+
 ### Fixed
+
+- The UART transmit enable is preceded by a signal fence, so the frame stores cannot move past it (with LTO too).
+- The blocking-wait bound is enabled for any spelling of `KB_RTOS` and for an installed kb-core's FreeRTOS or host
+  backend; a FreeRTOS build takes `KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY` from its FreeRTOSConfig.h, and one that leaves
+  it at 0 fails the configure.
+- The SPI clock actually used is recorded (`Stats().actual_clock_hz`) and lowered selections counted (`clamps`).
+- I2C recovery waits up to 25 ms for SCL to rise before it counts SCL as held and skips the clocks.
+- The TIM2/TIM5 vector switches its NVIC line off when no `Clock` runs on that timer.
 
 - SPI interrupt transfers are limited to a per-family SCK ceiling (core / 64 on F4, core / 40 with a FIFO), so the
   per-byte interrupt cannot overrun the receiver; `ActualClockHz()` reports the SCK used. An abort makes every

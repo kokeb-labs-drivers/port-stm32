@@ -988,6 +988,10 @@ bool ClockWrapPending(uint8_t timer) noexcept {
   return __HAL_TIM_GET_FLAG(&Timers()[timer], TIM_FLAG_UPDATE) != 0U;
 }
 
+void ClockIrqOff(uint8_t timer) noexcept {
+  HAL_NVIC_DisableIRQ((timer == 5U) ? TIM5_IRQn : TIM2_IRQn);
+}
+
 void ClockClearWrap(uint8_t timer) noexcept {
   __HAL_TIM_CLEAR_FLAG(&Timers()[timer], TIM_FLAG_UPDATE);
 }

@@ -45,6 +45,10 @@ foreach(_v IN ITEMS g4 f4)
   add_test(NAME ${_name} COMMAND ${_name})
 endforeach()
 
+# The configure-time RTOS logic (cmake/kb_port_stm32_rtos.cmake): every KB_RTOS spelling, the FreeRTOSConfig.h read.
+add_test(NAME kb_port_stm32_rtos_config
+         COMMAND ${CMAKE_COMMAND} "-DROOT=${PROJECT_SOURCE_DIR}" -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/test_rtos.cmake")
+
 # Each public header compiles on its own as ISO C++20 with the strict flags.
 set(_headers adc can error gpio i2c irq log port pwm spi time uart version)
 set(_checks "")

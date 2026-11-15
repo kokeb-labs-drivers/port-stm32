@@ -196,7 +196,9 @@ kb::Status Uart::sendLocked(std::span<const uint8_t> tx, bool wait_complete,
   tx_size_.store(tx.size(), std::memory_order_release); // everything above is seen by the interrupt
   tx_done_.Arm();
   // Data first, then the interrupt: transmit-empty fires at once and sends byte by byte. An empty
-  // frame with wait_complete only waits for transmit-complete (WaitTxDone()).
+  // frame with wait_complete only waits for transmit-complete (WaitTxDone()). The fence keeps the
+  // compiler (with LTO too) from moving the stores above past the interrupt enable.
+  std::atomic_signal_fence(std::memory_order_seq_cst);
   sdk::UartTxInterrupts(config_.instance, !tx.empty(), tx.empty() && wait_complete);
   Deadline deadline{timeout};
   const bool done = tx_done_.Wait(deadline);

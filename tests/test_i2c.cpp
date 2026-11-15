@@ -432,3 +432,17 @@ KB_TEST("i2c: an interrupt of an instance the port does not own is switched off"
   stm::HandleI2cIrq(2U, false);
   KB_CHECK(!fake::IrqEnabled(I2C2_EV_IRQn)); // no endless re-entry
 }
+
+KB_TEST("i2c: SCL that rises late (or a short clock stretch) is waited for, then the bus clocked") {
+  Fresh();
+  stm::I2cConfig c = Config();
+  c.auto_recover = false;
+  stm::I2cController bus{c};
+  KB_REQUIRE(bus.EnsureReady() == Status::Ok);
+  fake::ForceLevelFor(kPortB, 8, 0, 50U); // SCL low for its first 50 reads, then released
+  fake::ForceLevelFor(kPortB, 9, 0, 3U);  // SDA held by a slave for a few clocks
+  const uint32_t writes = fake::Calls("HAL_GPIO_WritePin");
+  KB_CHECK_EQ(bus.RecoverBus(), Status::Ok);
+  KB_CHECK_EQ(bus.Stats().scl_held, 0U);                    // not given up on the first low read
+  KB_CHECK(fake::Calls("HAL_GPIO_WritePin") - writes > 4U); // the clocks were sent
+}

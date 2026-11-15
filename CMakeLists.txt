@@ -36,16 +36,33 @@ add_library(kb_port_stm32_api INTERFACE)
 target_compile_features(kb_port_stm32_api INTERFACE cxx_std_20)
 target_include_directories(kb_port_stm32_api INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>")
 target_link_libraries(kb_port_stm32_api INTERFACE kb::interfaces kb::rtos kb::utils)
+include("${CMAKE_CURRENT_LIST_DIR}/cmake/kb_port_stm32_rtos.cmake")
+# Whether kb::rtos takes and sleeps block (completion.hpp: the bound of a wait when the clocks stop): from KB_RTOS in
+# any spelling, or from the backend target an installed kb-core package brings.
+kb_port_stm32_rtos_blocks("${KB_RTOS}" _kb_port_blocks)
+foreach(_backend IN ITEMS kb_rtos_backend_freertos kb::rtos_backend_freertos kb_rtos_backend_host kb::rtos_backend_host)
+  if(TARGET ${_backend})
+    set(_kb_port_blocks TRUE)
+  endif()
+endforeach()
+string(TOUPPER "${KB_RTOS}" _kb_port_rtos)
+if(TARGET kb_rtos_backend_freertos OR TARGET kb::rtos_backend_freertos)
+  set(_kb_port_rtos FREERTOS)
+endif()
 # The lowest NVIC priority number of an interrupt that gives a kb::rtos semaphore (error.hpp): under FreeRTOS
-# configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY. EnsureReady() refuses a lower number (a more urgent interrupt).
+# configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY (cmake/kb_port_stm32_freertos.cmake reads it from FreeRTOSConfig.h).
+# EnsureReady() refuses a lower number (a more urgent interrupt). A FreeRTOS build must set it.
 set(KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY "0" CACHE STRING "Lowest NVIC priority of an RTOS-calling interrupt (0-15)")
+if((_kb_port_rtos STREQUAL "FREERTOS") AND (KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY STREQUAL "0"))
+  message(FATAL_ERROR "[kb-port-stm32] KB_RTOS=FREERTOS: set KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY to "
+                      "configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY (kb_port_stm32_freertos() reads it)")
+endif()
 if(NOT KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY MATCHES "^([0-9]|1[0-5])$")
   message(FATAL_ERROR "[kb-port-stm32] KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY must be 0 to 15")
 endif()
 target_compile_definitions(kb_port_stm32_api INTERFACE
   "KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY=${KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY}U")
-# Whether kb::rtos takes and sleeps block (completion.hpp: the bound of a wait when the clocks stop).
-if(KB_RTOS STREQUAL "FREERTOS" OR KB_RTOS STREQUAL "HOST")
+if(_kb_port_blocks)
   target_compile_definitions(kb_port_stm32_api INTERFACE KB_PORT_STM32_RTOS_BLOCKS=1)
 endif()
 

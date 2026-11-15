@@ -13,6 +13,7 @@
 #include "kb/port/stm32/i2c.hpp"
 #include "kb/port/stm32/time.hpp"
 #include "kb/rtos/mutex.hpp"
+#include "kb/rtos/time.hpp"
 #include "kb/utils/status.hpp"
 #include "sdk.hpp"
 #include "state.hpp"
@@ -26,7 +27,8 @@ constexpr uint32_t kMaxClockHz = 1000000U;         // Fast-mode Plus (I2C v2: G4
 constexpr uint32_t kMaxClockV1Hz = 400000U;        // Fast mode (I2C v1: F4)
 constexpr std::size_t kMaxTransferBytes = 0xFFFFU; // the HAL's uint16_t length
 constexpr uint32_t kRecoveryClocks = 9U;
-constexpr uint32_t kHalfPeriodUs = 5U; // 100 kHz while recovering
+constexpr uint32_t kSclReleaseMs = 25U; // the SMBus clock-low timeout (25 to 35 ms)
+constexpr uint32_t kHalfPeriodUs = 5U;  // 100 kHz while recovering
 // HAL_I2C_ERROR_AF (acknowledge failure): bit 2 of ErrorCode on every family.
 constexpr uint32_t kErrorAf = 0x04U;
 // HAL_I2C_ERROR_TIMEOUT: bit 5 of ErrorCode on every family.
@@ -364,8 +366,16 @@ kb::Status I2cController::recoverLocked() noexcept {
   // SCL and SDA as open-drain outputs, released (high): clock SCL until a slave lets SDA go.
   code = First(code, sdk::PinOutput(config_.scl, true, pull, Speed::Low, true));
   code = First(code, sdk::PinOutput(config_.sda, true, pull, Speed::Low, true));
-  // A device holding SCL low cannot be clocked free: counted apart (scl_held), no clocks sent.
-  const bool scl_held = !sdk::PinRead(config_.scl);
+  // SCL rising slowly after the release, or a device stretching the clock, reads low for a while:
+  // wait up to the SMBus clock-low timeout for it to rise. A device that still holds SCL low
+  // cannot be clocked free: counted apart (scl_held), no clocks sent.
+  Deadline release{kb::Milliseconds{kSclReleaseMs}};
+  bool scl_held = !sdk::PinRead(config_.scl);
+  while (scl_held && !release.Expired()) {
+    kb::rtos::SleepFor(kb::Milliseconds{1U});
+    release.Slept(1U);
+    scl_held = !sdk::PinRead(config_.scl);
+  }
   if (scl_held) {
     count(&I2cStats::scl_held);
   }

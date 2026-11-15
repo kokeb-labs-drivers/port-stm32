@@ -361,3 +361,30 @@ KB_TEST("can: frames received before a Release() are not delivered after the reo
   CanFrame got{};
   KB_CHECK_EQ(can.Receive(got, kb::Milliseconds{2U}), Status::Timeout);
 }
+
+KB_TEST("can: an interrupt priority outside the RTOS-callable range is refused") {
+  Fresh();
+  stm::CanConfig c = Config();
+  c.irq_priority = 16U;
+  stm::CanController can{c};
+  KB_CHECK_EQ(can.EnsureReady(), Status::InvalidArgument);
+}
+
+KB_TEST("can: an interrupt of a controller the port does not own is switched off") {
+  Fresh();
+  const IRQn_Type irq = kF4 ? CAN2_RX0_IRQn : FDCAN2_IT0_IRQn;
+  HAL_NVIC_EnableIRQ(irq);
+  stm::HandleCanIrq(2U);
+  KB_CHECK(!fake::IrqEnabled(irq));
+}
+
+KB_TEST("can: Recover refuses the FDCAN restart when the HAL time base has stopped") {
+  Fresh();
+  stm::CanController can{Config()};
+  KB_REQUIRE(can.EnsureReady() == Status::Ok);
+  fake::CanBusOff(true, 3U);
+  fake::SetTickStep(0U);
+  KB_CHECK_EQ(can.Recover(kb::Milliseconds{5U}), Status::NotReady);
+  KB_CHECK(FailedWith(can.LastError(), Status::NotReady, stm::port_code::kHalTickStopped));
+  KB_CHECK_EQ(fake::Calls("HAL_FDCAN_Stop"), 0U);
+}

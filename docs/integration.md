@@ -31,7 +31,11 @@ the handle's callbacks, so the port works either way.
   gets no interrupts, so exclude its vectors. EXTI lines are grouped in vectors (`EXTI9_5`, `EXTI15_10`): a line no
   `InputPin` owns is cleared and not served; to serve a line of the application, exclude the vector and call
   `HandleExtiIrq()` from the application's handler for the port's lines. `KB_PORT_STM32_VECTORS=OFF` drops the whole
-  file. A vector defined twice is a link error, never a silent override; `tools/check_vectors.cmake` checks after
+  file. The clock's `TIM2`/`TIM5` vector switches its NVIC line off when no `Clock` runs on that timer. A shared ADC
+  vector (`ADC1_2` on G4 and L4, `ADC` on F4 and H7) with one instance the port's and another the application's must
+  be excluded: the application's handler then calls `HandleAdcIrq()` for the port's instances and
+  `HAL_ADC_IRQHandler()` for its own (the port switches a shared vector off only when none of its instances is open).
+  A vector defined twice is a link error, never a silent override; `tools/check_vectors.cmake` checks after
   the link that every vector the port defines is its strong symbol (an excluded one is not checked).
 - **Leave the port's peripherals unconfigured in CubeMX** (no init code, no NVIC entry): the port initialises them in
   `EnsureReady()`. Drop the generated callback functions listed above.

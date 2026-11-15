@@ -37,6 +37,8 @@ void Stall(const char* area, bool on);
 void SetTickStep(uint32_t step);
 /** @brief The HAL tick advances by its step once every `calls` reads (a slow time base). */
 void SetTickEvery(uint32_t calls);
+/** @brief What HAL_GetTickFreq() returns (the milliseconds per HAL tick). */
+void SetTickFreq(HAL_TickFreqTypeDef freq);
 /** @brief Microseconds a timer counter advances per read (default 1). */
 void SetCounterStep(uint32_t step);
 void SetCycleStep(uint32_t step);
@@ -47,6 +49,8 @@ void SetCycleStep(uint32_t step);
 // -----------------------------------------------------------------------------
 /** @brief The level an input or output pin reads: -1 follows the model, 0 or 1 forces it. */
 void ForceLevel(int port, int pin, int level);
+/** @brief As ForceLevel(), for the next `reads` reads only; then the model's level again. */
+void ForceLevelFor(int port, int pin, int level, uint32_t reads);
 [[nodiscard]] int Driven(int port, int pin);
 [[nodiscard]] uint32_t ModeOf(int port, int pin);
 [[nodiscard]] uint32_t AlternateOf(int port, int pin);

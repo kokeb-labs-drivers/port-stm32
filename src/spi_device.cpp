@@ -133,6 +133,14 @@ uint32_t SpiDevice::limited(uint32_t hz) const noexcept {
   return ((ceiling != 0U) && (hz > ceiling)) ? ceiling : hz;
 }
 
+void SpiDevice::noteClock(uint32_t asked) noexcept {
+  const bool lowered = limited(asked) != asked;
+  const uint32_t actual = ActualClockHz();
+  const IrqGuard guard{};
+  stats_.actual_clock_hz = actual;
+  stats_.clamps += lowered ? 1U : 0U;
+}
+
 uint32_t SpiDevice::ActualClockHz() const noexcept {
   return bus_.KernelClockHz() >> (prescaler_ + 1U);
 }
@@ -162,6 +170,9 @@ kb::Status SpiDevice::EnsureReady() noexcept {
       const uint32_t code = ok ? claimCs() : port_code::kInvalidArgument;
       status = error_.Set(MapHalStatus(code & 0xFFU), code);
       ready_ = status == kb::Status::Ok;
+      if (ready_) {
+        noteClock(config_.clock_hz);
+      }
     }
   }
   return status;
@@ -251,6 +262,9 @@ kb::Status SpiDevice::SetClockHz(uint32_t hz) noexcept {
   } else {
     config_.clock_hz = hz; // the next frame selects the new prescaler
     prescaler_ = exponent;
+    if (ready_) {
+      noteClock(hz);
+    }
     status = error_.Clear();
   }
   return status;

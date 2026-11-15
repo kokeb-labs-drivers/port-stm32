@@ -44,5 +44,12 @@ function(kb_port_stm32_freertos config_dir)
   target_include_directories(kb_port_stm32_freertos_kernel SYSTEM PUBLIC ${_includes})
   target_compile_options(kb_port_stm32_freertos_kernel PRIVATE -w) # SOUP: its own warnings, not the port's
   set(KB_RTOS FREERTOS CACHE STRING "kb-core RTOS backend" FORCE)
+  # The port's interrupt-priority check takes the kernel's syscall limit from the same FreeRTOSConfig.h.
+  include("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/kb_port_stm32_rtos.cmake")
+  kb_port_stm32_freertos_min_priority("${config_dir}/FreeRTOSConfig.h" _min)
+  if(_min STREQUAL "")
+    message(FATAL_ERROR "[kb-port-stm32] ${config_dir}/FreeRTOSConfig.h: no configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY")
+  endif()
+  set(KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY "${_min}" CACHE STRING "Lowest NVIC priority of an RTOS-calling interrupt" FORCE)
   set(KB_FREERTOS_INCLUDE_DIRS "${_includes}" CACHE STRING "FreeRTOS include folders for kb-core" FORCE)
 endfunction()

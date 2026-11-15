@@ -28,8 +28,6 @@ get_filename_component(_root "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 if(EXAMPLE_RTOS STREQUAL "FREERTOS")
   include("${_root}/cmake/kb_port_stm32_freertos.cmake")
   kb_port_stm32_freertos("${CMAKE_CURRENT_LIST_DIR}/freertos") # before the port: kb-core takes KB_RTOS from it
-  # configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY of freertos/FreeRTOSConfig.h: the port checks its interrupts.
-  set(KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY "5" CACHE STRING "" FORCE)
 elseif(NOT EXAMPLE_RTOS STREQUAL "NONE")
   message(FATAL_ERROR "EXAMPLE_RTOS must be NONE or FREERTOS, not '${EXAMPLE_RTOS}'")
 endif()

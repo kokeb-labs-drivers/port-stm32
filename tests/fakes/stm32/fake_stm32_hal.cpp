@@ -51,6 +51,7 @@ struct Pin {
   uint32_t pull{GPIO_NOPULL};
   uint32_t alternate{0U};
   int forced{-1};
+  uint32_t forced_reads{0U}; ///< Reads left before `forced` lapses (0: no limit).
 };
 
 struct State {
@@ -62,6 +63,7 @@ struct State {
   uint32_t tick_step{1U};
   uint32_t counter_step{1U};
   uint32_t tick_every{1U};
+  HAL_TickFreqTypeDef tick_freq{HAL_TICK_FREQ_1KHZ};
   uint32_t tick_calls{0U};
   std::set<std::string> stalled;
   bool uart_running{false};
@@ -247,6 +249,9 @@ bool ClockEnabled(const char* name) {
 void SetTickStep(uint32_t step) {
   S().tick_step = step;
 }
+void SetTickFreq(HAL_TickFreqTypeDef freq) {
+  S().tick_freq = freq;
+}
 void SetTickEvery(uint32_t calls) {
   S().tick_every = (calls == 0U) ? 1U : calls;
 }
@@ -270,7 +275,14 @@ uint64_t CyclesRead() {
   return S().cycles;
 }
 void ForceLevel(int port, int pin, int level) {
-  S().pins[static_cast<std::size_t>(port)][static_cast<std::size_t>(pin)].forced = level;
+  fake::Pin& f = S().pins[static_cast<std::size_t>(port)][static_cast<std::size_t>(pin)];
+  f.forced = level;
+  f.forced_reads = 0U;
+}
+void ForceLevelFor(int port, int pin, int level, uint32_t reads) {
+  fake::Pin& f = S().pins[static_cast<std::size_t>(port)][static_cast<std::size_t>(pin)];
+  f.forced = level;
+  f.forced_reads = reads;
 }
 int Driven(int port, int pin) {
   return ((kb_fake_gpio[port].ODR >> static_cast<unsigned>(pin)) & 1U) != 0U ? 1 : 0;
@@ -455,7 +467,7 @@ uint32_t HAL_GetTick(void) {
   return now;
 }
 HAL_TickFreqTypeDef HAL_GetTickFreq(void) {
-  return HAL_TICK_FREQ_1KHZ;
+  return S().tick_freq;
 }
 uint32_t HAL_RCC_GetHCLKFreq(void) {
   return 160000000U;
@@ -523,11 +535,17 @@ void HAL_GPIO_WritePin(GPIO_TypeDef* port, uint16_t pin, GPIO_PinState state) {
 GPIO_PinState HAL_GPIO_ReadPin(const GPIO_TypeDef* port, uint16_t pin) {
   static_cast<void>(Injected("HAL_GPIO_ReadPin"));
   const int p = fake::PortIndex(port);
-  const fake::Pin& f =
+  fake::Pin& f =
       S().pins[static_cast<std::size_t>(p)][static_cast<std::size_t>(fake::PinIndex(pin))];
   bool high = false;
   if (f.forced >= 0) {
     high = f.forced != 0;
+    if (f.forced_reads > 0U) {
+      --f.forced_reads;
+      if (f.forced_reads == 0U) {
+        f.forced = -1; // the last forced read: the model's level from the next one
+      }
+    }
   } else if (fake::IsOutput(f.mode)) {
     high = (port->ODR & pin) != 0U;
   } else {

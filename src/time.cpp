@@ -111,7 +111,9 @@ uint64_t ClockNowUs(uint8_t timer) noexcept {
 }
 
 void HandleClockIrq(uint8_t timer) noexcept {
-  if ((timer < kTimers) && sdk::State().clock_on[timer].load(std::memory_order_acquire)) {
+  if ((timer < kTimers) && !sdk::State().clock_on[timer].load(std::memory_order_acquire)) {
+    sdk::ClockIrqOff(timer); // not the port's clock: its update interrupt would re-enter forever
+  } else if (timer < kTimers) {
     // The flag cleared and the wrap counted with interrupts masked: no reader, not even a higher
     // priority interrupt, ever sees one without the other.
     const IrqGuard guard{};
@@ -119,6 +121,8 @@ void HandleClockIrq(uint8_t timer) noexcept {
       sdk::ClockClearWrap(timer);
       static_cast<void>(sdk::State().wraps[timer].fetch_add(1U, std::memory_order_acq_rel));
     }
+  } else {
+    // not a timer
   }
 }
 

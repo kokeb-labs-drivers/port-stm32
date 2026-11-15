@@ -312,3 +312,19 @@ KB_TEST("adc: the H7 asynchronous divider meets the ADC clock limit at any kerne
     KB_CHECK((i == 0U) || ((hz / stm::kAdcAsyncDividers[i - 1U]) > stm::kH7AdcMaxHz)); // smallest
   }
 }
+
+KB_TEST("adc: a vector none of whose instances the port has open is switched off") {
+  Fresh();
+  const IRQn_Type irq = kF4 ? ADC_IRQn : ADC3_IRQn;
+  HAL_NVIC_EnableIRQ(irq);
+  stm::HandleAdcIrq(3U, 3U);
+  KB_CHECK(!fake::IrqEnabled(irq));
+}
+
+KB_TEST("clock: an update interrupt of a timer the port's clock does not run on is switched off") {
+  Fresh();
+  // TIM5 has no Clock yet in this test binary (the clock tests come later): another user's.
+  HAL_NVIC_EnableIRQ(TIM5_IRQn);
+  stm::HandleClockIrq(5U);
+  KB_CHECK(!fake::IrqEnabled(TIM5_IRQn));
+}

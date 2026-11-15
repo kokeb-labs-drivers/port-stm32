@@ -68,10 +68,12 @@ struct SpiDeviceConfig {
 
 /** @brief Counters of an SPI device. */
 struct SpiStats {
-  uint32_t transfers{0U};     ///< Frames started.
-  uint32_t failures{0U};      ///< Frames that failed.
-  uint32_t rebuilds{0U};      ///< Peripheral initialisations after a timeout.
-  uint32_t lock_timeouts{0U}; ///< Calls refused with Busy.
+  uint32_t transfers{0U};       ///< Frames started.
+  uint32_t failures{0U};        ///< Frames that failed.
+  uint32_t rebuilds{0U};        ///< Peripheral initialisations after a timeout.
+  uint32_t lock_timeouts{0U};   ///< Calls refused with Busy.
+  uint32_t clamps{0U};          ///< Clock selections lowered to the bus's interrupt ceiling.
+  uint32_t actual_clock_hz{0U}; ///< The SCK of the next frame (ActualClockHz()); 0 before start.
 };
 
 /**
@@ -203,6 +205,7 @@ private:
   [[nodiscard]] kb::Status finish(uint32_t code) noexcept;
   [[nodiscard]] bool configValid() const noexcept;
   [[nodiscard]] uint32_t limited(uint32_t hz) const noexcept;
+  void noteClock(uint32_t asked) noexcept;
   void count(uint32_t SpiStats::* field) noexcept;
 
   SpiBus& bus_;

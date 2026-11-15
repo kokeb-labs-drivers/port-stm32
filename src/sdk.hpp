@@ -182,6 +182,9 @@ void PwmSetCompare(uint8_t timer, uint8_t channel, uint32_t compare) noexcept;
 /** @brief The update flag: a wrap the interrupt has not counted yet. */
 [[nodiscard]] bool ClockWrapPending(uint8_t timer) noexcept;
 void ClockClearWrap(uint8_t timer) noexcept;
+/** @brief Disables the NVIC line of TIM2 or TIM5 (a timer whose interrupt the port does not own).
+ */
+void ClockIrqOff(uint8_t timer) noexcept;
 /** @brief True when the ITM and stimulus port 0 are enabled (a probe listens). */
 [[nodiscard]] bool ItmEnabled() noexcept;
 /** @brief True when stimulus port 0 can take a character. */

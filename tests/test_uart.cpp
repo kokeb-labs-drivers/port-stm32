@@ -376,3 +376,24 @@ KB_TEST("uart: an interrupt of an instance the port does not own is switched off
   stm::HandleUartIrq(1U);
   KB_CHECK(!fake::IrqEnabled(USART1_IRQn)); // no endless re-entry with RXNE set
 }
+
+KB_TEST("uart: a HAL tick of 10 Hz is accepted from its period, beyond the 25 ms floor") {
+  Fresh();
+  // 100 ms ticks: one tick after about 120 ms of DWT time (16 MHz, 100 cycles per read).
+  fake::SetTickFreq(HAL_TICK_FREQ_10HZ);
+  fake::SetTickStep(100U);
+  fake::SetTickEvery(10000U);
+  stm::Uart u{Config()};
+  KB_CHECK_EQ(u.EnsureReady(), Status::Ok); // the window is two periods (201 ms), not 25 ms
+}
+
+KB_TEST("uart: SetBaud refuses when the HAL time base has stopped") {
+  Fresh();
+  stm::Uart u{Config()};
+  KB_REQUIRE(u.EnsureReady() == Status::Ok);
+  fake::SetTickStep(0U);
+  const uint32_t inits = fake::Calls("HAL_UART_Init");
+  KB_CHECK_EQ(u.SetBaud(9600U), Status::NotReady);
+  KB_CHECK(FailedWith(u.LastError(), Status::NotReady, stm::port_code::kHalTickStopped));
+  KB_CHECK_EQ(fake::Calls("HAL_UART_Init"), inits); // HAL_UART_Init and its waits not entered
+}
