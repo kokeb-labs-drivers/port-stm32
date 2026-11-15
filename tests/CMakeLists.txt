@@ -75,3 +75,18 @@ foreach(_file IN ITEMS ref_from_wrong_contract.cpp controller_copied.cpp output_
   add_test(NAME ${_target} COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target ${_target})
   set_tests_properties(${_target} PROPERTIES PASS_REGULAR_EXPRESSION "${_expect}")
 endforeach()
+
+# The source layout (tools/check_layout.py): one source per public header, one boundary file per HAL component;
+# and the checker's own test. Needs python3 with PyYAML (the preflight and the CI images have it).
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+  execute_process(COMMAND "${Python3_EXECUTABLE}" -c "import yaml" RESULT_VARIABLE _kb_yaml OUTPUT_QUIET ERROR_QUIET)
+endif()
+if(Python3_Interpreter_FOUND AND _kb_yaml EQUAL 0)
+  add_test(NAME kb_port_stm32_layout
+           COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tools/check_layout.py" --root "${PROJECT_SOURCE_DIR}")
+  add_test(NAME kb_port_stm32_layout_checker
+           COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tools/test_check_layout.py")
+else()
+  message(STATUS "kb_port_stm32: python3 with PyYAML not found, the layout tests are not registered")
+endif()

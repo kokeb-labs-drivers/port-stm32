@@ -5,6 +5,16 @@ All notable changes of port-stm32. The format follows Keep a Changelog; versions
 
 ## [Unreleased]
 
+### Changed
+
+- Source layout: every public header has a source file of the same name (`src/adc.cpp` for `adc.hpp`, and so
+  on; `irq.hpp` and `version.hpp` are header-only), and the HAL boundary is one file per HAL component in
+  `src/boundary/` (`i2c.cpp`, `spi.cpp`, `uart.cpp`, `gpio.cpp`, `adc.cpp`, `timer.cpp`, `can.cpp`, `time.cpp`,
+  `log.cpp`, `error.cpp`, `state.cpp`, `vectors.cpp`). The combined files (`adc_pwm.cpp`, `stm32_*_boundary.cpp`)
+  are gone; `time.cpp` is split into `time.cpp`, `completion.cpp` and `log.cpp`, `i2c_controller.cpp` is `i2c.cpp`
+  and `spi_device.cpp` is `spi.cpp`. `tools/check_layout.py` (preflight and ctest) fails on a header without its
+  source or a file that matches no header. No behaviour change; the MISRA records name the new files.
+
 ### Known limits
 
 - The SPI interrupt ceilings are estimates; a bench measurement per family is not yet done. A long critical section

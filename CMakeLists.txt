@@ -22,12 +22,12 @@ set(KB_PORT_STM32_VECTORS_EXCLUDE "" CACHE STRING
 set(KB_PORT_STM32_DEVICE "" CACHE STRING "CMSIS device macro, e.g. STM32G474xx (empty: off target)")
 set(KB_PORT_STM32_HAL_CONF_DIR "" CACHE PATH "Folder of the application's stm32<family>xx_hal_conf.h")
 
-# One source per public header (src/<stem>.cpp).
+# One source per public header (src/<stem>.cpp; tools/check_layout.py checks it).
 set(KB_PORT_STM32_LOGIC_SOURCES
     src/adc.cpp src/can.cpp src/completion.cpp src/error.cpp src/gpio.cpp src/i2c.cpp src/log.cpp src/port.cpp
     src/pwm.cpp src/spi.cpp src/time.cpp src/uart.cpp)
 # The only files that include HAL or CMSIS headers (deviations/boundary-files.yml).
-# One file per HAL component, in src/boundary/ (named after the header it serves); the vectors are a file of their own below.
+# One file per HAL component, in src/boundary/ (tools/check_layout.py); the vectors are a file of their own below.
 set(KB_PORT_STM32_BOUNDARY_SOURCES
     src/boundary/adc.cpp src/boundary/can.cpp src/boundary/error.cpp src/boundary/gpio.cpp src/boundary/i2c.cpp
     src/boundary/log.cpp src/boundary/spi.cpp src/boundary/state.cpp src/boundary/time.cpp src/boundary/timer.cpp

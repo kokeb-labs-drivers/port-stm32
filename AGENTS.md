@@ -11,20 +11,20 @@ handbook at level `high` (`.kokeb/handbook.yml`).
   all and proves every `*Ref`; `irq.hpp` holds the interrupt entry points.
 - `src/<stem>.cpp`: the platform-free logic, one file per public header (`adc`, `can`, `completion`, `error`, `gpio`,
   `i2c`, `log`, `port`, `pwm`, `spi`, `time`, `uart`); `irq.hpp` and `version.hpp` are header-only
- . Shared internals: `sdk.hpp` (the seam to the boundary), `state.hpp` (the shared state's
+  (`tools/layout.yml`). Shared internals: `sdk.hpp` (the seam to the boundary), `state.hpp` (the shared state's
   type) and `clock_read.hpp` (the clock's read rule), used by several of these files.
 - `src/boundary/<component>.cpp`: the HAL boundary, one file per HAL component (`i2c`, `spi`, `uart`, `gpio`, `adc`,
   `can`, `time`, `log`, `error`; `timer` for the TIM handles that PWM and the clock share, `state` for the shared
   state's one instance, `vectors` for the interrupt vectors), the only files that include HAL or CMSIS headers
-  (`deviations/boundary-files.yml`). A new peripheral adds `inc/.../<x>.hpp`, `src/<x>.cpp` and
-  `src/boundary/<x>.cpp`.
+  (`deviations/boundary-files.yml`). `tools/check_layout.py` (preflight, ctest) keeps header, source and boundary
+  file in step: a new peripheral adds `inc/.../<x>.hpp`, `src/<x>.cpp` and `src/boundary/<x>.cpp`.
 - `cmake/`: the pinned HAL fetch (`kb_port_stm32_hal.cmake`), the pinned FreeRTOS-Kernel fetch for the example
   (`kb_port_stm32_freertos.cmake`), the kb-core copy check, an Arm toolchain file.
 - `tests/`: host tests; `tests/fakes/stm32/` fakes every HAL call the boundary files make.
 - `examples/stm32/`: one firmware project for the four families (`boards/<board>/`); `drivers/` holds the pinned
   driver submodules it binds.
 - `third_party/kb-core/`: the pinned, unchanged kb-core copy (`tools/kb_core_snapshot.py`, `third_party/kb-core.lock`).
-- `_config/`: tool configuration; `tools/`: pre-flight, layering rules, the snapshot tool, the firmware vector check
+- `_config/`: tool configuration; `tools/`: pre-flight, layering rules, the layout check, the snapshot tool, the firmware vector check
   (`check_vectors.cmake`).
 
 ## Rules

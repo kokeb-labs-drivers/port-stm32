@@ -1,0 +1,30 @@
+---
+# What tools/check_layout.py accepts besides the rule "src/<stem>.cpp for every inc/kb/port/stm32/<stem>.hpp, and
+# src/boundary/<component>.cpp for every HAL component". Every entry carries its reason; an entry that no longer
+# matches a file fails the check, so the lists cannot go stale.
+
+# Public headers without a source file of the same stem.
+header_only:
+  irq: >-
+    declarations only: the interrupt entry points it names are defined next to the handles they read, in
+    src/boundary/<component>.cpp (uart, i2c, spi, adc, can), src/gpio.cpp (EXTI) and src/time.cpp (the clock's
+    timer), and called by src/boundary/vectors.cpp
+  version: >-
+    constants only; the version is checked against CMakeLists.txt and CHANGELOG.md by the static_assert in
+    src/port.cpp (the translation unit of port.hpp)
+
+# Files of src/ whose stem is not a public header: private code shared by several headers' sources.
+internal:
+  sdk: >-
+    the seam between the logic (src/*.cpp) and the boundary (src/boundary/*.cpp); one declaration per HAL
+    operation
+  state: >-
+    the type of the port's shared state (pin claims, EXTI lines, timer ownership, wrap counters, ADC
+    instances), shared by the sources of gpio, adc, pwm, time, uart, i2c, spi, can and completion
+  clock_read: the 64-bit clock's read rule over any sample source, included by src/time.cpp and driven by its own test
+
+# Files of src/boundary/ whose stem is not a public header.
+boundary_extra:
+  state: the one instance of the port's shared state (state.hpp); includes no HAL header
+  timer: the TIM handles, one table shared by the PWM channels (pwm.hpp) and the clock's counter (time.hpp)
+  vectors: the interrupt vectors of the device, built as an object library (KB_PORT_STM32_VECTORS); calls irq.hpp

@@ -10,5 +10,6 @@ Thank you for helping. This repository follows the
 4. Sign off every commit (`git commit -s`, Developer Certificate of Origin); CI checks it.
 5. Update `CHANGELOG.md` and the documentation page of the peripheral.
 
-STM32Cube HAL and CMSIS headers belong only in the boundary files listed in `deviations/boundary-files.yml`; a new
-MISRA finding there gets a record in `deviations/deviations.yml`. Questions: <kokeblabs@gmail.com>.
+A new header `x.hpp` comes with `src/x.cpp` and `src/boundary/x.cpp` (`tools/check_layout.py`). STM32Cube HAL and
+CMSIS headers belong only in the boundary files listed in `deviations/boundary-files.yml`; a new MISRA finding
+there gets a record in `deviations/deviations.yml`. Questions: <kokeblabs@gmail.com>.

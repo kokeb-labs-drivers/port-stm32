@@ -8,7 +8,8 @@ port over the HAL fakes, both family variants: `kb_port_stm32_scan`).
 
 STM32Cube HAL and CMSIS headers are included only by the files of `src/boundary/` (`deviations/boundary-files.yml`):
 one file per HAL component, named after the public header it serves, next to the logic file `src/<name>.cpp` of the
-same name:
+same name (`tools/check_layout.py` fails on a header without its source, on a combined file and on a file that
+matches no header):
 
 | File | HAL areas |
 | --- | --- |
