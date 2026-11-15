@@ -30,6 +30,7 @@ that stops the build.
 | --- | --- | --- | --- | --- |
 | DEV-001 | Rule 6.7.1 (local variables with static storage) | the bus, io and CAN boundary files | The HAL keeps each peripheral's state in a handle that outlives each call and is reached from the interrupt handlers and HAL callbacks, and no HAL type may reach a public header: the handles live in one function-local static table per peripheral, and the one instance of the platform-free shared state (`src/state.hpp`) in the same form | One accessor per table in an anonymous namespace; entries written by the owner's `EnsureReady()`, cleared by `Release()`; a second owner refused with `Busy`; entries shared with an interrupt are atomic and changed only with interrupts masked (`IrqGuard`); every accessor exercised by the host tests |
 | DEV-002 | Rule 8.2.3 (casts that remove const) | the bus boundary file, one call | `HAL_I2C_Master_Seq_Transmit_IT` takes `uint8_t*` for data it only reads; the contract hands the port `std::span<const uint8_t>`, and a write cannot be split into copies | One call site; the pinned HAL only reads through the pointer; the tests check the bytes reach the bus and the caller's buffer is unchanged |
+| DEV-003 | Rule 10.2.3 (unscoped enum without a fixed underlying type) | the bus boundary file, two stores in `I2cRestore` | `I2C_HandleTypeDef::State` and `::Mode` are volatile fields of the HAL's unscoped enumerations; the pinned HAL has no call that returns a handle to ready without a re-initialisation | Only the field's own enumerators are stored (no conversion); bus lock held and the instance's interrupts disabled; the tests start a transfer from ready after a NACK, a timeout and a recovery |
 
 The records are in `deviations/deviations.yml`. A marker `// codeql::misra_deviation_next_line(DEV-001)` stands
 on the line before each finding it covers. A clang-tidy suppression of a check the MISRA matrix relies on names its
@@ -44,7 +45,8 @@ nothing, an unknown id or a lapsed record (`review_by` passed) fails the scan.
 | Rule 8.2.5 (`reinterpret_cast`) | `HAL_UART_Transmit` takes `uint8_t*` for log text | `UartLogSink` converts each character with `std::bit_cast` into a byte buffer |
 | Rule 24.5.2 (`memcpy`) | Copying frames and text with `memcpy` | `std::array` assignment and element loops |
 | Rule 8.2.6 (`void*` to object pointer) | HAL handles in public headers | Handles stay in the boundary files' tables; the HAL's `void*` callbacks are not used |
-| Rule 10.2.3 (`HAL_StatusTypeDef` cast to `void`) | Discarding the result of `HAL_SPI_Abort`, `HAL_ADC_Stop`, `HAL_FDCAN_Stop`, `HAL_CAN_Stop` | Each result is used: folded into the reported status or `ErrorCode` |
+| Rule 10.2.3 (`HAL_StatusTypeDef` cast to `void`) | Discarding the result of `HAL_SPI_Abort`, `HAL_ADC_Stop`, `HAL_FDCAN_Stop`, `HAL_CAN_Stop`, `HAL_CAN_ResetError` | Each result is used: folded into the reported status or `ErrorCode`, or compared with `HAL_OK` (the CAN error callback) |
+| Rule 10.2.3 (`IRQn_Type` stored through a reference) | An out-parameter pair for the I2C event and error vectors | `I2cEventIrq()` and `I2cErrorIrq()` return each vector by value |
 | Rule 8.2.6 in the HAL callbacks | Recovering the owner from the handle through a `void*` user field | Each callback finds its owner by comparing the handle's address with the port's table |
 
 ## Advisory findings left

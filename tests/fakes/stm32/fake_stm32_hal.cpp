@@ -793,6 +793,12 @@ HAL_StatusTypeDef HAL_UART_DeInit(UART_HandleTypeDef* h) {
   FAKE_INJECT("HAL_UART_DeInit", h);
   return HAL_OK;
 }
+namespace {
+// The port's interrupt entry, reached through a pointer: the fake stands in for the hardware, which
+// raises the interrupt from outside the call chain, so the port's functions do not call themselves
+// through the fake (Rule 8.2.10).
+void (*const g_uart_irq)(uint8_t) noexcept = &kb::port::stm32::HandleUartIrq;
+} // namespace
 void kb_fake_uart_it(UART_HandleTypeDef* h, uint32_t it, int on) {
   h->Interrupts = (on != 0) ? (h->Interrupts | it) : (h->Interrupts & ~it);
   if ((on != 0) && ((it & (UART_IT_TXE | UART_IT_TC)) != 0U) && !S().uart_running &&
@@ -808,12 +814,12 @@ void kb_fake_uart_it(UART_HandleTypeDef* h, uint32_t it, int on) {
 #if defined(KB_FAKE_STM32F4)
       const uint32_t before = u->SR;
       u->SR = before | USART_SR_TXE | USART_SR_TC;
-      kb::port::stm32::HandleUartIrq(instance);
+      g_uart_irq(instance);
       u->SR = before;
 #else
       const uint32_t before = u->ISR;
       u->ISR = before | USART_ISR_TXE_TXFNF | USART_ISR_TC;
-      kb::port::stm32::HandleUartIrq(instance);
+      g_uart_irq(instance);
       u->ISR = before;
 #endif
     }

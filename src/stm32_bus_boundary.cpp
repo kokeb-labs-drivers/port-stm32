@@ -76,35 +76,53 @@ std::array<I2cSlot, kI2cs>& I2cs() noexcept {
   return found;
 }
 
-// The event and error interrupt numbers of an instance.
-void I2cIrqs(uint8_t instance, IRQn_Type& event, IRQn_Type& error) noexcept {
-  event = I2C1_EV_IRQn;
-  error = I2C1_ER_IRQn;
+// The event and error interrupt numbers of an instance. Each is a local value returned by value: no
+// vendor enumerator is written through a reference (Rule 10.2.3).
+[[nodiscard]] IRQn_Type I2cEventIrq(uint8_t instance) noexcept {
+  IRQn_Type irq = I2C1_EV_IRQn;
 #if defined(I2C2)
   if (instance == 2U) {
-    event = I2C2_EV_IRQn;
-    error = I2C2_ER_IRQn;
+    irq = I2C2_EV_IRQn;
   }
 #endif
 #if defined(I2C3)
   if (instance == 3U) {
-    event = I2C3_EV_IRQn;
-    error = I2C3_ER_IRQn;
+    irq = I2C3_EV_IRQn;
   }
 #endif
 #if defined(I2C4)
   if (instance == 4U) {
-    event = I2C4_EV_IRQn;
-    error = I2C4_ER_IRQn;
+    irq = I2C4_EV_IRQn;
   }
 #endif
   static_cast<void>(instance);
+  return irq;
+}
+
+[[nodiscard]] IRQn_Type I2cErrorIrq(uint8_t instance) noexcept {
+  IRQn_Type irq = I2C1_ER_IRQn;
+#if defined(I2C2)
+  if (instance == 2U) {
+    irq = I2C2_ER_IRQn;
+  }
+#endif
+#if defined(I2C3)
+  if (instance == 3U) {
+    irq = I2C3_ER_IRQn;
+  }
+#endif
+#if defined(I2C4)
+  if (instance == 4U) {
+    irq = I2C4_ER_IRQn;
+  }
+#endif
+  static_cast<void>(instance);
+  return irq;
 }
 
 void I2cIrqsOn(uint8_t instance, uint8_t priority, bool on) noexcept {
-  IRQn_Type event = I2C1_EV_IRQn;
-  IRQn_Type error = I2C1_ER_IRQn;
-  I2cIrqs(instance, event, error);
+  const IRQn_Type event = I2cEventIrq(instance);
+  const IRQn_Type error = I2cErrorIrq(instance);
   if (on) {
     HAL_NVIC_SetPriority(event, priority, 0U);
     HAL_NVIC_SetPriority(error, priority, 0U);
@@ -681,7 +699,10 @@ void I2cRestore(uint8_t instance) noexcept {
         &h, I2C_FLAG_AF | I2C_FLAG_STOPF | I2C_FLAG_BERR | I2C_FLAG_ARLO | I2C_FLAG_OVR);
 #endif
     I2cPrepare(instance);
+    // The HAL has no call that returns a handle to ready without a re-initialisation (DEV-003).
+    // codeql::misra_deviation_next_line(DEV-003)
     h.State = HAL_I2C_STATE_READY;
+    // codeql::misra_deviation_next_line(DEV-003)
     h.Mode = HAL_I2C_MODE_NONE;
     h.PreviousState = 0U;
     __HAL_UNLOCK(&h);

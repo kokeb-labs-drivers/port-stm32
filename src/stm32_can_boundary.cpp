@@ -584,7 +584,9 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef* hcan) {
 void HAL_CAN_ErrorCallback(CAN_HandleTypeDef* hcan) {
   kb::port::stm32::CanController* const owner = kb::port::stm32::sdk::OwnerOf(hcan);
   const bool overrun = (hcan->ErrorCode & HAL_CAN_ERROR_RX_FOV0) != 0U;
-  static_cast<void>(HAL_CAN_ResetError(hcan));
+  // HAL_ERROR only for a handle neither ready nor listening: nothing more an interrupt can do.
+  const bool reset = HAL_CAN_ResetError(hcan) == HAL_OK;
+  static_cast<void>(reset);
   if ((owner != nullptr) && overrun) {
     owner->OnRxInterrupt(true);
   }
