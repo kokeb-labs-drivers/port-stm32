@@ -1,8 +1,10 @@
 // Boundary file (deviations/boundary-files.yml): the interrupt vectors the port serves, defined
 // over the device header's instance macros so each exists only where the device has it. Built
-// unless KB_PORT_STM32_VECTORS is OFF; an application that defines these vectors itself turns it
-// off and calls the entry points of irq.hpp from its own handlers. SPDX-License-Identifier: MIT
-// Copyright (c) 2026 The port-stm32 authors
+// unless KB_PORT_STM32_VECTORS is OFF, as an object library linked into the firmware directly (a
+// weak reference from the startup file never pulls a member out of an archive);
+// tools/check_vectors.cmake checks every family's firmware for them. An application that defines
+// these vectors itself turns it off and calls the entry points of irq.hpp from its own handlers.
+// SPDX-License-Identifier: MIT Copyright (c) 2026 The port-stm32 authors
 #include <cstdint>
 
 #include "kb/port/stm32/irq.hpp"
@@ -99,6 +101,148 @@ void UART8_IRQHandler(void) {
 #if defined(LPUART1)
 void LPUART1_IRQHandler(void) {
   port::HandleUartIrq(port::kLpuart1);
+}
+#endif
+
+// I2C event and error interrupts.
+void I2C1_EV_IRQHandler(void) {
+  port::HandleI2cIrq(1U, false);
+}
+void I2C1_ER_IRQHandler(void) {
+  port::HandleI2cIrq(1U, true);
+}
+#if defined(I2C2)
+void I2C2_EV_IRQHandler(void) {
+  port::HandleI2cIrq(2U, false);
+}
+void I2C2_ER_IRQHandler(void) {
+  port::HandleI2cIrq(2U, true);
+}
+#endif
+#if defined(I2C3)
+void I2C3_EV_IRQHandler(void) {
+  port::HandleI2cIrq(3U, false);
+}
+void I2C3_ER_IRQHandler(void) {
+  port::HandleI2cIrq(3U, true);
+}
+#endif
+#if defined(I2C4)
+void I2C4_EV_IRQHandler(void) {
+  port::HandleI2cIrq(4U, false);
+}
+void I2C4_ER_IRQHandler(void) {
+  port::HandleI2cIrq(4U, true);
+}
+#endif
+
+// SPI interrupts.
+void SPI1_IRQHandler(void) {
+  port::HandleSpiIrq(1U);
+}
+#if defined(SPI2)
+void SPI2_IRQHandler(void) {
+  port::HandleSpiIrq(2U);
+}
+#endif
+#if defined(SPI3)
+void SPI3_IRQHandler(void) {
+  port::HandleSpiIrq(3U);
+}
+#endif
+#if defined(SPI4)
+void SPI4_IRQHandler(void) {
+  port::HandleSpiIrq(4U);
+}
+#endif
+#if defined(SPI5)
+void SPI5_IRQHandler(void) {
+  port::HandleSpiIrq(5U);
+}
+#endif
+#if defined(SPI6)
+void SPI6_IRQHandler(void) {
+  port::HandleSpiIrq(6U);
+}
+#endif
+
+// ADC interrupts: the vector names differ by family.
+#if defined(STM32F4)
+void ADC_IRQHandler(void) {
+  port::HandleAdcIrq(1U, 3U);
+}
+#elif defined(STM32H7)
+void ADC_IRQHandler(void) {
+  port::HandleAdcIrq(1U, 2U);
+}
+#if defined(ADC3)
+void ADC3_IRQHandler(void) {
+  port::HandleAdcIrq(3U, 3U);
+}
+#endif
+#else
+#if defined(ADC2)
+void ADC1_2_IRQHandler(void) {
+  port::HandleAdcIrq(1U, 2U);
+}
+#else
+void ADC1_IRQHandler(void) {
+  port::HandleAdcIrq(1U, 1U);
+}
+#endif
+#if defined(ADC3)
+void ADC3_IRQHandler(void) {
+  port::HandleAdcIrq(3U, 3U);
+}
+#endif
+#if defined(ADC4)
+void ADC4_IRQHandler(void) {
+  port::HandleAdcIrq(4U, 4U);
+}
+#endif
+#if defined(ADC5)
+void ADC5_IRQHandler(void) {
+  port::HandleAdcIrq(5U, 5U);
+}
+#endif
+#endif
+
+// CAN interrupts: FDCAN line 0 (G4, H7) or the bxCAN TX, RX0 and SCE lines (F4, L4).
+#if defined(FDCAN1)
+void FDCAN1_IT0_IRQHandler(void) {
+  port::HandleCanIrq(1U);
+}
+#endif
+#if defined(FDCAN2)
+void FDCAN2_IT0_IRQHandler(void) {
+  port::HandleCanIrq(2U);
+}
+#endif
+#if defined(FDCAN3)
+void FDCAN3_IT0_IRQHandler(void) {
+  port::HandleCanIrq(3U);
+}
+#endif
+#if defined(CAN1)
+void CAN1_TX_IRQHandler(void) {
+  port::HandleCanIrq(1U);
+}
+void CAN1_RX0_IRQHandler(void) {
+  port::HandleCanIrq(1U);
+}
+void CAN1_SCE_IRQHandler(void) {
+  port::HandleCanIrq(1U);
+}
+#endif
+#if defined(CAN2)
+void CAN2_TX_IRQHandler(void) {
+  port::HandleCanIrq(2U);
+}
+void CAN2_RX0_IRQHandler(void) {
+  port::HandleCanIrq(2U);
+}
+void CAN2_SCE_IRQHandler(void) {
+  port::HandleCanIrq(2U);
 }
 #endif
 

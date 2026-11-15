@@ -2,19 +2,24 @@
  * @file spi.hpp
  * @brief `kb::port::stm32::SpiBus` (one SPI peripheral as master) and `kb::port::stm32::SpiDevice`
  * (one chip select on it, driven as a GPIO), which satisfies `kb::iface::SpiDevice` and
- * `kb::iface::SpiClockControl`. HAL `stm32<family>xx_hal_spi`, blocking calls.
+ * `kb::iface::SpiClockControl`. HAL `stm32<family>xx_hal_spi`, interrupt-driven calls.
  *
  * A Transfer() takes the bus lock (at most `SpiDeviceConfig::timeout`), sets the peripheral to the
- * device's mode and baud-rate prescaler when another device used it last, drives chip select low,
- * clocks the frame (`HAL_SPI_TransmitReceive`, `HAL_SPI_Transmit` or `HAL_SPI_Receive`, in chunks
- * of at most 65535 bytes), and drives chip select high again, whatever the result. A HAL timeout
- * aborts the transfer (`HAL_SPI_Abort`) and the peripheral is initialised again before the next
- * frame.
+ * device's mode and baud-rate prescaler when another device used it last (re-initialised, so the
+ * peripheral is disabled while it is reprogrammed), drives chip select low, clocks the frame by
+ * interrupt (`HAL_SPI_TransmitReceive_IT` or `HAL_SPI_Transmit_IT`, in chunks of at most 65535
+ * bytes; a read-only frame is a full-duplex transfer of the zeroed receive buffer in place, on
+ * every family), and drives chip select high again, whatever the result. The task waits for the
+ * HAL's completion callback on the port's clock (completion.hpp), asleep under an RTOS; each chunk
+ * has `timeout`. A timeout aborts the transfer (`HAL_SPI_Abort`) and the peripheral is initialised
+ * again before the next frame. The inter-data idleness (H7 MIDI) is the HAL default (none) for
+ * every device.
  *
  * | Result | Meaning |
  * | --- | --- |
  * | `Ok` | The frame was clocked |
  * | `InvalidArgument` | Empty or unequal spans, a clock out of the prescaler's reach, bad config |
+ * | `NotReady` | (also) the SPI kernel clock reads 0 |
  * | `Busy` | The bus lock was not had in time; nothing was clocked |
  * | `Timeout` | The HAL did not finish in time; the transfer was aborted |
  * | `BusError` | Mode fault, overrun or CRC error (`HAL_SPI_ERROR_*` in Detail) |
@@ -31,6 +36,7 @@
 #include <span>
 
 #include "kb/interfaces/spi.hpp"
+#include "kb/port/stm32/completion.hpp"
 #include "kb/port/stm32/error.hpp"
 #include "kb/rtos/mutex.hpp"
 #include "kb/utils/result.hpp"
@@ -46,6 +52,7 @@ struct SpiBusConfig {
   PinId mosi{};                 ///< MOSI with its alternate function, or unused.
   PinId miso{};                 ///< MISO with its alternate function, or unused.
   uint32_t kernel_clock_hz{0U}; ///< The SPI kernel clock; 0 reads it from the RCC.
+  uint8_t irq_priority{5U};     ///< NVIC priority of the SPI interrupt.
 };
 
 /** @brief One device on an SpiBus. */
@@ -53,7 +60,8 @@ struct SpiDeviceConfig {
   PinId cs{};                  ///< Chip select, driven as a push-pull GPIO (active low).
   uint8_t mode{0U};            ///< SPI mode 0 to 3 (CPOL, CPHA).
   uint32_t clock_hz{1000000U}; ///< The highest SCK wanted; the prescaler rounds down from it.
-  kb::Milliseconds timeout{kb::Milliseconds{20U}}; ///< Bus lock wait and per-chunk limit.
+  kb::Milliseconds timeout{
+      kb::Milliseconds{20U}}; ///< Bus lock wait and per-chunk limit, to kMaxTimeout.
 };
 
 /** @brief Counters of an SPI device. */
@@ -112,10 +120,14 @@ public:
   }
   /** @brief With the lock held: the peripheral in `mode` at prescaler exponent `prescaler`. */
   [[nodiscard]] uint32_t SelectLocked(uint8_t mode, uint8_t prescaler, bool force) noexcept;
+  /** @brief With the lock held: one interrupt-driven chunk, waited for on `deadline`. */
+  [[nodiscard]] uint32_t TransferLocked(std::span<const uint8_t> tx, std::span<uint8_t> rx,
+                                        Deadline& deadline) noexcept;
 
 private:
   SpiBusConfig config_;
   kb::rtos::Mutex mutex_;
+  Completion done_; ///< Completed by the HAL's transfer callbacks.
   LastErrorRecord error_;
   uint32_t kernel_hz_{0U};
   uint8_t mode_{0xFFU};
@@ -147,10 +159,8 @@ public:
   [[nodiscard]] kb::Result<void> LastError() const noexcept {
     return error_.Get();
   }
-  /** @brief The counters. */
-  [[nodiscard]] SpiStats Stats() const noexcept {
-    return stats_;
-  }
+  /** @brief The counters (a consistent copy). */
+  [[nodiscard]] SpiStats Stats() const noexcept;
   /** @brief The configuration (with the current clock). */
   [[nodiscard]] const SpiDeviceConfig& Config() const noexcept {
     return config_;
@@ -163,6 +173,7 @@ private:
   [[nodiscard]] uint32_t claimCs() const noexcept;
   [[nodiscard]] kb::Status finish(uint32_t code) noexcept;
   [[nodiscard]] bool configValid() const noexcept;
+  void count(uint32_t SpiStats::* field) noexcept;
 
   SpiBus& bus_;
   SpiDeviceConfig config_;

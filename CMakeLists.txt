@@ -16,12 +16,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(KB_PORT_STM32_BUILD_TESTS "Build the host tests against the HAL fakes" OFF)
-option(KB_PORT_STM32_VECTORS "Define the USART, EXTI and TIM2/TIM5 interrupt vectors the port serves" ON)
+option(KB_PORT_STM32_VECTORS "Define the interrupt vectors the port serves (USART, EXTI, TIM2/TIM5, I2C, SPI, ADC, CAN)" ON)
 set(KB_PORT_STM32_DEVICE "" CACHE STRING "CMSIS device macro, e.g. STM32G474xx (empty: off target)")
 set(KB_PORT_STM32_HAL_CONF_DIR "" CACHE PATH "Folder of the application's stm32<family>xx_hal_conf.h")
 
 set(KB_PORT_STM32_LOGIC_SOURCES
-    src/adc_pwm.cpp src/can_time_log.cpp src/gpio.cpp src/i2c_controller.cpp src/port.cpp src/spi_device.cpp src/uart.cpp)
+    src/adc_pwm.cpp src/can.cpp src/error.cpp src/gpio.cpp src/i2c_controller.cpp src/port.cpp src/spi_device.cpp
+    src/time.cpp src/uart.cpp)
 # The only files that include HAL or CMSIS headers (deviations/boundary-files.yml).
 set(KB_PORT_STM32_BOUNDARY_SOURCES src/stm32_bus_boundary.cpp src/stm32_can_boundary.cpp src/stm32_io_boundary.cpp)
 set(KB_PORT_STM32_VECTOR_SOURCE src/stm32_vectors_boundary.cpp)
@@ -50,14 +51,20 @@ if(KB_PORT_STM32_DEVICE)
     set(KB_PORT_STM32_FAMILY "${KB_PORT_STM32_FAMILY}" PARENT_SCOPE)
     set(KB_PORT_STM32_STARTUP "${KB_PORT_STM32_STARTUP}" PARENT_SCOPE)
   endif()
-  set(_sources ${_kb_port_logic} ${_kb_port_boundary})
-  if(KB_PORT_STM32_VECTORS)
-    list(APPEND _sources "${CMAKE_CURRENT_SOURCE_DIR}/${KB_PORT_STM32_VECTOR_SOURCE}")
-  endif()
-  add_library(kb_port_stm32 STATIC ${_sources})
+  add_library(kb_port_stm32 STATIC ${_kb_port_logic} ${_kb_port_boundary})
   add_library(kb::port_stm32 ALIAS kb_port_stm32)
   target_include_directories(kb_port_stm32 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
   target_link_libraries(kb_port_stm32 PUBLIC kb_port_stm32_api kb_port_stm32_hal)
+  if(KB_PORT_STM32_VECTORS)
+    # The vectors are strong definitions of names the startup file only references weakly, and a weak
+    # reference never pulls a member out of an archive: in libkb_port_stm32.a they would be dropped
+    # and every vector would stay Default_Handler. They are an object library whose object is added
+    # to the sources of every executable that links the port, so the linker always takes it.
+    add_library(kb_port_stm32_vectors OBJECT "${CMAKE_CURRENT_SOURCE_DIR}/${KB_PORT_STM32_VECTOR_SOURCE}")
+    target_link_libraries(kb_port_stm32_vectors PRIVATE kb_port_stm32_api kb_port_stm32_hal)
+    target_compile_options(kb_port_stm32_vectors PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra -Werror)
+    target_sources(kb_port_stm32 INTERFACE $<TARGET_OBJECTS:kb_port_stm32_vectors>)
+  endif()
   # The logic with kb-core's strict flags; the boundary files without the conversion and pedantic warnings, which
   # the HAL's and CMSIS's own headers and macros do not build cleanly with (the host build of the boundary files
   # over the fakes has every warning).

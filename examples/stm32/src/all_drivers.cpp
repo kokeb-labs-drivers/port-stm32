@@ -1,6 +1,7 @@
 // STM32 example firmware: the port's self test (clock, busy wait, log, GPIO, PWM, ADC, CAN in loopback,
-// UART), then pcal9555 and bno08x sharing one I2C controller and tmc5160 on SPI, served from one loop
-// (no RTOS: kb::rtos's RTOS-free backend). The HAL runs on the reset clock (HSI or MSI). Example code.
+// UART), then pcal9555 and bno08x sharing one I2C controller and tmc5160 on SPI, served from one loop:
+// bare metal (kb::rtos's none backend) by default, or one FreeRTOS task with EXAMPLE_RTOS=FREERTOS
+// (src/freertos_start.c). The HAL runs on the reset clock (HSI or MSI). Example code.
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The port-stm32 authors
 #include <array>
@@ -11,6 +12,7 @@
 #include "board.hpp"
 #include "driver_adapters.hpp"
 #include "kb/port/stm32/port.hpp"
+#include "kb/rtos/time.hpp"
 #include "pcal9555.hpp"
 #include "tmc5160.hpp"
 #include "tmc5160_kconfig.hpp"
@@ -18,14 +20,19 @@
 namespace stm = kb::port::stm32;
 
 extern "C" {
-// The HAL time base: SysTick at 1 kHz (HAL_Init). The startup file names these handlers.
-void SysTick_Handler(void);
-void HAL_IncTick(void);
 int HAL_Init(void);
-}
-
+void HAL_IncTick(void);
+void kb_example_main(void);
+#if defined(EXAMPLE_RTOS_FREERTOS)
+// FreeRTOS owns SysTick (FreeRTOSConfig.h); its tick hook advances the HAL time base.
+void kb_example_start(void);
+#else
+// Bare metal: the HAL time base is SysTick at 1 kHz (HAL_Init). The startup file names this handler.
+void SysTick_Handler(void);
 void SysTick_Handler(void) {
   HAL_IncTick();
+}
+#endif
 }
 
 namespace {
@@ -94,8 +101,8 @@ void SelfTest(stm::Clock& clock) {
 }
 } // namespace
 
-int main() {
-  static_cast<void>(HAL_Init());
+// The application: EnsureReady() of every object runs here, after the scheduler (under FreeRTOS).
+void kb_example_main(void) {
   static stm::Clock clock{};
   static_cast<void>(clock.Start());
   SelfTest(clock);
@@ -137,6 +144,9 @@ int main() {
 
   uint32_t last = 0U;
   while (true) {
+#if defined(EXAMPLE_RTOS_FREERTOS)
+    kb::rtos::SleepFor(kb::Milliseconds{1U}); // lower-priority tasks run between polls
+#endif
     hub.Poll(kb::utils::NarrowUs(clock.Now()));
     bno08x::Event ev{};
     while (hub.PopEvent(ev)) {
@@ -152,4 +162,14 @@ int main() {
       }
     }
   }
+}
+
+int main() {
+  static_cast<void>(HAL_Init());
+#if defined(EXAMPLE_RTOS_FREERTOS)
+  kb_example_start(); // the scheduler runs kb_example_main() as a task; never returns
+#else
+  kb_example_main();
+#endif
+  return 0;
 }

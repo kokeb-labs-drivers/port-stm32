@@ -21,14 +21,22 @@ void Reset();
 void Fail(const char* function, HAL_StatusTypeDef status, uint32_t error_code = 0U,
           uint32_t count = 1U);
 /** @brief Calls `fn(context)` once at the start of the next call of `function` (re-entrancy tests).
- */
+ * Besides the HAL functions: "time_read" (a DWT or timer counter read, as every wait makes) and
+ * "UART_TDR" (a byte written to the transmit data register by the interrupt). */
 void Hook(const char* function, void (*fn)(void*), void* context);
+/**
+ * @brief Holds (`on`) the completion interrupts of an area: "I2C", "SPI", "ADC", "UART" (transmit),
+ * "CAN" (receive): the interrupt APIs start and return HAL_OK, but no callback runs.
+ */
+void Stall(const char* area, bool on);
 /** @brief Calls of `function` since Reset(). */
 [[nodiscard]] uint32_t Calls(const char* function);
 [[nodiscard]] bool ClockEnabled(const char* name);
 
 // --- time ---------------------------------------------------------------------------------------
 void SetTickStep(uint32_t step);
+/** @brief Microseconds a timer counter advances per read (default 1). */
+void SetCounterStep(uint32_t step);
 void SetCycleStep(uint32_t step);
 [[nodiscard]] uint32_t Ticks();
 [[nodiscard]] uint64_t CyclesRead();
@@ -52,8 +60,12 @@ void I2cPresent(uint8_t address, bool present);
 void I2cDataNack(bool on);
 void I2cReply(std::span<const uint8_t> bytes);
 [[nodiscard]] const std::vector<uint8_t>& I2cWritten();
-[[nodiscard]] uint16_t I2cMemAddress();
-[[nodiscard]] uint16_t I2cMemSize();
+/** @brief The transfer options of the last sequential call, and the frames sent since Reset(). */
+[[nodiscard]] uint32_t I2cLastOptions();
+[[nodiscard]] uint32_t I2cFrames();
+/** @brief The BUSY flag of every I2C instance; `sticky`: a re-initialisation does not clear it. */
+void I2cBusyFlag(bool on, bool sticky = false);
+[[nodiscard]] const I2C_TypeDef& I2cRegs(int instance);
 [[nodiscard]] const I2C_InitTypeDef& I2cInit();
 
 // --- SPI ----------------------------------------------------------------------------------------
@@ -82,7 +94,11 @@ struct Frame {
   uint8_t data[8]{};
 };
 void CanTxFree(uint32_t free);
+/** @brief A received frame: into the 3-deep RX FIFO, then the receive interrupt (unless held). */
 void CanFeed(const Frame& frame);
+/** @brief Holds the receive interrupt (`on` false); true lets it run, with what queued meanwhile.
+ */
+void CanRxInterrupt(bool on);
 [[nodiscard]] const std::vector<Frame>& CanSent();
 /** @brief Bus-off on (and, for FDCAN, how many status reads after a restart it lasts). */
 void CanBusOff(bool on, uint32_t reads_after_restart = 1U);

@@ -1,13 +1,15 @@
 /**
  * @file adc.hpp
  * @brief `kb::port::stm32::AdcChannel`: one regular channel of an STM32 ADC (HAL
- * `stm32<family>xx_hal_adc`, single conversion, polled), which satisfies `kb::iface::AdcChannel`.
+ * `stm32<family>xx_hal_adc`, single conversion ended by its interrupt), which satisfies
+ * `kb::iface::AdcChannel`.
  *
- * The ADC instance is shared by every channel object on it (initialised once, counted); a
- * conversion selects the channel, starts, polls for the end of conversion at most
- * `conversion_timeout` and stops. On G4, H7 and L4 the ADC's offset calibration runs once at
- * EnsureReady()
- * (`HAL_ADCEx_Calibration_Start`); F4 has none. ReadMillivolts() scales the raw value by the
+ * The ADC instance is shared by every channel object on it (initialised once by its first
+ * channel, counted with interrupts masked, de-initialised by its last); a conversion selects the
+ * channel, starts by interrupt (HAL_ADC_Start_IT) and waits for HAL_ADC_ConvCpltCallback at most
+ * `conversion_timeout` on the port's clock, stopping the conversion on a timeout. On G4 and L4 the
+ * offset calibration runs once at EnsureReady() (`HAL_ADCEx_Calibration_Start`), on H7 offset and
+ * linearity; F4 has none. ReadMillivolts() scales the raw value by the
  * reference voltage the board has on VREF+ (`vref_mv`).
  *
  * | Result | Meaning |
@@ -48,8 +50,8 @@ struct AdcConfig {
   PinId pin{};          ///< The pin to set analog, or unused (internal channel).
   AdcSampling sampling{AdcSampling::Medium}; ///< Sampling time.
   uint32_t vref_mv{3300U};                   ///< The VREF+ voltage of the board, in millivolts.
-  kb::Milliseconds conversion_timeout{kb::Milliseconds{5U}}; ///< End-of-conversion wait.
-  kb::Milliseconds lock_timeout{kb::Milliseconds{10U}};      ///< Wait for the shared instance.
+  kb::Milliseconds conversion_timeout{kb::Milliseconds{5U}}; ///< End-of-conversion wait, to 2 s.
+  kb::Milliseconds lock_timeout{kb::Milliseconds{10U}};      ///< Shared-instance wait, to 2 s.
 };
 
 /** @brief One ADC input; satisfies kb::iface::AdcChannel. */

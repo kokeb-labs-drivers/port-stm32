@@ -137,8 +137,9 @@ KB_TEST("spi: two devices with different modes switch the peripheral; write-only
   KB_CHECK_EQ(b.Transfer(std::span<const uint8_t>{}, rx), Status::Ok);
   KB_CHECK_EQ(fake::SpiInit().CLKPolarity, SPI_POLARITY_LOW);
   KB_CHECK_EQ(fake::SpiSent()[2], 0x00U); // zeros clocked out for the read
-  KB_CHECK_EQ(fake::Calls("HAL_SPI_Transmit"), 1U);
-  KB_CHECK_EQ(fake::Calls("HAL_SPI_Receive"), 1U);
+  KB_CHECK_EQ(fake::Calls("HAL_SPI_Transmit_IT"), 1U);
+  // A read-only frame is full duplex on every family (never the H7 simplex receive).
+  KB_CHECK_EQ(fake::Calls("HAL_SPI_TransmitReceive_IT"), 1U);
   KB_CHECK_EQ(a.Transfer(tx, std::span<uint8_t>{}), Status::Ok);
   KB_CHECK_EQ(fake::SpiInit().CLKPolarity, SPI_POLARITY_HIGH);
   stm::SpiDevice same_cs{bus, DevConfig()};
@@ -166,20 +167,23 @@ KB_TEST("spi: a timeout aborts and re-initialises before the next frame; errors 
   stm::SpiDevice dev{bus, DevConfig()};
   KB_REQUIRE(dev.EnsureReady() == Status::Ok);
   const std::array<uint8_t, 2> tx{1U, 2U};
-  fake::Fail("HAL_SPI_Transmit", HAL_TIMEOUT);
+  fake::SetTickStep(0U);    // the HAL tick stands still: the wait is on the port's clock
+  fake::Stall("SPI", true); // the transfer's interrupt never ends it
   KB_CHECK_EQ(dev.Transfer(tx, std::span<uint8_t>{}), Status::Timeout);
+  fake::Stall("SPI", false);
   KB_CHECK_EQ(fake::Calls("HAL_SPI_Abort"), 1U);
   KB_CHECK_EQ(dev.Stats().rebuilds, 1U);
   KB_CHECK_EQ(fake::Driven(kPortB, 6), 1); // released after the failure too
   const uint32_t inits = fake::Calls("HAL_SPI_Init");
   KB_CHECK_EQ(dev.Transfer(tx, std::span<uint8_t>{}), Status::Ok);
   KB_CHECK_EQ(fake::Calls("HAL_SPI_Init"), inits + 1U);
-  fake::Fail("HAL_SPI_Transmit", HAL_TIMEOUT);
+  fake::Stall("SPI", true);
   fake::Fail("HAL_SPI_Abort", HAL_ERROR); // the abort failing too is reported in ErrorCode
   KB_CHECK_EQ(dev.Transfer(tx, std::span<uint8_t>{}), Status::Timeout);
+  fake::Stall("SPI", false);
   KB_CHECK(FailedWith(dev.LastError(), Status::Timeout, Code(HAL_TIMEOUT, HAL_SPI_ERROR_ABORT)));
   KB_CHECK_EQ(dev.Transfer(tx, std::span<uint8_t>{}), Status::Ok);
-  fake::Fail("HAL_SPI_Transmit", HAL_ERROR, HAL_SPI_ERROR_OVR);
+  fake::Fail("spi_error", HAL_ERROR, HAL_SPI_ERROR_OVR); // ended by the error callback
   KB_CHECK_EQ(dev.Transfer(tx, std::span<uint8_t>{}), Status::BusError);
   KB_CHECK(FailedWith(dev.LastError(), Status::BusError, Code(HAL_ERROR, HAL_SPI_ERROR_OVR)));
   fake::Fail("HAL_SPI_DeInit", HAL_BUSY); // the next selection fails
@@ -190,6 +194,12 @@ KB_TEST("spi: a timeout aborts and re-initialises before the next frame; errors 
   KB_REQUIRE(b.EnsureReady() == Status::Ok);
   KB_CHECK_EQ(b.Transfer(tx, std::span<uint8_t>{}), Status::Busy);
   KB_CHECK_EQ(dev.Stats().failures, 3U);
+  fake::Fail("HAL_SPI_Transmit_IT", HAL_BUSY); // the start itself refused
+  KB_CHECK_EQ(dev.Transfer(tx, std::span<uint8_t>{}), Status::Busy);
+  stm::HandleSpiIrq(1U); // the vector reaches the HAL's handler of the open bus
+  stm::HandleSpiIrq(3U);
+  stm::HandleSpiIrq(9U);
+  KB_CHECK_EQ(fake::Calls("HAL_SPI_IRQHandler"), 1U);
 }
 
 KB_TEST("spi: SetClockHz before and after EnsureReady; Release") {

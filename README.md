@@ -16,16 +16,17 @@ H7, F4 and L4** families. Drivers written against the kb contracts run on an STM
 
 | kb contract | Type | HAL |
 | --- | --- | --- |
-| `I2cBus` | `I2cController` | `hal_i2c`, TIMINGR computed (v2) or ClockSpeed (F4), stuck-bus recovery (nine clocks and a STOP) |
-| `SpiDevice`, `SpiClockControl` | `SpiBus` + `SpiDevice` | `hal_spi`, polling, GPIO chip select held across chunks, abort and re-init after a timeout |
-| `UartPort`, `UartBaudControl`, `UartTxDrain` | `Uart` | `hal_uart` transmit, the port's own receive interrupt into a ring, RS-485 DE optional |
+| `I2cBus` | `I2cController` | `hal_i2c` interrupt API, TIMINGR computed (v2) or ClockSpeed (F4), handle restore and BUSY reset, stuck-bus recovery (nine clocks and a STOP) |
+| `SpiDevice`, `SpiClockControl` | `SpiBus` + `SpiDevice` | `hal_spi` interrupt API, GPIO chip select held across chunks, abort and re-init after a timeout |
+| `UartPort`, `UartBaudControl`, `UartTxDrain` | `Uart` | `hal_uart` setup, the port's own interrupt for both directions, a receive ring, RS-485 DE optional |
 | `GpioOutput`; `GpioInput`, `GpioInterrupt` | `OutputPin`; `InputPin` | `hal_gpio`, EXTI through the port's handlers |
-| `AdcChannel` | `AdcChannel` | `hal_adc`, single conversion, calibration on G4, H7, L4 |
+| `AdcChannel` | `AdcChannel` | `hal_adc`, single conversion ended by its interrupt, calibration on G4, H7, L4 |
 | `PwmOutput` | `PwmChannel` | `hal_tim`, PWM mode 1 |
-| `CanBus` | `CanController` | `hal_fdcan` (G4, H7, classic frames) or `hal_can` (F4, L4), bus-off recovery |
+| `CanBus` | `CanController` | `hal_fdcan` (G4, H7, classic frames) or `hal_can` (F4, L4), receive interrupt into a ring, bus-off recovery |
 | `MonotonicClock`, `BusyWait`, `LogSink` | `Clock`, `BusyWait`, `ItmLogSink` / `UartLogSink` | TIM2/TIM5 at 1 MHz extended to 64 bits, DWT cycle counter, ITM or a `Uart` |
 
-Every type is `static_assert`ed against its concepts and its `*Ref`. Every wait is bounded by a configured timeout;
+Every type is `static_assert`ed against its concepts and its `*Ref`. Every wait is bounded by a timeout of at most
+2 s, measured on the port's own clock and ended by an interrupt (asleep under FreeRTOS; [How the port waits](docs/waits.md));
 every failure is a `kb::Status` with the HAL status and the handle's `ErrorCode` kept as the vendor code
 (`LastError().Detail()`). What is not implemented, and why, is on the [home page](docs/index.md).
 

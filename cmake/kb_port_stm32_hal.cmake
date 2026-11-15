@@ -46,6 +46,12 @@ function(kb_port_stm32_hal)
                         "device macro (for example STM32G474xx)")
   endif()
   set(family "${CMAKE_MATCH_1}")
+  if(KB_PORT_STM32_DEVICE MATCHES "^STM32H7[45][57]xx$")
+    # Dual-core parts: the second core has its own EXTI pending registers, and the port's clock and tables are per
+    # core (docs/integration.md). Not supported.
+    message(FATAL_ERROR "[kb-port-stm32] ${KB_PORT_STM32_DEVICE} is a dual-core STM32H7: not supported (single-core H7 "
+                        "parts only)")
+  endif()
   string(TOLOWER "${family}" low)
   if(NOT EXISTS "${KB_PORT_STM32_HAL_CONF_DIR}/stm32${low}xx_hal_conf.h")
     message(FATAL_ERROR "[kb-port-stm32] KB_PORT_STM32_HAL_CONF_DIR must hold stm32${low}xx_hal_conf.h")

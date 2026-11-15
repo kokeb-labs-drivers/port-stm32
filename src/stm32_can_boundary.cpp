@@ -1,7 +1,9 @@
 // Boundary file (deviations/boundary-files.yml): the CAN calls of the STM32 HAL behind sdk.hpp:
-// FDCAN in classic mode on G4 and H7, bxCAN on F4 and L4. Each function converts its arguments,
-// calls the HAL and returns VendorCode(HAL status, the handle's ErrorCode); the handles live in the
-// table below. SPDX-License-Identifier: MIT Copyright (c) 2026 The port-stm32 authors
+// FDCAN in classic mode on G4 and H7, bxCAN on F4 and L4, their receive, overrun and transmit
+// notifications, the HAL callbacks that pass them to the owner, and the interrupt entry point. Each
+// function converts its arguments, calls the HAL and returns VendorCode(HAL status, the handle's
+// ErrorCode); the handles live in the table below. SPDX-License-Identifier: MIT Copyright (c) 2026
+// The port-stm32 authors
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -9,6 +11,7 @@
 #include "kb/interfaces/types.hpp"
 #include "kb/port/stm32/can.hpp"
 #include "kb/port/stm32/error.hpp"
+#include "kb/port/stm32/irq.hpp"
 #include "sdk.hpp"
 #if defined(KB_PORT_STM32_G4)
 #include "stm32g4xx_hal.h"
@@ -107,9 +110,44 @@ void InitFields(Handle& h, const CanConfig& config, const CanTiming& timing) noe
                                      FDCAN_FILTER_REMOTE, FDCAN_FILTER_REMOTE);
   }
   if (s == HAL_OK) {
+#if defined(STM32H7)
+    constexpr uint32_t kTxBuffers = 0xFFU; // the 8 elements of the TX FIFO configured above
+#else
+    constexpr uint32_t kTxBuffers = FDCAN_TX_BUFFER0 | FDCAN_TX_BUFFER1 | FDCAN_TX_BUFFER2;
+#endif
+    s = HAL_FDCAN_ActivateNotification(
+        &h, FDCAN_IT_RX_FIFO0_NEW_MESSAGE | FDCAN_IT_RX_FIFO0_MESSAGE_LOST | FDCAN_IT_TX_COMPLETE,
+        kTxBuffers); // all on interrupt line 0
+  }
+  if (s == HAL_OK) {
     s = HAL_FDCAN_Start(&h);
   }
   return Code(s, h.ErrorCode);
+}
+
+void Irqs(uint8_t controller, uint8_t priority, bool on) noexcept {
+  IRQn_Type irq = FDCAN1_IT0_IRQn;
+#if defined(FDCAN2)
+  if (controller == 2U) {
+    irq = FDCAN2_IT0_IRQn;
+  }
+#endif
+#if defined(FDCAN3)
+  if (controller == 3U) {
+    irq = FDCAN3_IT0_IRQn;
+  }
+#endif
+  static_cast<void>(controller);
+  if (on) {
+    HAL_NVIC_SetPriority(irq, priority, 0U);
+    HAL_NVIC_EnableIRQ(irq);
+  } else {
+    HAL_NVIC_DisableIRQ(irq);
+  }
+}
+
+void Interrupt(Handle& h) noexcept {
+  HAL_FDCAN_IRQHandler(&h);
 }
 
 [[nodiscard]] uint32_t Close(Handle& h) noexcept {
@@ -276,9 +314,50 @@ void Clock(uint8_t controller) noexcept {
     s = HAL_CAN_ConfigFilter(&h, &f); // mask 0: every frame
   }
   if (s == HAL_OK) {
+    s = HAL_CAN_ActivateNotification(
+        &h, CAN_IT_RX_FIFO0_MSG_PENDING | CAN_IT_RX_FIFO0_OVERRUN | CAN_IT_TX_MAILBOX_EMPTY);
+  }
+  if (s == HAL_OK) {
     s = HAL_CAN_Start(&h);
   }
   return Code(s, h.ErrorCode);
+}
+
+void IrqSet(IRQn_Type irq, uint8_t priority, bool on) noexcept {
+  if (on) {
+    HAL_NVIC_SetPriority(irq, priority, 0U);
+    HAL_NVIC_EnableIRQ(irq);
+  } else {
+    HAL_NVIC_DisableIRQ(irq);
+  }
+}
+
+void Irqs(uint8_t controller, uint8_t priority, bool on) noexcept {
+  IRQn_Type tx = CAN1_TX_IRQn;
+  IRQn_Type rx = CAN1_RX0_IRQn;
+  IRQn_Type sce = CAN1_SCE_IRQn;
+#if defined(CAN2)
+  if (controller == 2U) {
+    tx = CAN2_TX_IRQn;
+    rx = CAN2_RX0_IRQn;
+    sce = CAN2_SCE_IRQn;
+  }
+#endif
+#if defined(CAN3)
+  if (controller == 3U) {
+    tx = CAN3_TX_IRQn;
+    rx = CAN3_RX0_IRQn;
+    sce = CAN3_SCE_IRQn;
+  }
+#endif
+  static_cast<void>(controller);
+  IrqSet(tx, priority, on);
+  IrqSet(rx, priority, on);
+  IrqSet(sce, priority, on);
+}
+
+void Interrupt(Handle& h) noexcept {
+  HAL_CAN_IRQHandler(&h);
 }
 
 [[nodiscard]] uint32_t Close(Handle& h) noexcept {
@@ -371,10 +450,21 @@ std::array<family::Handle, kControllers>& Handles() noexcept {
   return handles;
 }
 
-std::array<bool, kControllers>& Owned() noexcept {
+std::array<CanController*, kControllers>& Owners() noexcept {
   // codeql::misra_deviation_next_line(DEV-001)
-  static std::array<bool, kControllers> owned{};
-  return owned;
+  static std::array<CanController*, kControllers> owners{};
+  return owners;
+}
+
+// The owner of the handle `h`, or nullptr.
+[[nodiscard]] CanController* OwnerOf(const family::Handle* h) noexcept {
+  CanController* found = nullptr;
+  for (std::size_t i = 0U; i < kControllers; ++i) {
+    if (&Handles()[i] == h) {
+      found = Owners()[i];
+    }
+  }
+  return found;
 }
 } // namespace
 
@@ -391,19 +481,25 @@ uint32_t CanKernelClockHz(uint8_t controller) noexcept {
   return family::KernelClock();
 }
 
-uint32_t CanOpen(const CanConfig& config, const CanTiming& timing) noexcept {
+uint32_t CanOpen(const CanConfig& config, const CanTiming& timing, CanController& owner) noexcept {
   uint32_t code = port_code::kOwned;
-  if (!Owned()[config.controller]) {
+  if (Owners()[config.controller] == nullptr) {
     static_cast<void>(PinAlternate(config.tx, false, Pull::None));
     static_cast<void>(PinAlternate(config.rx, false, Pull::Up));
+    Owners()[config.controller] = &owner; // before the start: a frame may arrive at once
     code = family::Open(Handles()[config.controller], config, timing);
-    Owned()[config.controller] = code == hal::kOk;
+    if (code == hal::kOk) {
+      family::Irqs(config.controller, config.irq_priority, true);
+    } else {
+      Owners()[config.controller] = nullptr;
+    }
   }
   return code;
 }
 
 uint32_t CanClose(uint8_t controller) noexcept {
-  Owned()[controller] = false;
+  family::Irqs(controller, 0U, false);
+  Owners()[controller] = nullptr;
   return family::Close(Handles()[controller]);
 }
 
@@ -434,3 +530,75 @@ uint32_t CanRestart(uint8_t controller) noexcept {
 }
 
 } // namespace kb::port::stm32::sdk
+
+namespace kb::port::stm32 {
+// The interrupt entry point (irq.hpp): the HAL's handler of the open controller.
+void HandleCanIrq(uint8_t controller) noexcept {
+  if ((controller < sdk::kControllers) && (sdk::Owners()[controller] != nullptr)) {
+    sdk::family::Interrupt(sdk::Handles()[controller]);
+  }
+}
+} // namespace kb::port::stm32
+
+// The HAL's CAN callbacks (weak in the HAL, defined here): receive, overrun and transmit-complete
+// passed to the owner. C linkage and global names by definition.
+extern "C" {
+// NOLINTBEGIN(readability-identifier-naming): the HAL fixes these names
+#if defined(STM32G4) || defined(STM32H7)
+void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs) {
+  kb::port::stm32::CanController* const owner = kb::port::stm32::sdk::OwnerOf(hfdcan);
+  if (owner != nullptr) {
+    owner->OnRxInterrupt((RxFifo0ITs & FDCAN_IT_RX_FIFO0_MESSAGE_LOST) != 0U);
+  }
+}
+void HAL_FDCAN_TxBufferCompleteCallback(FDCAN_HandleTypeDef* hfdcan, uint32_t BufferIndexes) {
+  static_cast<void>(BufferIndexes);
+  kb::port::stm32::CanController* const owner = kb::port::stm32::sdk::OwnerOf(hfdcan);
+  if (owner != nullptr) {
+    owner->OnTxInterrupt();
+  }
+}
+#else
+namespace {
+void TxDone(const CAN_HandleTypeDef* hcan) noexcept {
+  kb::port::stm32::CanController* const owner = kb::port::stm32::sdk::OwnerOf(hcan);
+  if (owner != nullptr) {
+    owner->OnTxInterrupt();
+  }
+}
+} // namespace
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef* hcan) {
+  kb::port::stm32::CanController* const owner = kb::port::stm32::sdk::OwnerOf(hcan);
+  if (owner != nullptr) {
+    owner->OnRxInterrupt(false);
+  }
+}
+void HAL_CAN_ErrorCallback(CAN_HandleTypeDef* hcan) {
+  kb::port::stm32::CanController* const owner = kb::port::stm32::sdk::OwnerOf(hcan);
+  const bool overrun = (hcan->ErrorCode & HAL_CAN_ERROR_RX_FOV0) != 0U;
+  static_cast<void>(HAL_CAN_ResetError(hcan));
+  if ((owner != nullptr) && overrun) {
+    owner->OnRxInterrupt(true);
+  }
+}
+void HAL_CAN_TxMailbox0CompleteCallback(CAN_HandleTypeDef* hcan) {
+  TxDone(hcan);
+}
+void HAL_CAN_TxMailbox1CompleteCallback(CAN_HandleTypeDef* hcan) {
+  TxDone(hcan);
+}
+void HAL_CAN_TxMailbox2CompleteCallback(CAN_HandleTypeDef* hcan) {
+  TxDone(hcan);
+}
+void HAL_CAN_TxMailbox0AbortCallback(CAN_HandleTypeDef* hcan) {
+  TxDone(hcan);
+}
+void HAL_CAN_TxMailbox1AbortCallback(CAN_HandleTypeDef* hcan) {
+  TxDone(hcan);
+}
+void HAL_CAN_TxMailbox2AbortCallback(CAN_HandleTypeDef* hcan) {
+  TxDone(hcan);
+}
+#endif
+// NOLINTEND(readability-identifier-naming)
+} // extern "C"

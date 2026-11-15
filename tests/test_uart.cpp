@@ -21,12 +21,12 @@ USART_TypeDef& Regs(uint8_t instance) {
   return kb_fake_usart[(instance == stm::kLpuart1) ? 11U : instance];
 }
 
-// One received byte, as the peripheral presents it to the interrupt (optionally with error flags).
-void Receive(uint8_t instance, uint8_t byte, uint32_t errors = 0U) {
+// One received word, as the peripheral presents it to the interrupt (optionally with error flags).
+void Receive(uint8_t instance, uint16_t byte, uint32_t errors = 0U) {
   USART_TypeDef& u = Regs(instance);
 #if defined(KB_FAKE_STM32F4)
   u.SR = USART_SR_RXNE | errors;
-  u.DR = byte;
+  u.DR.rx = byte;
 #else
   u.ISR = USART_ISR_RXNE_RXFNE | errors;
   u.RDR = byte;
@@ -157,24 +157,25 @@ KB_TEST("uart: calls before EnsureReady are NotReady; empty spans are refused") 
                       stm::port_code::kInvalidArgument));
 }
 
-KB_TEST("uart: Write sends through the HAL; failures are reported") {
+KB_TEST("uart: Write sends byte by byte from the interrupt; a stalled transmit times out") {
   Fresh();
   stm::Uart u{Config()};
   KB_REQUIRE(u.EnsureReady() == Status::Ok);
   const std::array<uint8_t, 3> tx{1U, 2U, 3U};
   KB_CHECK_EQ(u.Write(tx), Status::Ok);
   KB_CHECK_EQ(fake::UartSent().size(), 3U);
+  KB_CHECK_EQ(fake::UartSent()[2], 3U);
   KB_CHECK_EQ(u.Stats().bytes_written, 3U);
-  fake::Fail("HAL_UART_Transmit", HAL_TIMEOUT);
+  fake::SetTickStep(0U);     // the HAL tick stands still: the wait is on the port's clock
+  fake::Stall("UART", true); // the transmit interrupt never runs
   KB_CHECK_EQ(u.Write(tx), Status::Timeout);
-  static std::array<uint8_t, 70000U> big{}; // above the HAL's uint16_t length: two calls
-  const uint32_t before = fake::Calls("HAL_UART_Transmit");
+  KB_CHECK(FailedWith(u.LastError(), Status::Timeout, stm::hal::kTimeout));
+  fake::Stall("UART", false);
+  static std::array<uint8_t, 70000U> big{}; // no HAL length limit any more: one frame
+  const uint32_t ticks = fake::Calls("HAL_GetTick");
   KB_CHECK_EQ(u.Write(big), Status::Ok);
-  KB_CHECK_EQ(fake::Calls("HAL_UART_Transmit") - before, 2U);
   KB_CHECK_EQ(fake::UartSent().size(), 3U + 70000U);
-  fake::Fail("HAL_UART_Transmit", HAL_TIMEOUT); // the first chunk fails: the second is not sent
-  KB_CHECK_EQ(u.Write(big), Status::Timeout);
-  KB_CHECK_EQ(fake::Calls("HAL_UART_Transmit") - before, 3U);
+  KB_CHECK_EQ(fake::Calls("HAL_GetTick"), ticks); // no wait reads the HAL tick
 }
 
 KB_TEST("uart: RS-485 drives DE high while sending and low after the last stop bit") {
@@ -185,15 +186,72 @@ KB_TEST("uart: RS-485 drives DE high while sending and low after the last stop b
   KB_REQUIRE(u.EnsureReady() == Status::Ok);
   KB_CHECK_EQ(fake::Driven(kPortA, 1), 0);
   const std::array<uint8_t, 2> tx{1U, 2U};
-  fake::Hook("HAL_UART_Transmit", [](void*) { KB_CHECK_EQ(fake::Driven(0, 1), 1); }, nullptr);
-  SetTxComplete(2U, true);
-  KB_CHECK_EQ(u.Write(tx), Status::Ok);
+  fake::Hook("UART_TDR", [](void*) { KB_CHECK_EQ(fake::Driven(0, 1), 1); }, nullptr);
+  KB_CHECK_EQ(u.Write(tx), Status::Ok); // ended by transmit-complete, then DE low
   KB_CHECK_EQ(fake::Driven(kPortA, 1), 0);
-  SetTxComplete(2U, false); // the last byte never leaves: DE is dropped after the timeout anyway
+  fake::Stall("UART", true); // the last byte never leaves: DE is dropped after the timeout anyway
   KB_CHECK_EQ(u.Write(tx), Status::Timeout);
   KB_CHECK_EQ(fake::Driven(kPortA, 1), 0);
+  fake::Stall("UART", false);
   KB_CHECK_EQ(u.Release(), Status::Ok);
-  KB_CHECK_EQ(fake::ModeOf(kPortA, 1), GPIO_MODE_ANALOG);
+  // DE stays an output driven low: a floating DE with a pull-up would enable the driver.
+  KB_CHECK_EQ(fake::ModeOf(kPortA, 1), GPIO_MODE_OUTPUT_PP);
+  KB_CHECK_EQ(fake::Driven(kPortA, 1), 0);
+}
+
+KB_TEST("uart: 7-bit frames with parity mask the parity bit; 7N1 is refused on F4 only") {
+  Fresh();
+  stm::UartConfig c = Config();
+  c.data_bits = 7U;
+  c.parity = stm::UartParity::Even;
+  stm::Uart u{c};
+  KB_REQUIRE(u.EnsureReady() == Status::Ok);
+  KB_CHECK_EQ(fake::UartInit().WordLength, UART_WORDLENGTH_8B); // 7 data bits + parity
+  Receive(2U, 0x80U | 0x41U);                                   // 'A' with its parity bit in bit 7
+  std::array<uint8_t, 2> rx{};
+  KB_REQUIRE(u.Read(rx, kb::Milliseconds{1U}).IsOk());
+  KB_CHECK_EQ(rx[0], 0x41U);
+  KB_CHECK_EQ(u.Release(), Status::Ok);
+  stm::UartConfig eight = Config();
+  eight.parity = stm::UartParity::Odd; // 8O1: a 9-bit word, the parity bit in bit 8
+  stm::Uart u8{eight};
+  KB_REQUIRE(u8.EnsureReady() == Status::Ok);
+  Receive(2U, 0x1C3U);
+  KB_REQUIRE(u8.Read(rx, kb::Milliseconds{1U}).IsOk());
+  KB_CHECK_EQ(rx[0], 0xC3U);
+  KB_CHECK_EQ(u8.Release(), Status::Ok);
+  stm::UartConfig seven_none = Config();
+  seven_none.data_bits = 7U;
+  stm::Uart u7{seven_none};
+  if (kF4) {
+    KB_CHECK_EQ(u7.EnsureReady(), Status::Unsupported); // F4 has no 7-bit word: never 8N1 silently
+  } else {
+    KB_CHECK_EQ(u7.EnsureReady(), Status::Ok);
+    Receive(2U, 0xFFU);
+    KB_REQUIRE(u7.Read(rx, kb::Milliseconds{1U}).IsOk());
+    KB_CHECK_EQ(rx[0], 0x7FU);
+  }
+}
+
+KB_TEST("uart: a stopped HAL time base and timeouts above the maximum are refused") {
+  Fresh();
+  fake::SetTickStep(0U);
+  stm::Uart stopped{Config()};
+  KB_CHECK_EQ(stopped.EnsureReady(), Status::NotReady); // HAL_UART_Init's waits would not end
+  KB_CHECK(FailedWith(stopped.LastError(), Status::NotReady, stm::port_code::kHalTickStopped));
+  KB_CHECK_EQ(fake::Calls("HAL_UART_Init"), 0U);
+  fake::SetTickStep(1U);
+  stm::UartConfig c = Config();
+  c.write_timeout = kb::Milliseconds{stm::kMaxTimeout.Count() + 1U};
+  stm::Uart too_long{c};
+  KB_CHECK_EQ(too_long.EnsureReady(), Status::InvalidArgument);
+  stm::Uart u{Config()};
+  KB_REQUIRE(u.EnsureReady() == Status::Ok);
+  std::array<uint8_t, 1> rx{};
+  KB_CHECK(FailedWith(u.Read(rx, kb::Milliseconds{0xFFFFFFFFU}), Status::InvalidArgument,
+                      stm::port_code::kInvalidArgument));
+  KB_CHECK_EQ(u.WaitTxDone(kb::Milliseconds{stm::kMaxTimeout.Count() + 1U}),
+              Status::InvalidArgument);
 }
 
 KB_TEST("uart: bytes from the interrupt are read; Read waits for the first only") {
@@ -209,9 +267,8 @@ KB_TEST("uart: bytes from the interrupt are read; Read waits for the first only"
   KB_CHECK_EQ(r.Value(), 3U);
   KB_CHECK_EQ(rx[2], 0x30U);
   KB_CHECK_EQ(u.Stats().bytes_read, 3U);
-  const uint32_t before = fake::Ticks();
+  fake::SetTickStep(0U); // the HAL tick stands still: the wait is on the port's clock
   KB_CHECK(FailedWith(u.Read(rx, kb::Milliseconds{7U}), Status::Timeout, stm::hal::kTimeout));
-  KB_CHECK(fake::Ticks() - before >= 7U);
   stm::HandleUartIrq(2U); // an interrupt with nothing pending changes nothing
   stm::HandleUartIrq(9U); // an instance without an owner
   KB_CHECK(FailedWith(u.Read(rx, kb::Milliseconds{1U}), Status::Timeout, stm::hal::kTimeout));
@@ -263,8 +320,11 @@ KB_TEST("uart: FlushInput drops data and errors; SetBaud; WaitTxDone") {
   KB_CHECK(u.Config().baud == 230400U);
   SetTxComplete(2U, true);
   KB_CHECK_EQ(u.WaitTxDone(kb::Milliseconds{5U}), Status::Ok);
-  SetTxComplete(2U, false);
+  SetTxComplete(2U, false); // ended by the transmit-complete interrupt
+  KB_CHECK_EQ(u.WaitTxDone(kb::Milliseconds{5U}), Status::Ok);
+  fake::Stall("UART", true);
   KB_CHECK_EQ(u.WaitTxDone(kb::Milliseconds{5U}), Status::Timeout);
+  fake::Stall("UART", false);
 }
 
 KB_TEST("uart: LPUART1 and the reader and writer locks") {
@@ -277,10 +337,10 @@ KB_TEST("uart: LPUART1 and the reader and writer locks") {
   Receive(c.instance, 9U);
   std::array<uint8_t, 1> rx{};
   KB_CHECK(u.Read(rx, kb::Milliseconds{1U}).IsOk());
-  fake::Hook("HAL_GetTick", ReenterRead, &u); // while Read waits, the reader lock is held
+  fake::Hook("time_read", ReenterRead, &u); // while Read waits, the reader lock is held
   KB_CHECK(!u.Read(rx, kb::Milliseconds{2U}).IsOk());
   fake::Hook(
-      "HAL_GetTick",
+      "time_read",
       [](void* context) {
         KB_CHECK_EQ(static_cast<stm::Uart*>(context)->FlushInput(), Status::Busy);
       },
@@ -288,7 +348,7 @@ KB_TEST("uart: LPUART1 and the reader and writer locks") {
   KB_CHECK(!u.Read(rx, kb::Milliseconds{2U}).IsOk());
   const std::array<uint8_t, 1> tx{1U};
   fake::Hook(
-      "HAL_UART_Transmit",
+      "UART_TDR",
       [](void* context) {
         auto* uart = static_cast<stm::Uart*>(context);
         KB_CHECK_EQ(uart->SetBaud(9600U), Status::Busy);

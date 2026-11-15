@@ -2,7 +2,7 @@
 # (boards/<board>/: linker script, HAL configuration, pins). The HAL, CMSIS and the startup file come from
 # STMicroelectronics' repositories at pinned commits (cmake/kb_port_stm32_hal.cmake of the port).
 #   cmake -S examples/stm32 -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake -DEXAMPLE_BOARD=g4
-#   (h7 also needs -DKB_ARM_CORE=cortex-m7f)
+#   (h7 also needs -DKB_ARM_CORE=cortex-m7f; -DEXAMPLE_RTOS=FREERTOS runs it as a task under FreeRTOS)
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 The port-stm32 authors
 cmake_minimum_required(VERSION 3.25)
@@ -22,8 +22,15 @@ list(GET _devices ${_i} _device)
 set(_board "${CMAKE_CURRENT_LIST_DIR}/boards/${EXAMPLE_BOARD}")
 set(KB_PORT_STM32_DEVICE "${_device}" CACHE STRING "" FORCE)
 set(KB_PORT_STM32_HAL_CONF_DIR "${_board}" CACHE PATH "" FORCE)
+set(EXAMPLE_RTOS "NONE" CACHE STRING "NONE (one loop, kb::rtos's none backend) or FREERTOS (a task)")
 
 get_filename_component(_root "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+if(EXAMPLE_RTOS STREQUAL "FREERTOS")
+  include("${_root}/cmake/kb_port_stm32_freertos.cmake")
+  kb_port_stm32_freertos("${CMAKE_CURRENT_LIST_DIR}/freertos") # before the port: kb-core takes KB_RTOS from it
+elseif(NOT EXAMPLE_RTOS STREQUAL "NONE")
+  message(FATAL_ERROR "EXAMPLE_RTOS must be NONE or FREERTOS, not '${EXAMPLE_RTOS}'")
+endif()
 add_subdirectory("${_root}" kb_port_stm32)
 foreach(_driver IN ITEMS pcal9555 tmc5160 bno08x)
   if(NOT EXISTS "${_root}/drivers/driver-${_driver}/CMakeLists.txt")
@@ -44,3 +51,15 @@ target_link_options(all_drivers PRIVATE "-T${_board}/linker.ld" "-Wl,-Map=$<TARG
 separate_arguments(_core_flags UNIX_COMMAND "${CMAKE_C_FLAGS}")
 set_source_files_properties("${KB_PORT_STM32_STARTUP}" PROPERTIES COMPILE_OPTIONS "${_core_flags}")
 set_target_properties(all_drivers PROPERTIES SUFFIX ".elf")
+if(EXAMPLE_RTOS STREQUAL "FREERTOS")
+  target_sources(all_drivers PRIVATE src/freertos_start.c)
+  target_link_libraries(all_drivers PRIVATE kb_port_stm32_freertos_kernel)
+  target_compile_definitions(all_drivers PRIVATE EXAMPLE_RTOS_FREERTOS=1)
+endif()
+# After the link: every vector and HAL callback the port defines is in the firmware as a strong symbol, not the
+# startup file's Default_Handler (tools/check_vectors.cmake). A failure fails the build, in CI and locally.
+add_custom_command(TARGET all_drivers POST_BUILD
+  COMMAND "${CMAKE_COMMAND}" "-DNM=${CMAKE_NM}" "-DELF=$<TARGET_FILE:all_drivers>"
+          "-DVECTORS=$<TARGET_OBJECTS:kb_port_stm32_vectors>" "-DLIBRARY=$<TARGET_FILE:kb_port_stm32>"
+          -P "${_root}/tools/check_vectors.cmake"
+  COMMAND_EXPAND_LISTS VERBATIM)

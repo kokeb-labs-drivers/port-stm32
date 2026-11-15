@@ -5,6 +5,64 @@ All notable changes of port-stm32. The format follows Keep a Changelog; versions
 
 ## [Unreleased]
 
+### Fixed
+
+- The interrupt vectors are linked for certain: the vector file is an object library added to every firmware that
+  links the port. Before, it sat in the static archive, a weak reference from the startup file never pulled it in,
+  and every USART, EXTI and TIM2/TIM5 interrupt ran `Default_Handler`. The example firmware checks with `nm` after
+  each link that every vector and HAL callback of the port is a strong symbol (`tools/check_vectors.cmake`).
+- `Clock::Now()` never goes back: a new sample order (wrap count, counter, update flag, counter, wrap count), a
+  sample in which the wrap interrupt ran is taken again, and the interrupt clears the flag and counts the wrap with
+  interrupts masked. The earlier rule stepped forward by 2^32 us and back when the interrupt ran between its reads.
+  `Clock::Start()` zeroes the counter (it keeps running across a jump from a loader).
+- No wait reads `HAL_GetTick()` or spins at the caller's priority: I2C, SPI and ADC use the HAL's interrupt APIs,
+  the UART transmits from its own interrupt, CAN receives into a ring from its RX FIFO interrupt; every wait is a
+  `Completion` on a `kb::rtos` semaphore, bounded on the port's clock (the DWT before a `Clock` runs) and by a poll
+  cap, with the operation stopped and the peripheral restored on a timeout. `Uart`, `CanController` and
+  `AdcChannel` refuse `EnsureReady()` when the HAL time base does not run (the HAL's own init waits use it).
+- UART 7-bit frames: the received word is masked to the data bits (7E1 and 7O1 returned the parity bit in bit 7);
+  7N1 is refused on F4 (it silently became 8N1).
+- PWM on the clock's timer is refused, and the channels of one timer must share its frequency.
+- Every timeout is at most 2 s (`kMaxTimeout`); `HAL_MAX_DELAY` and longer values are refused.
+- CAN frames are no longer lost behind a 3-deep hardware FIFO; a FIFO overrun or a full ring is `Overflow`.
+- I2C: a BUSY flag that stays set with idle lines resets the peripheral (on every family); the handle is restored
+  and the error flags cleared after every failure, PE toggled only while BUSY stays set; TXDR/RXDR flushed and the
+  CR2 transfer fields cleared before every transfer.
+- `LastError()`, `LastFailure()` and `Stats()` are free of data races (interrupt-masked records, atomics); the
+  documentation states that they hold the most recent call by any task.
+- The ADC instance's channel count and the EXTI line table change with interrupts masked (two tasks no longer
+  initialise an instance twice, a handler no longer sees a new callback with an old context).
+- The logic that sat in the boundary files (pin claims, EXTI dispatch, timer ownership, the ADC sharing, the clock
+  wrap count, the UART interrupt's decisions, the ITM wait) moved to the platform-free files.
+- Mutex and semaphore creation failures fail `EnsureReady()` (`Fault`, port code `kRtosObject`).
+- A kernel clock that reads 0 Hz is refused (`NotReady`, `kNoClock`); the H7 I2C4 kernel clock is read from D3;
+  TIMPRE is applied to the timer clock; the H7 ADC clock is refused above 36 MHz; F4 ADC channel 19 is refused.
+- UART `Release()` keeps the RS-485 DE pin driven low; I2C recovery keeps the configured pull-ups.
+- H7 read-only SPI frames are full duplex (the HAL's receive-only call switched to simplex receive).
+- clang-tidy's configuration is valid for clang-tidy 18 (the host job ran nothing), and the pre-flight fails on a
+  configuration error.
+
+### Changed
+
+- `I2cController::WriteRead()` writes any number of bytes before the repeated START (was at most 2).
+- A write NACK is `Nack` (`DataNack`) unless `I2cConfig::nack_probe` is set; no address-only probe is sent by default
+  and never during `EnsureReady()`.
+- `Uart::write_timeout` bounds the whole write (was per 65535-byte chunk); `Uart::OnByte()`/`OnErrors()` became
+  `OnInterrupt(UartEvent)`.
+- `Clock::Combine()` takes a `ClockSample` and says whether the sample is consistent.
+- New config fields: `I2cConfig::irq_priority`, `I2cConfig::nack_probe`, `SpiBusConfig::irq_priority`,
+  `CanConfig::irq_priority`. New interrupt entry points: `HandleI2cIrq`, `HandleSpiIrq`, `HandleAdcIrq`,
+  `HandleCanIrq`. The port defines the HAL completion callbacks of I2C, SPI, ADC and CAN.
+- Dual-core STM32H7 parts and `CORE_CM4` builds are refused.
+- kb-core copy re-pinned to kb-core `main` (`efd67da`); the snapshot tool copies the whole `cmake/` folder and refuses
+  a commit that is not on `origin/main`.
+
+### Added
+
+- `completion.hpp` (`Deadline`, `Completion`), `docs/waits.md`, `docs/integration.md` (CubeMX, priorities, RTOS
+  start-up, the H7 cache and DMA rules, dual core), `docs/kb-core-dependency.md`, `docs/misra-review.md`.
+- The example under FreeRTOS (`-DEXAMPLE_RTOS=FREERTOS`, FreeRTOS-Kernel V11.1.0 pinned) and its CI build for G4.
+
 ## [0.1.0-rc.1]
 
 First release candidate: kb-core's contracts over the STM32Cube HAL for the STM32 G4, H7, F4 and L4 families.

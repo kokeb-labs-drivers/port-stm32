@@ -4,22 +4,28 @@
  * (HAL `stm32<family>xx_hal_fdcan`) or bxCAN on F4 and L4 (HAL `stm32<family>xx_hal_can`), which
  * satisfies `kb::iface::CanBus`. Classic CAN 2.0A/B frames; every frame is accepted into RX FIFO 0.
  *
- * Send() waits at most its timeout for a free transmit slot (FDCAN TX FIFO, bxCAN mailbox), then
- * queues the frame. Receive() waits at most its timeout for a frame in RX FIFO 0. Both poll the
- * hardware fill levels; each poll takes the controller's lock (at most `lock_timeout`) only for the
- * check and the HAL call, so a Receive() that waits does not hold off a Send(). Nothing runs in an
- * interrupt. The bit timing comes from ComputeCanTiming() at a sample point near 87.5 %. bxCAN
- * recovers from bus-off by itself (automatic bus-off management); FDCAN is restarted by Recover().
+ * Reception is interrupt driven: the RX FIFO 0 new-message interrupt (and its overrun interrupt)
+ * reaches OnRxInterrupt() through the HAL callback, which moves every frame of the FIFO into a ring
+ * of kCanRxFrames, so a burst larger than the hardware FIFO (3 frames on G4 FDCAN and bxCAN, 16 as
+ * configured on H7) is not lost while the task is busy. A FIFO overrun or a full ring is latched
+ * and reported by the next Receive() as Overflow (Detail: can_flags); the frames already in the
+ * ring stay. Receive() waits at most its timeout for a frame; Send() at most its timeout for a free
+ * transmit slot (FDCAN TX FIFO, bxCAN mailbox), woken by the transmit-complete interrupt. Both
+ * wait on the port's clock (completion.hpp), asleep under an RTOS. Receive and Send have separate
+ * locks (each at most `lock_timeout`), so a waiting Receive() does not hold off a Send(). The bit
+ * timing comes from ComputeCanTiming() at a sample point near 87.5 %. bxCAN recovers from bus-off
+ * by itself (automatic bus-off management); FDCAN is restarted by Recover().
  *
  * | Result | Meaning |
  * | --- | --- |
  * | `Ok` | Queued (Send) or taken (Receive) |
  * | `Timeout` | No transmit slot or no frame within the timeout |
+ * | `Overflow` | Receive: frames were lost since the last Receive() (Detail: can_flags) |
  * | `BusError` | Bus-off. Detail: the vendor code |
- * | `InvalidArgument` | dlc above 8, an identifier too wide, a bit rate the clock cannot make |
- * | `Unsupported` | The device has no CAN controller of this number |
+ * | `InvalidArgument` | dlc above 8, an identifier too wide, a bit rate the clock cannot make, a
+ * timeout above kMaxTimeout | | `Unsupported` | The device has no CAN controller of this number |
  * | `Busy` | The controller lock was not had in time |
- * | `NotReady` | EnsureReady() has not succeeded |
+ * | `NotReady` | EnsureReady() has not succeeded, or the CAN kernel clock reads 0 |
  *
  * SPDX-License-Identifier: MIT
  * Copyright (c) 2026 The port-stm32 authors
@@ -27,17 +33,32 @@
 #ifndef KB_PORT_STM32_CAN_HPP
 #define KB_PORT_STM32_CAN_HPP
 
+// State shared with interrupts needs lock-free std::atomic (as kb-core's SpscRing does).
+// misra-lint: ignore KB-CPP-012
+#include <atomic>
+#include <cstddef>
 #include <cstdint>
 
 #include "kb/interfaces/can.hpp"
 #include "kb/interfaces/types.hpp"
+#include "kb/port/stm32/completion.hpp"
 #include "kb/port/stm32/error.hpp"
 #include "kb/rtos/mutex.hpp"
 #include "kb/utils/result.hpp"
+#include "kb/utils/ring_buffer.hpp"
 #include "kb/utils/status.hpp"
 #include "kb/utils/time.hpp"
 
 namespace kb::port::stm32 {
+
+/** @brief The software receive ring of each CanController, in frames (a power of two). */
+inline constexpr std::size_t kCanRxFrames = 32U;
+
+/** @brief Receive losses reported by Receive() as Overflow (its Detail()). */
+namespace can_flags {
+inline constexpr uint32_t kFifoOverrun = 1U << 0U; ///< The controller's RX FIFO 0 overran.
+inline constexpr uint32_t kRingFull = 1U << 1U;    ///< The port's ring was full; frames were lost.
+} // namespace can_flags
 
 /** @brief Operating mode of a CAN controller. */
 enum class CanMode : uint8_t {
@@ -101,7 +122,8 @@ struct CanConfig {
   uint32_t bitrate{500000U};     ///< Bits per second, 10k to 1M.
   CanMode mode{CanMode::Normal}; ///< Mode.
   uint32_t kernel_clock_hz{0U};  ///< The CAN kernel clock; 0 reads it from the RCC.
-  kb::Milliseconds lock_timeout{kb::Milliseconds{10U}}; ///< Wait for the controller lock.
+  kb::Milliseconds lock_timeout{kb::Milliseconds{10U}}; ///< Wait for a lock, to kMaxTimeout.
+  uint8_t irq_priority{5U}; ///< NVIC priority of the controller's interrupts.
 };
 
 /** @brief One CAN controller; satisfies kb::iface::CanBus. */
@@ -137,17 +159,26 @@ public:
   [[nodiscard]] const CanTiming& Timing() const noexcept {
     return timing_;
   }
+  /** @brief Interrupt context only: frames in RX FIFO 0 (`lost`: the FIFO overran). */
+  void OnRxInterrupt(bool lost) noexcept;
+  /** @brief Interrupt context only: a transmit finished (a slot is free). */
+  void OnTxInterrupt() noexcept;
 
 private:
-  [[nodiscard]] kb::Status attempt(bool transmit, const kb::iface::CanFrame& tx,
-                                   kb::iface::CanFrame& rx, bool& pending) noexcept;
-  [[nodiscard]] kb::Status exchange(bool transmit, const kb::iface::CanFrame& tx,
-                                    kb::iface::CanFrame& rx, kb::Milliseconds timeout) noexcept;
+  [[nodiscard]] kb::Status sendLocked(const kb::iface::CanFrame& frame,
+                                      kb::Milliseconds timeout) noexcept;
+  [[nodiscard]] kb::Status receiveLocked(kb::iface::CanFrame& frame,
+                                         kb::Milliseconds timeout) noexcept;
 
   CanConfig config_;
-  kb::rtos::Mutex mutex_;
+  kb::rtos::Mutex tx_mutex_;
+  kb::rtos::Mutex rx_mutex_;
   LastErrorRecord error_;
   CanTiming timing_;
+  kb::utils::SpscRing<kb::iface::CanFrame, kCanRxFrames> rx_ring_;
+  std::atomic<uint32_t> rx_lost_{0U}; ///< can_flags since the last Receive().
+  Completion rx_wake_;                ///< Notified by every receive interrupt.
+  Completion tx_wake_;                ///< Notified by every transmit interrupt.
   bool ready_{false};
 };
 

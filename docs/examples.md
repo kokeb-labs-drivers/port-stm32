@@ -7,8 +7,13 @@ script, its HAL configuration and its pins (`boards/<board>/`). It builds `all_d
    read in millivolts, a `CanController` in internal loopback (one frame sent and received back), a `Uart` write;
 2. the **pcal9555** I/O expander and the **bno08x** IMU sharing one `I2cController`, and the **tmc5160** stepper
    driver on a `SpiDevice` with its enable pin on an `OutputPin`, bound through `src/driver_adapters.hpp`;
-3. one loop (bare metal, `KB_RTOS=NONE`) polling the IMU and, every 500 ms, toggling an expander output and reading
-   the motor position.
+3. one loop polling the IMU and, every 500 ms, toggling an expander output and reading the motor position: bare
+   metal (`KB_RTOS=NONE`) by default, or one FreeRTOS task with `-DEXAMPLE_RTOS=FREERTOS` (FreeRTOS-Kernel V11.1.0
+   fetched at its pinned commit, `freertos/FreeRTOSConfig.h`, `src/freertos_start.c`; the HAL tick from the kernel's
+   tick hook, every object started in the task).
+
+After each link the build checks with `nm` that every vector and HAL callback of the port is a strong symbol of the
+firmware (`tools/check_vectors.cmake`); a failure fails the build.
 
 The drivers are the pinned submodules in `drivers/` (`drivers/drivers.lock.yml`): pcal9555, tmc5160 and bno08x at
 v0.1.0-rc.1.
@@ -34,7 +39,8 @@ cmake -S examples/stm32 -B build/h7 -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/arm-no
   -DKB_ARM_CORE=cortex-m7f -DEXAMPLE_BOARD=h7
 ```
 
-CI builds the four boards (`ci-cmake-matrix.yml`). The link reports newlib-nano's unimplemented system calls
+CI builds the four boards bare metal and G4 under FreeRTOS (`ci-cmake-matrix.yml`). The link reports newlib-nano's
+unimplemented system calls
 (`_close`, `_read`, ...) as warnings: nothing in the firmware calls them.
 
 ## Flash and run

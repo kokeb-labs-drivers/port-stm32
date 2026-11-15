@@ -30,7 +30,13 @@ The HAL configuration must enable the modules the port uses: `HAL_MODULE_ENABLED
 `GPIO`, `DMA`, `RCC`, `CORTEX`, `PWR`, `ADC`, `TIM`, `EXTI` and `FDCAN` (G4, H7) or `CAN` (F4, L4) modules. The
 examples' `examples/stm32/boards/*/stm32*_hal_conf.h` include ST's template unchanged, which enables every module.
 `KB_RTOS` selects the `kb::rtos` backend: `NONE` (bare metal, the default off ESP-IDF) or `FREERTOS` with
-`KB_FREERTOS_INCLUDE_DIRS` naming the kernel's headers.
+`KB_FREERTOS_INCLUDE_DIRS` naming the kernel's headers (kb-core includes them as `freertos/<header>.h`;
+`cmake/kb_port_stm32_freertos.cmake` fetches the pinned FreeRTOS-Kernel and provides that layout, as the example
+does with `-DEXAMPLE_RTOS=FREERTOS`).
+
+`KB_RTOS=NONE` has no scheduler: kb-core's `none` backend is deterministic with a fake tick, its `SleepFor` does not
+sleep on silicon, and a semaphore take cannot block. The port's waits then poll their completion, still bounded on
+the port's clock ([How the port waits](waits.md)). Use FreeRTOS when a task must sleep while it waits.
 
 ## 2. Create the objects
 
@@ -48,10 +54,10 @@ stm::I2cConfig MakeI2c() {
   return c;
 }
 
-int main() {
-  HAL_Init(); // and the application's clock setup
+// Under FreeRTOS: the first task, after the scheduler runs. Bare metal: from main().
+void AppMain() {
   static stm::Clock clock{};
-  static_cast<void>(clock.Start());
+  static_cast<void>(clock.Start()); // first: every wait of the port is measured on it
   static stm::I2cController bus{MakeI2c()}; // static: drivers keep references
   if (bus.EnsureReady() != kb::Status::Ok) {
     // bus.LastError().Detail(): HAL status in bits 0..7, ErrorCode from bit 8
@@ -62,11 +68,32 @@ int main() {
 ```
 
 Objects keep their configuration and touch no hardware until `EnsureReady()` (`Start()` for the clock). Call it
-once from one context before the object is shared; after that every member is safe to call from several tasks
-([Thread safety](thread-safety.md)). The application provides `SysTick_Handler` calling `HAL_IncTick()` (the
-HAL's millisecond tick, which the port's waits count).
+once from one context before the object is shared, after the scheduler runs (it creates the object's `kb::rtos`
+mutexes and semaphores), never from a static constructor and never with interrupts masked; after that every member
+is safe to call from several tasks ([Thread safety](thread-safety.md)). Start the `Clock` first: until a `Clock`
+runs, the port measures its waits on the DWT cycle counter.
 
-## 3. Bind a driver
+## 3. The HAL time base
+
+The port's waits never read `HAL_GetTick()`. The HAL's own initialisation code still does (`HAL_UART_Init`, the
+ADC enable, the CAN initialisation and start), so its time base must run, and `Uart`, `AdcChannel` and
+`CanController` refuse `EnsureReady()` with `NotReady` (port code `kHalTickStopped`) when it does not:
+
+| Setup | HAL time base |
+| --- | --- |
+| Bare metal | `SysTick_Handler` calling `HAL_IncTick()` (what `HAL_Init()` sets up) |
+| FreeRTOS | FreeRTOS owns `SysTick_Handler` (`xPortSysTickHandler`), so the application must **not** define one. Give the HAL a time base of its own: a TIMx whose update interrupt calls `HAL_IncTick()` (CubeMX's "Timebase Source" setting, `HAL_InitTick()` overridden), or `HAL_IncTick()` from `vApplicationTickHook()` as the example does |
+
+Either way, call `EnsureReady()` only from task context with interrupts enabled.
+
+## 4. Interrupts
+
+The port defines the vectors of the peripherals it serves and the HAL completion callbacks of I2C, SPI, ADC and
+CAN; a CubeMX project leaves those peripherals unconfigured and drops the generated handlers and callbacks
+([Integration](integration.md)). The default priorities (5) suit FreeRTOS with
+`configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY` = 5.
+
+## 5. Bind a driver
 
 A driver's port is a thin adapter from its hooks to the kb contracts; `examples/stm32/src/driver_adapters.hpp` has
 the adapters for pcal9555, tmc5160 and bno08x. They are templates over the contracts, so the same adapter runs over

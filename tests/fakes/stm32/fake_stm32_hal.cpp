@@ -4,6 +4,9 @@
 // Copyright (c) 2026 The port-stm32 authors
 #include "fake_stm32_hal.hpp"
 
+#include "kb/port/stm32/irq.hpp"
+#include "kb/port/stm32/uart.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -57,6 +60,17 @@ struct State {
   std::set<std::string> clocks;
   uint32_t tick{0U};
   uint32_t tick_step{1U};
+  uint32_t counter_step{1U};
+  std::set<std::string> stalled;
+  bool uart_running{false};
+  uint32_t i2c_options{0U};
+  uint32_t i2c_frames{0U};
+  bool i2c_busy{false};
+  bool i2c_busy_sticky{false};
+  bool can_rx_irq{true};
+  bool can_lost{false};
+  bool can_notify{false};
+  void* can_handle{nullptr};
   uint64_t cycles{0U};
   uint32_t cycle_step{100U};
   uint32_t primask{0U};
@@ -68,8 +82,6 @@ struct State {
   bool data_nack{false};
   std::vector<uint8_t> i2c_reply;
   std::vector<uint8_t> i2c_written;
-  uint16_t mem_address{0U};
-  uint16_t mem_size{0U};
   I2C_InitTypeDef i2c_init{};
   std::vector<uint8_t> spi_reply;
   std::vector<uint8_t> spi_sent;
@@ -163,6 +175,27 @@ HAL_StatusTypeDef I2cAck(uint16_t address8, I2C_HandleTypeDef* h) {
   return HAL_OK;
 }
 
+bool Stalled(const char* area) {
+  return S().stalled.count(area) != 0U;
+}
+
+void I2cDone(I2C_HandleTypeDef* h, HAL_StatusTypeDef st) {
+  ++S().i2c_frames;
+  HAL_StatusTypeDef injected = HAL_OK;
+  uint32_t ec = 0U;
+  if (Injected("i2c_error", injected, ec)) { // the transfer ends in the error callback instead
+    h->ErrorCode = ec;
+    st = HAL_ERROR;
+  }
+  if (!Stalled("I2C")) {
+    if (st == HAL_OK) {
+      HAL_I2C_MasterTxCpltCallback(h);
+    } else {
+      HAL_I2C_ErrorCallback(h);
+    }
+  }
+}
+
 void I2cCopy(uint8_t* rx, uint16_t n) {
   for (uint16_t i = 0U; i < n; ++i) {
     rx[i] = (i < S().i2c_reply.size()) ? S().i2c_reply[i] : 0xFFU;
@@ -187,6 +220,7 @@ void Reset() {
   std::memset(static_cast<void*>(kb_fake_gpio), 0, sizeof(kb_fake_gpio));
   std::memset(static_cast<void*>(kb_fake_tim), 0, sizeof(kb_fake_tim));
   std::memset(static_cast<void*>(kb_fake_usart), 0, sizeof(kb_fake_usart));
+  std::memset(static_cast<void*>(kb_fake_i2c), 0, sizeof(kb_fake_i2c));
   kb_fake_dwt.CTRL = 0U;
   kb_fake_coredebug.DEMCR = 0U;
   kb_fake_itm.TCR = 0U;
@@ -210,6 +244,16 @@ bool ClockEnabled(const char* name) {
 }
 void SetTickStep(uint32_t step) {
   S().tick_step = step;
+}
+void SetCounterStep(uint32_t step) {
+  S().counter_step = step;
+}
+void Stall(const char* area, bool on) {
+  if (on) {
+    S().stalled.insert(area);
+  } else {
+    S().stalled.erase(area);
+  }
 }
 void SetCycleStep(uint32_t step) {
   S().cycle_step = step;
@@ -259,11 +303,21 @@ void I2cReply(std::span<const uint8_t> bytes) {
 const std::vector<uint8_t>& I2cWritten() {
   return S().i2c_written;
 }
-uint16_t I2cMemAddress() {
-  return S().mem_address;
+uint32_t I2cLastOptions() {
+  return S().i2c_options;
 }
-uint16_t I2cMemSize() {
-  return S().mem_size;
+uint32_t I2cFrames() {
+  return S().i2c_frames;
+}
+void I2cBusyFlag(bool on, bool sticky) {
+  S().i2c_busy = on;
+  S().i2c_busy_sticky = sticky;
+  for (I2C_TypeDef& r : kb_fake_i2c) {
+    r.ISR = on ? (r.ISR | I2C_FLAG_BUSY) : (r.ISR & ~I2C_FLAG_BUSY);
+  }
+}
+const I2C_TypeDef& I2cRegs(int instance) {
+  return kb_fake_i2c[instance];
 }
 const I2C_InitTypeDef& I2cInit() {
   return S().i2c_init;
@@ -305,7 +359,34 @@ void CanTxFree(uint32_t free) {
   S().can_tx_free = free;
 }
 void CanFeed(const Frame& frame) {
-  S().can_rx.push_back(frame);
+  constexpr std::size_t kFifo = 3U; // G4 FDCAN and bxCAN RX FIFO 0
+  if (S().can_rx.size() < kFifo) {
+    S().can_rx.push_back(frame);
+  } else {
+    S().can_lost = true; // overrun: the new frame is lost
+  }
+  if (S().can_rx_irq) {
+    CanRxInterrupt(true);
+  }
+}
+void CanRxInterrupt(bool on) {
+  S().can_rx_irq = on;
+  if (on && S().can_notify && (S().can_handle != nullptr) && !S().can_rx.empty()) {
+    const bool lost = S().can_lost;
+    S().can_lost = false;
+#if !defined(KB_FAKE_STM32F4)
+    HAL_FDCAN_RxFifo0Callback(
+        static_cast<FDCAN_HandleTypeDef*>(S().can_handle),
+        FDCAN_IT_RX_FIFO0_NEW_MESSAGE | (lost ? FDCAN_IT_RX_FIFO0_MESSAGE_LOST : 0U));
+#else
+    auto* h = static_cast<CAN_HandleTypeDef*>(S().can_handle);
+    if (lost) {
+      h->ErrorCode |= HAL_CAN_ERROR_RX_FOV0;
+      HAL_CAN_ErrorCallback(h);
+    }
+    HAL_CAN_RxFifo0MsgPendingCallback(h);
+#endif
+  }
 }
 const std::vector<Frame>& CanSent() {
   return S().can_tx;
@@ -331,7 +412,27 @@ uint32_t CanMode() {
 using fake::Injected;
 using fake::S;
 
+KbFakeCounter::operator uint32_t() {
+  static_cast<void>(Injected("time_read"));
+  const uint32_t now = value;
+  value += S().counter_step;
+  return now;
+}
+
+KbFakeTdr& KbFakeTdr::operator=(uint32_t v) {
+  static_cast<void>(Injected("UART_TDR"));
+  S().uart_sent.push_back(static_cast<uint8_t>(v));
+  return *this;
+}
+
+KbFakeDr& KbFakeDr::operator=(uint32_t v) {
+  static_cast<void>(Injected("UART_TDR"));
+  S().uart_sent.push_back(static_cast<uint8_t>(v));
+  return *this;
+}
+
 KbFakeCycles::operator uint32_t() const {
+  static_cast<void>(Injected("time_read"));
   S().cycles += S().cycle_step;
   return static_cast<uint32_t>(S().cycles);
 }
@@ -497,20 +598,29 @@ HAL_StatusTypeDef HAL_ADC_ConfigChannel(ADC_HandleTypeDef* h, const ADC_ChannelC
   S().adc_sampling = c->SamplingTime;
   return HAL_OK;
 }
-HAL_StatusTypeDef HAL_ADC_Start(ADC_HandleTypeDef* h) {
-  FAKE_INJECT("HAL_ADC_Start", h);
+HAL_StatusTypeDef HAL_ADC_Start_IT(ADC_HandleTypeDef* h) {
+  FAKE_INJECT("HAL_ADC_Start_IT", h);
+  if (!fake::Stalled("ADC")) {
+    HAL_StatusTypeDef st = HAL_OK;
+    uint32_t ec = 0U;
+    if (Injected("conversion", st, ec)) { // an error ends the conversion instead
+      h->ErrorCode = ec;
+      HAL_ADC_ErrorCallback(h);
+    } else {
+      HAL_ADC_ConvCpltCallback(h);
+    }
+  }
   return HAL_OK;
 }
-HAL_StatusTypeDef HAL_ADC_PollForConversion(ADC_HandleTypeDef* h, uint32_t) {
-  FAKE_INJECT("HAL_ADC_PollForConversion", h);
+HAL_StatusTypeDef HAL_ADC_Stop_IT(ADC_HandleTypeDef* h) {
+  FAKE_INJECT("HAL_ADC_Stop_IT", h);
   return HAL_OK;
+}
+void HAL_ADC_IRQHandler(ADC_HandleTypeDef*) {
+  static_cast<void>(Injected("HAL_ADC_IRQHandler"));
 }
 uint32_t HAL_ADC_GetValue(const ADC_HandleTypeDef*) {
   return S().adc_raw;
-}
-HAL_StatusTypeDef HAL_ADC_Stop(ADC_HandleTypeDef* h) {
-  FAKE_INJECT("HAL_ADC_Stop", h);
-  return HAL_OK;
 }
 HAL_StatusTypeDef HAL_ADCEx_Calibration_Start(ADC_HandleTypeDef* h, uint32_t) {
   FAKE_INJECT("HAL_ADCEx_Calibration_Start", h);
@@ -525,42 +635,70 @@ HAL_StatusTypeDef HAL_I2C_Init(I2C_HandleTypeDef* h) {
 }
 HAL_StatusTypeDef HAL_I2C_DeInit(I2C_HandleTypeDef* h) {
   FAKE_INJECT("HAL_I2C_DeInit", h);
+  if ((h->Instance != nullptr) && !S().i2c_busy_sticky) {
+    h->Instance->ISR &= ~I2C_FLAG_BUSY; // PE low resets the peripheral's state machine
+  }
   return HAL_OK;
 }
-HAL_StatusTypeDef HAL_I2C_Master_Transmit(I2C_HandleTypeDef* h, uint16_t address, uint8_t* data,
-                                          uint16_t size, uint32_t) {
-  FAKE_INJECT("HAL_I2C_Master_Transmit", h);
+HAL_StatusTypeDef HAL_I2C_Master_Transmit_IT(I2C_HandleTypeDef* h, uint16_t address, uint8_t*,
+                                             uint16_t size) {
+  FAKE_INJECT("HAL_I2C_Master_Transmit_IT", h);
+  if ((h->Instance->ISR & I2C_FLAG_BUSY) != 0U) {
+    return HAL_BUSY;
+  }
+  S().i2c_written.clear();
+  HAL_StatusTypeDef st = HAL_OK;
+  if (!S().present[(address >> 1U) & 0x7FU] || ((size > 0U) && S().data_nack)) {
+    h->ErrorCode = HAL_I2C_ERROR_AF;
+    st = HAL_ERROR;
+  }
+  fake::I2cDone(h, st);
+  return HAL_OK;
+}
+HAL_StatusTypeDef HAL_I2C_Master_Seq_Transmit_IT(I2C_HandleTypeDef* h, uint16_t address,
+                                                 uint8_t* data, uint16_t size, uint32_t options) {
+  FAKE_INJECT("HAL_I2C_Master_Seq_Transmit_IT", h);
+  if ((h->Instance->ISR & I2C_FLAG_BUSY) != 0U) {
+    return HAL_BUSY;
+  }
+  S().i2c_options = options;
   S().i2c_written.assign(data, data + size);
-  return fake::I2cAck(address, h);
+  fake::I2cDone(h, fake::I2cAck(address, h));
+  return HAL_OK;
 }
-HAL_StatusTypeDef HAL_I2C_Master_Receive(I2C_HandleTypeDef* h, uint16_t address, uint8_t* data,
-                                         uint16_t size, uint32_t) {
-  FAKE_INJECT("HAL_I2C_Master_Receive", h);
-  const HAL_StatusTypeDef st = fake::I2cAck(address, h);
-  if (st == HAL_OK) {
-    fake::I2cCopy(data, size);
+HAL_StatusTypeDef HAL_I2C_Master_Seq_Receive_IT(I2C_HandleTypeDef* h, uint16_t address,
+                                                uint8_t* data, uint16_t size, uint32_t options) {
+  FAKE_INJECT("HAL_I2C_Master_Seq_Receive_IT", h);
+  if (((h->Instance->ISR & I2C_FLAG_BUSY) != 0U) && (options == I2C_FIRST_AND_LAST_FRAME)) {
+    return HAL_BUSY;
   }
-  return st;
-}
-HAL_StatusTypeDef HAL_I2C_Mem_Read(I2C_HandleTypeDef* h, uint16_t address, uint16_t mem,
-                                   uint16_t mem_size, uint8_t* data, uint16_t size, uint32_t) {
-  FAKE_INJECT("HAL_I2C_Mem_Read", h);
-  S().mem_address = mem;
-  S().mem_size = mem_size;
-  const HAL_StatusTypeDef st = fake::I2cAck(address, h);
-  if (st == HAL_OK) {
-    fake::I2cCopy(data, size);
-  }
-  return st;
-}
-HAL_StatusTypeDef HAL_I2C_IsDeviceReady(I2C_HandleTypeDef* h, uint16_t address, uint32_t,
-                                        uint32_t) {
-  FAKE_INJECT("HAL_I2C_IsDeviceReady", h);
+  S().i2c_options = options;
+  HAL_StatusTypeDef st = HAL_OK;
+  uint32_t ec = 0U;
   if (!S().present[(address >> 1U) & 0x7FU]) {
     h->ErrorCode = HAL_I2C_ERROR_AF;
-    return HAL_ERROR;
+    st = HAL_ERROR;
+  } else if (Injected("i2c_error", st, ec)) {
+    h->ErrorCode = ec;
+    st = HAL_ERROR;
+  } else {
+    fake::I2cCopy(data, size);
+  }
+  ++S().i2c_frames;
+  if (!fake::Stalled("I2C")) {
+    if (st == HAL_OK) {
+      HAL_I2C_MasterRxCpltCallback(h);
+    } else {
+      HAL_I2C_ErrorCallback(h);
+    }
   }
   return HAL_OK;
+}
+void HAL_I2C_EV_IRQHandler(I2C_HandleTypeDef*) {
+  static_cast<void>(Injected("HAL_I2C_EV_IRQHandler"));
+}
+void HAL_I2C_ER_IRQHandler(I2C_HandleTypeDef*) {
+  static_cast<void>(Injected("HAL_I2C_ER_IRQHandler"));
 }
 HAL_StatusTypeDef HAL_I2CEx_ConfigAnalogFilter(I2C_HandleTypeDef* h, uint32_t) {
   FAKE_INJECT("HAL_I2CEx_ConfigAnalogFilter", h);
@@ -577,23 +715,39 @@ HAL_StatusTypeDef HAL_SPI_DeInit(SPI_HandleTypeDef* h) {
   FAKE_INJECT("HAL_SPI_DeInit", h);
   return HAL_OK;
 }
-HAL_StatusTypeDef HAL_SPI_Transmit(SPI_HandleTypeDef* h, const uint8_t* data, uint16_t size,
-                                   uint32_t) {
-  FAKE_INJECT("HAL_SPI_Transmit", h);
+HAL_StatusTypeDef HAL_SPI_Transmit_IT(SPI_HandleTypeDef* h, const uint8_t* data, uint16_t size) {
+  FAKE_INJECT("HAL_SPI_Transmit_IT", h);
   fake::SpiClock(data, nullptr, size);
+  if (!fake::Stalled("SPI")) {
+    HAL_StatusTypeDef st = HAL_OK;
+    uint32_t ec = 0U;
+    if (Injected("spi_error", st, ec)) {
+      h->ErrorCode = ec;
+      HAL_SPI_ErrorCallback(h);
+    } else {
+      HAL_SPI_TxCpltCallback(h);
+    }
+  }
   return HAL_OK;
 }
-HAL_StatusTypeDef HAL_SPI_Receive(SPI_HandleTypeDef* h, uint8_t* data, uint16_t size, uint32_t) {
-  FAKE_INJECT("HAL_SPI_Receive", h);
-  std::vector<uint8_t> out(data, data + size); // the HAL clocks out the receive buffer
-  fake::SpiClock(out.data(), data, size);
-  return HAL_OK;
-}
-HAL_StatusTypeDef HAL_SPI_TransmitReceive(SPI_HandleTypeDef* h, const uint8_t* tx, uint8_t* rx,
-                                          uint16_t size, uint32_t) {
-  FAKE_INJECT("HAL_SPI_TransmitReceive", h);
+HAL_StatusTypeDef HAL_SPI_TransmitReceive_IT(SPI_HandleTypeDef* h, const uint8_t* tx, uint8_t* rx,
+                                             uint16_t size) {
+  FAKE_INJECT("HAL_SPI_TransmitReceive_IT", h);
   fake::SpiClock(tx, rx, size);
+  if (!fake::Stalled("SPI")) {
+    HAL_StatusTypeDef st = HAL_OK;
+    uint32_t ec = 0U;
+    if (Injected("spi_error", st, ec)) { // a mode fault or overrun ends the transfer instead
+      h->ErrorCode = ec;
+      HAL_SPI_ErrorCallback(h);
+    } else {
+      HAL_SPI_TxRxCpltCallback(h);
+    }
+  }
   return HAL_OK;
+}
+void HAL_SPI_IRQHandler(SPI_HandleTypeDef*) {
+  static_cast<void>(Injected("HAL_SPI_IRQHandler"));
 }
 HAL_StatusTypeDef HAL_SPI_Abort(SPI_HandleTypeDef* h) {
   FAKE_INJECT("HAL_SPI_Abort", h);
@@ -610,11 +764,32 @@ HAL_StatusTypeDef HAL_UART_DeInit(UART_HandleTypeDef* h) {
   FAKE_INJECT("HAL_UART_DeInit", h);
   return HAL_OK;
 }
-HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef* h, const uint8_t* data, uint16_t size,
-                                    uint32_t) {
-  FAKE_INJECT("HAL_UART_Transmit", h);
-  S().uart_sent.insert(S().uart_sent.end(), data, data + size);
-  return HAL_OK;
+void kb_fake_uart_it(UART_HandleTypeDef* h, uint32_t it, int on) {
+  h->Interrupts = (on != 0) ? (h->Interrupts | it) : (h->Interrupts & ~it);
+  if ((on != 0) && ((it & (UART_IT_TXE | UART_IT_TC)) != 0U) && !S().uart_running &&
+      !fake::Stalled("UART")) {
+    // The hardware sends at once: transmit-empty and transmit-complete stay set, and the
+    // interrupt runs while one of them is enabled.
+    S().uart_running = true;
+    USART_TypeDef* const u = h->Instance;
+    const auto index = static_cast<std::size_t>(u - kb_fake_usart);
+    const uint8_t instance =
+        (index == 11U) ? kb::port::stm32::kLpuart1 : static_cast<uint8_t>(index);
+    for (int i = 0; (i < 1000000) && ((h->Interrupts & (UART_IT_TXE | UART_IT_TC)) != 0U); ++i) {
+#if defined(KB_FAKE_STM32F4)
+      const uint32_t before = u->SR;
+      u->SR = before | USART_SR_TXE | USART_SR_TC;
+      kb::port::stm32::HandleUartIrq(instance);
+      u->SR = before;
+#else
+      const uint32_t before = u->ISR;
+      u->ISR = before | USART_ISR_TXE_TXFNF | USART_ISR_TC;
+      kb::port::stm32::HandleUartIrq(instance);
+      u->ISR = before;
+#endif
+    }
+    S().uart_running = false;
+  }
 }
 
 // --- CAN -----------------------------------------------------------------------------------------
@@ -633,6 +808,15 @@ bool BusOffNow(bool recovering) {
 }
 } // namespace
 #if !defined(KB_FAKE_STM32F4)
+HAL_StatusTypeDef HAL_FDCAN_ActivateNotification(FDCAN_HandleTypeDef* h, uint32_t, uint32_t) {
+  FAKE_INJECT("HAL_FDCAN_ActivateNotification", h);
+  S().can_notify = true;
+  S().can_handle = h;
+  return HAL_OK;
+}
+void HAL_FDCAN_IRQHandler(FDCAN_HandleTypeDef*) {
+  static_cast<void>(Injected("HAL_FDCAN_IRQHandler"));
+}
 HAL_StatusTypeDef HAL_FDCAN_Init(FDCAN_HandleTypeDef* h) {
   FAKE_INJECT("HAL_FDCAN_Init", h);
   S().can_prescaler = h->Init.NominalPrescaler;
@@ -640,6 +824,7 @@ HAL_StatusTypeDef HAL_FDCAN_Init(FDCAN_HandleTypeDef* h) {
   return HAL_OK;
 }
 HAL_StatusTypeDef HAL_FDCAN_DeInit(FDCAN_HandleTypeDef* h) {
+  S().can_notify = false;
   FAKE_INJECT("HAL_FDCAN_DeInit", h);
   return HAL_OK;
 }
@@ -674,6 +859,9 @@ HAL_StatusTypeDef HAL_FDCAN_AddMessageToTxFifoQ(FDCAN_HandleTypeDef* h,
   f.dlc = header->DataLength;
   std::memcpy(f.data, data, 8U);
   S().can_tx.push_back(f);
+  if (S().can_notify) {
+    HAL_FDCAN_TxBufferCompleteCallback(h, FDCAN_TX_BUFFER0);
+  }
   return HAL_OK;
 }
 HAL_StatusTypeDef HAL_FDCAN_GetRxMessage(FDCAN_HandleTypeDef* h, uint32_t,
@@ -712,6 +900,19 @@ HAL_StatusTypeDef HAL_FDCAN_GetErrorCounters(const FDCAN_HandleTypeDef*,
   return HAL_OK;
 }
 #else
+HAL_StatusTypeDef HAL_CAN_ActivateNotification(CAN_HandleTypeDef* h, uint32_t) {
+  FAKE_INJECT("HAL_CAN_ActivateNotification", h);
+  S().can_notify = true;
+  S().can_handle = h;
+  return HAL_OK;
+}
+HAL_StatusTypeDef HAL_CAN_ResetError(CAN_HandleTypeDef* h) {
+  h->ErrorCode = 0U;
+  return HAL_OK;
+}
+void HAL_CAN_IRQHandler(CAN_HandleTypeDef*) {
+  static_cast<void>(Injected("HAL_CAN_IRQHandler"));
+}
 HAL_StatusTypeDef HAL_CAN_Init(CAN_HandleTypeDef* h) {
   FAKE_INJECT("HAL_CAN_Init", h);
   S().can_prescaler = h->Init.Prescaler;
@@ -719,6 +920,7 @@ HAL_StatusTypeDef HAL_CAN_Init(CAN_HandleTypeDef* h) {
   return HAL_OK;
 }
 HAL_StatusTypeDef HAL_CAN_DeInit(CAN_HandleTypeDef* h) {
+  S().can_notify = false;
   FAKE_INJECT("HAL_CAN_DeInit", h);
   return HAL_OK;
 }
@@ -751,6 +953,9 @@ HAL_StatusTypeDef HAL_CAN_AddTxMessage(CAN_HandleTypeDef* h, const CAN_TxHeaderT
   std::memcpy(f.data, data, 8U);
   S().can_tx.push_back(f);
   *mailbox = 1U;
+  if (S().can_notify) {
+    HAL_CAN_TxMailbox0CompleteCallback(h);
+  }
   return HAL_OK;
 }
 HAL_StatusTypeDef HAL_CAN_GetRxMessage(CAN_HandleTypeDef* h, uint32_t, CAN_RxHeaderTypeDef* header,

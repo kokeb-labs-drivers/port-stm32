@@ -1,25 +1,38 @@
 /**
  * @file i2c.hpp
  * @brief `kb::port::stm32::I2cController`: one STM32 I2C peripheral (HAL `stm32<family>xx_hal_i2c`,
- * blocking calls) that satisfies `kb::iface::I2cBus`, with bus recovery, statistics and a lock.
+ * interrupt-driven sequential transfers) that satisfies `kb::iface::I2cBus`, with bus recovery,
+ * statistics and a lock.
  *
  * | Result | Meaning |
  * | --- | --- |
  * | `Ok` | Done; `LastFailure()` is `None` |
- * | `NoDevice` | The address was not acknowledged (`AddressNack`) |
- * | `Nack` | The device acknowledged its address, then refused a byte (`DataNack`) |
- * | `Timeout` | The transfer did not end in time, lines idle (`Timeout`) |
- * | `BusError` | Arbitration lost, bus error, or a stuck line (`Bus` or `BusStuck`) |
- * | `Busy` | The controller lock was not had within the timeout; nothing was sent |
- * | `Unsupported` | `WriteRead()` with more than 2 bytes to write (HAL_I2C_Mem_Read limit) |
- * | `InvalidArgument` | Address outside 0x08..0x77, an empty read, or a bad configuration |
- * | `NotReady` | EnsureReady() has not succeeded |
+ * | `NoDevice` | The address was not acknowledged (`AddressNack`; a Read, or a probe) |
+ * | `Nack` | A write was not acknowledged (`DataNack`): the address or a data byte, unsplit unless
+ * `nack_probe` | | `Timeout` | The transfer did not end in time, lines idle (`Timeout`) | |
+ * `BusError` | Arbitration lost, bus error, BUSY with idle lines, or a stuck line (`Bus` or
+ * `BusStuck`) | | `Busy` | The controller lock was not had within the timeout; nothing was sent |
+ * | `InvalidArgument` | Address outside 0x08..0x77, an empty read, a timeout above kMaxTimeout, a
+ * bad configuration | | `NotReady` | EnsureReady() has not succeeded, or the I2C kernel clock reads
+ * 0 |
  *
- * The HAL reports a NACK of the address and of a data byte with one bit (`HAL_I2C_ERROR_AF`); the
- * controller tells them apart with one `HAL_I2C_IsDeviceReady` probe. After a failure SDA and SCL
- * are read; when one is low the failure is `BusStuck` and, with `auto_recover`, RecoverBus() runs:
- * the pins are taken as GPIO, SCL is clocked nine times and a STOP is made, and the peripheral is
- * initialised again.
+ * Every transfer is started with the HAL's interrupt API (`HAL_I2C_Master_Seq_Transmit_IT`,
+ * `HAL_I2C_Master_Seq_Receive_IT`) and ended by the HAL's completion or error callback, which
+ * completes the controller's Completion; the calling task waits on it for at most `timeout` on the
+ * port's clock (completion.hpp), asleep under an RTOS. WriteRead() is a write of any length without
+ * STOP, a repeated START and the read. Before every transfer the transmit and receive data
+ * registers are flushed and the stale transfer fields of CR2 cleared (I2C v2).
+ *
+ * After any failure the HAL handle is put back to ready and the error flags are cleared; only when
+ * the BUSY flag stays set is the peripheral reset (PE toggled by re-initialisation; SWRST on F4),
+ * never after a plain NACK. When a line reads low the failure is `BusStuck` and, with
+ * `auto_recover`, RecoverBus() runs: the pins are taken as GPIO, SCL is clocked nine times and a
+ * STOP is made, and the peripheral is initialised again.
+ *
+ * The HAL reports a NACK of the address and of a data byte with one bit (`HAL_I2C_ERROR_AF`). Only
+ * with `nack_probe` set does the controller tell them apart, with one address-only probe after the
+ * NACK. It is off by default: some devices (secure elements) NACK every poll while busy, and an
+ * address-only frame can make them hold the bus. EnsureReady() never probes.
  *
  * SPDX-License-Identifier: MIT
  * Copyright (c) 2026 The port-stm32 authors
@@ -27,11 +40,15 @@
 #ifndef KB_PORT_STM32_I2C_HPP
 #define KB_PORT_STM32_I2C_HPP
 
+// State shared with interrupts needs lock-free std::atomic (as kb-core's SpscRing does).
+// misra-lint: ignore KB-CPP-012
+#include <atomic>
 #include <cstdint>
 #include <span>
 
 #include "kb/interfaces/i2c.hpp"
 #include "kb/interfaces/types.hpp"
+#include "kb/port/stm32/completion.hpp"
 #include "kb/port/stm32/error.hpp"
 #include "kb/rtos/mutex.hpp"
 #include "kb/utils/result.hpp"
@@ -46,11 +63,16 @@ struct I2cConfig {
   PinId scl{};                ///< SCL with its alternate function.
   PinId sda{};                ///< SDA with its alternate function.
   uint32_t clock_hz{100000U}; ///< 10 kHz to 1 MHz (Fast-mode Plus needs FM+ pins).
-  kb::Milliseconds timeout{kb::Milliseconds{50U}}; ///< Lock wait and transfer limit, 1 ms or more.
-  uint32_t timing{0U};          ///< TIMINGR (I2C v2 families); 0 computes it from the kernel clock.
-  uint32_t kernel_clock_hz{0U}; ///< The I2C kernel clock; 0 reads PCLK1 (the reset default).
+  /// Lock wait, and the limit of one transfer, 1 ms to kMaxTimeout.
+  kb::Milliseconds timeout{kb::Milliseconds{50U}};
+  /// TIMINGR (I2C v2 families); 0 computes it from the kernel clock. Real wiring can need a slower
+  /// timing than the nominal one: this override stays next to the computed value.
+  uint32_t timing{0U};
+  uint32_t kernel_clock_hz{0U}; ///< The I2C kernel clock; 0 reads it from the RCC.
   bool internal_pullups{false}; ///< Weak internal pull-ups on SCL and SDA (use external ones).
   bool auto_recover{true};      ///< Run RecoverBus() when a stuck line is found.
+  bool nack_probe{false};       ///< After a write NACK, probe the address to split address/data.
+  uint8_t irq_priority{5U};     ///< NVIC priority of the event and error interrupts.
 };
 
 /** @brief Counters of an I2C controller since EnsureReady(). */
@@ -102,14 +124,14 @@ public:
   [[nodiscard]] kb::Status EnsureReady() noexcept;
   /** @brief START, address, `tx`, STOP. An empty `tx` probes the address. */
   [[nodiscard]] kb::Status Write(uint8_t address, std::span<const uint8_t> tx) noexcept;
-  /** @brief Writes `tx` (1 or 2 bytes), repeated START, reads `rx` (HAL_I2C_Mem_Read). */
+  /** @brief Writes `tx` (no STOP), repeated START, reads `rx`, STOP. */
   [[nodiscard]] kb::Status WriteRead(uint8_t address, std::span<const uint8_t> tx,
                                      std::span<uint8_t> rx) noexcept;
   /** @brief START, address, reads `rx` (non-empty), STOP. */
   [[nodiscard]] kb::Status Read(uint8_t address, std::span<uint8_t> rx) noexcept;
   /** @brief Why the last transfer failed; `None` after a success. */
   [[nodiscard]] kb::iface::I2cFailure LastFailure() const noexcept {
-    return last_failure_;
+    return last_failure_.load(std::memory_order_relaxed);
   }
   /** @brief Nine SCL clocks and a STOP on the pins as GPIO, then the peripheral again. */
   [[nodiscard]] kb::Status RecoverBus() noexcept;
@@ -119,23 +141,24 @@ public:
   [[nodiscard]] kb::Result<void> LastError() const noexcept {
     return error_.Get();
   }
-  /** @brief The counters. */
-  [[nodiscard]] I2cStats Stats() const noexcept {
-    return stats_;
-  }
+  /** @brief The counters (a consistent copy). */
+  [[nodiscard]] I2cStats Stats() const noexcept;
   /** @brief The configuration. */
   [[nodiscard]] const I2cConfig& Config() const noexcept {
     return config_;
   }
 
 private:
-  enum class Op : uint8_t { Write, WriteRead, Read };
+  enum class Op : uint8_t { Probe, Write, WriteRead, Read };
   [[nodiscard]] kb::Status transfer(Op op, uint8_t address, std::span<const uint8_t> tx,
                                     std::span<uint8_t> rx) noexcept;
   [[nodiscard]] uint32_t run(Op op, uint8_t address, std::span<const uint8_t> tx,
-                             std::span<uint8_t> rx) const noexcept;
-  [[nodiscard]] kb::Status classify(uint32_t code, uint8_t address) noexcept;
-  [[nodiscard]] kb::iface::I2cFailure failureOf(uint32_t code, uint8_t address) const noexcept;
+                             std::span<uint8_t> rx) noexcept;
+  [[nodiscard]] uint32_t await(uint32_t started, Deadline& deadline) noexcept;
+  [[nodiscard]] kb::Status classify(uint32_t code, Op op, uint8_t address) noexcept;
+  [[nodiscard]] kb::iface::I2cFailure failureOf(uint32_t code, Op op, uint8_t address) noexcept;
+  void restoreLocked() noexcept;
+  void count(uint32_t I2cStats::* field) noexcept;
   [[nodiscard]] static kb::Status statusOf(kb::iface::I2cFailure failure) noexcept;
   [[nodiscard]] bool linesIdle() const noexcept;
   [[nodiscard]] kb::Status recoverLocked() noexcept;
@@ -144,9 +167,10 @@ private:
 
   I2cConfig config_;
   kb::rtos::Mutex mutex_;
+  Completion done_; ///< Completed by the HAL's transfer callbacks.
   LastErrorRecord error_;
   I2cStats stats_;
-  kb::iface::I2cFailure last_failure_{kb::iface::I2cFailure::None};
+  std::atomic<kb::iface::I2cFailure> last_failure_{kb::iface::I2cFailure::None};
   bool ready_{false};
 };
 

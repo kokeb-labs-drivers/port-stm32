@@ -198,18 +198,21 @@ KB_TEST("can: a full transmit queue times out; bus-off refuses Send; HAL refusal
 #if defined(KB_FAKE_STM32F4)
   fake::Fail("HAL_CAN_AddTxMessage", HAL_ERROR, 0x200000U);
   KB_CHECK_EQ(can.Send(f, kb::Milliseconds{3U}), Status::BusError);
+  fake::Fail("HAL_CAN_GetRxMessage", HAL_ERROR);
   fake::Frame in{};
   fake::CanFeed(in);
-  fake::Fail("HAL_CAN_GetRxMessage", HAL_ERROR);
 #else
   fake::Fail("HAL_FDCAN_AddMessageToTxFifoQ", HAL_ERROR, 0x200U);
   KB_CHECK_EQ(can.Send(f, kb::Milliseconds{3U}), Status::BusError);
+  fake::Fail("HAL_FDCAN_GetRxMessage", HAL_ERROR);
   fake::Frame in{};
   fake::CanFeed(in);
-  fake::Fail("HAL_FDCAN_GetRxMessage", HAL_ERROR);
 #endif
   CanFrame got{};
-  KB_CHECK_EQ(can.Receive(got, kb::Milliseconds{3U}), Status::Fault);
+  // The interrupt could not read the frame: it stays in the FIFO, nothing is lost or invented.
+  KB_CHECK_EQ(can.Receive(got, kb::Milliseconds{3U}), Status::Timeout);
+  fake::CanRxInterrupt(true); // the next interrupt takes it
+  KB_CHECK_EQ(can.Receive(got, kb::Milliseconds{3U}), Status::Ok);
   // A Send() while another holds the lock (inside the fill-level read) is Busy.
   fake::Hook(kF4 ? "HAL_CAN_GetTxMailboxesFreeLevel" : "HAL_FDCAN_GetTxFifoFreeLevel", ReenterSend,
              &can);
@@ -222,7 +225,7 @@ KB_TEST("can: a Receive() that waits does not hold off a Send()") {
   stm::CanController can{Config()};
   KB_REQUIRE(can.EnsureReady() == Status::Ok);
   fake::Hook(
-      "HAL_GetTick",
+      "time_read",
       [](void* context) {
         CanFrame f{};
         f.id = 0x55U;
@@ -282,7 +285,7 @@ KB_TEST("can: Recover leaves bus-off within the timeout, or reports Timeout") {
   KB_CHECK_EQ(can.Recover(kb::Milliseconds{5U}), Status::Fault);
 #endif
   fake::Hook(
-      "HAL_GetTick",
+      "time_read",
       [](void* context) {
         KB_CHECK_EQ(static_cast<stm::CanController*>(context)->Recover(kb::Milliseconds{1U}),
                     Status::Busy);
@@ -301,4 +304,47 @@ KB_TEST("can: Release de-initialises even when the stop fails, and frees the con
   KB_CHECK_EQ(fake::Calls(kF4 ? "HAL_CAN_DeInit" : "HAL_FDCAN_DeInit"), 1U);
   stm::CanController next{Config()};
   KB_CHECK_EQ(next.EnsureReady(), Status::Ok);
+}
+
+KB_TEST("can: frames arrive by interrupt into the ring; a FIFO overrun is reported as Overflow") {
+  Fresh();
+  stm::CanController can{Config()};
+  KB_REQUIRE(can.EnsureReady() == Status::Ok);
+  KB_CHECK(fake::IrqEnabled(kF4 ? CAN1_RX0_IRQn : FDCAN1_IT0_IRQn));
+  KB_CHECK_EQ(fake::IrqPriority(kF4 ? CAN1_RX0_IRQn : FDCAN1_IT0_IRQn), 5U);
+  fake::CanRxInterrupt(false); // the task (and the interrupt) held off while a burst arrives
+  for (uint32_t i = 0U; i < 4U; ++i) {
+    fake::Frame f{};
+    f.id = 0x100U + i;
+    fake::CanFeed(f); // the 3-deep hardware FIFO: the fourth is lost
+  }
+  fake::CanRxInterrupt(true);
+  CanFrame got{};
+  KB_CHECK_EQ(can.Receive(got, kb::Milliseconds{3U}), Status::Overflow);
+  KB_CHECK(FailedWith(can.LastError(), Status::Overflow, stm::can_flags::kFifoOverrun));
+  for (uint32_t i = 0U; i < 3U; ++i) {
+    KB_CHECK_EQ(can.Receive(got, kb::Milliseconds{3U}), Status::Ok); // the frames kept
+    KB_CHECK_EQ(got.id, 0x100U + i);
+  }
+  // A burst the interrupt takes in time is not lost, even far beyond the hardware FIFO.
+  for (uint32_t i = 0U; i < stm::kCanRxFrames; ++i) {
+    fake::Frame f{};
+    f.id = i;
+    fake::CanFeed(f);
+  }
+  for (uint32_t i = 0U; i < stm::kCanRxFrames; ++i) {
+    KB_CHECK_EQ(can.Receive(got, kb::Milliseconds{3U}), Status::Ok);
+  }
+  for (uint32_t i = 0U; i <= stm::kCanRxFrames; ++i) { // one more than the ring holds
+    fake::CanFeed(fake::Frame{});
+  }
+  KB_CHECK_EQ(can.Receive(got, kb::Milliseconds{3U}), Status::Overflow);
+  KB_CHECK(FailedWith(can.LastError(), Status::Overflow, stm::can_flags::kRingFull));
+  stm::HandleCanIrq(1U);
+  stm::HandleCanIrq(2U); // not open: nothing
+  KB_CHECK_EQ(fake::Calls(kF4 ? "HAL_CAN_IRQHandler" : "HAL_FDCAN_IRQHandler"), 1U);
+  KB_CHECK_EQ(can.Receive(got, kb::Milliseconds{stm::kMaxTimeout.Count() + 1U}),
+              Status::InvalidArgument);
+  KB_CHECK_EQ(can.Send(got, kb::Milliseconds{stm::kMaxTimeout.Count() + 1U}),
+              Status::InvalidArgument);
 }

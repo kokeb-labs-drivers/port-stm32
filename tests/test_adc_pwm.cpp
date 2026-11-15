@@ -86,6 +86,14 @@ KB_TEST("adc: refusals and HAL failures") {
   c = Adc(20U);
   stm::AdcChannel bad_channel{c};
   KB_CHECK_EQ(bad_channel.EnsureReady(), Status::InvalidArgument);
+  c = Adc(19U); // F4 has channels 0 to 18
+  stm::AdcChannel nineteen{c};
+  KB_CHECK_EQ(nineteen.EnsureReady(), kF4 ? Status::InvalidArgument : Status::Ok);
+  KB_CHECK_EQ(nineteen.Release(), Status::Ok);
+  c = Adc();
+  c.lock_timeout = kb::Milliseconds{stm::kMaxTimeout.Count() + 1U};
+  stm::AdcChannel too_long{c};
+  KB_CHECK_EQ(too_long.EnsureReady(), Status::InvalidArgument);
   c = Adc();
   c.vref_mv = 0U;
   stm::AdcChannel no_vref{c};
@@ -106,13 +114,23 @@ KB_TEST("adc: refusals and HAL failures") {
     KB_CHECK_EQ(ch.EnsureReady(), Status::Timeout);
   }
   KB_REQUIRE(ch.EnsureReady() == Status::Ok);
-  fake::Fail("HAL_ADC_PollForConversion", HAL_TIMEOUT);
+  KB_CHECK(fake::IrqEnabled(kF4 ? ADC_IRQn : ADC1_2_IRQn));
+  fake::SetTickStep(0U);    // the HAL tick stands still: the wait is on the port's clock
+  fake::Stall("ADC", true); // the end-of-conversion interrupt never comes
   KB_CHECK(FailedWith(ch.ReadRaw(), Status::Timeout, Code(HAL_TIMEOUT)));
+  KB_CHECK_EQ(fake::Calls("HAL_ADC_Stop_IT"), 1U);
+  fake::Fail("HAL_ADC_Stop_IT", HAL_ERROR, 0x10U); // the stop failing too: in the Detail
+  KB_CHECK(FailedWith(ch.ReadRaw(), Status::Timeout, Code(HAL_TIMEOUT, 0x10U)));
+  fake::Stall("ADC", false);
+  fake::Fail("conversion", HAL_ERROR, 0x04U); // the error callback ends the conversion
+  KB_CHECK(FailedWith(ch.ReadRaw(), Status::Fault, Code(HAL_ERROR, 0x04U)));
   fake::Fail("HAL_ADC_ConfigChannel", HAL_ERROR);
   KB_CHECK(FailedWith(ch.ReadMillivolts(), Status::Fault, Code(HAL_ERROR)));
-  fake::Fail("HAL_ADC_Start", HAL_BUSY);
+  fake::Fail("HAL_ADC_Start_IT", HAL_BUSY);
   KB_CHECK(FailedWith(ch.ReadRaw(), Status::Busy, Code(HAL_BUSY)));
-  fake::Hook("HAL_ADC_Start", ReenterRead, &ch);
+  stm::HandleAdcIrq(1U, 3U); // the vector reaches the HAL's handler of the open instance only
+  KB_CHECK_EQ(fake::Calls("HAL_ADC_IRQHandler"), 1U);
+  fake::Hook("HAL_ADC_Start_IT", ReenterRead, &ch);
   KB_CHECK(ch.ReadRaw().IsOk());
   fake::Fail("HAL_ADC_DeInit", HAL_ERROR);
   KB_CHECK_EQ(ch.Release(), Status::Fault);
@@ -189,6 +207,7 @@ KB_TEST("pwm: idle high, an APB2 timer, settings before EnsureReady, shared time
   d.timer = 1U;
   d.channel = 1U;
   d.pin = PinId{GpioPort::A, 8U, 6U};
+  d.frequency_hz = 2000U; // the timer's period
   stm::PwmChannel shared{d};
   KB_REQUIRE(shared.EnsureReady() == Status::Ok);
   KB_CHECK_EQ(fake::Calls("HAL_TIM_PWM_Init"), 1U);
@@ -231,11 +250,45 @@ KB_TEST("pwm: idle high, an APB2 timer, settings before EnsureReady, shared time
   KB_CHECK_EQ(failing.Release(), Status::Fault);
 }
 
-KB_TEST("adc: a failed stop after the conversion is reported") {
+KB_TEST("adc: the instance is initialised once and freed by its last channel, in any order") {
   Fresh();
-  stm::AdcChannel ch{Adc()};
-  KB_REQUIRE(ch.EnsureReady() == Status::Ok);
-  fake::Fail("HAL_ADC_Stop", HAL_ERROR);
-  KB_CHECK(FailedWith(ch.ReadRaw(), Status::Fault, Code(HAL_ERROR)));
-  KB_CHECK(ch.ReadRaw().IsOk());
+  stm::AdcChannel a{Adc(1U)};
+  stm::AdcConfig cb = Adc(2U);
+  cb.pin = PinId{};
+  stm::AdcChannel b{cb};
+  KB_REQUIRE(a.EnsureReady() == Status::Ok);
+  KB_REQUIRE(b.EnsureReady() == Status::Ok);
+  KB_CHECK_EQ(fake::Calls("HAL_ADC_Init"), 1U);
+  KB_CHECK_EQ(a.Release(), Status::Ok); // the first opener leaves: b still converts
+  KB_CHECK_EQ(fake::Calls("HAL_ADC_DeInit"), 0U);
+  KB_CHECK(b.ReadRaw().IsOk());
+  KB_CHECK_EQ(b.Release(), Status::Ok);
+  KB_CHECK_EQ(fake::Calls("HAL_ADC_DeInit"), 1U);
+  fake::Fail("HAL_ADC_Init", HAL_ERROR);
+  KB_CHECK_EQ(a.EnsureReady(), Status::Fault); // a failed open leaves the instance closed
+  KB_REQUIRE(b.EnsureReady() == Status::Ok);
+  KB_CHECK_EQ(fake::Calls("HAL_ADC_Init"), 3U);
+}
+
+KB_TEST("pwm: one period per timer; the clock's timer is refused") {
+  Fresh();
+  stm::PwmChannel first{Pwm()};
+  KB_REQUIRE(first.EnsureReady() == Status::Ok);
+  stm::PwmConfig other = Pwm();
+  other.channel = 3U;
+  other.pin = PinId{GpioPort::B, 0U, 2U};
+  other.frequency_hz = 2000U; // another period on the same timer would corrupt the first's duty
+  stm::PwmChannel conflicting{other};
+  KB_CHECK_EQ(conflicting.EnsureReady(), Status::InvalidArgument);
+  KB_CHECK(FailedWith(conflicting.LastError(), Status::InvalidArgument, stm::port_code::kConflict));
+  other.frequency_hz = 1000U;
+  stm::PwmChannel same{other};
+  KB_REQUIRE(same.EnsureReady() == Status::Ok);
+  KB_CHECK_EQ(fake::Calls("HAL_TIM_PWM_Init"), 1U);
+  KB_CHECK_EQ(same.Reload(), first.Reload());
+  KB_CHECK_EQ(first.SetFrequencyHz(3000U), Status::InvalidArgument); // shared: fixed
+  KB_CHECK_EQ(same.Release(), Status::Ok);
+  KB_CHECK_EQ(first.SetFrequencyHz(3000U), Status::Ok); // alone again: free to change
+  KB_CHECK_EQ(first.Release(), Status::Ok);
+  KB_CHECK_EQ(fake::Calls("HAL_TIM_PWM_DeInit"), 1U);
 }
