@@ -9,7 +9,7 @@ handbook at level `high` (`.kokeb/handbook.yml`).
 
 - `inc/kb/port/stm32/`: public headers, one per peripheral, no HAL type in any signature; `port.hpp` includes them
   all and proves every `*Ref`; `irq.hpp` holds the interrupt entry points.
-- `src/`: the platform-free logic (`i2c_controller.cpp`, `spi_device.cpp`, `uart.cpp`, `gpio.cpp`, `adc_pwm.cpp`,
+- `src/`: the platform-free logic (`i2c.cpp`, `spi.cpp`, `uart.cpp`, `gpio.cpp`, `adc_pwm.cpp`,
   `can.cpp`, `time.cpp`, `error.cpp`, `clock_read.hpp`, the shared state's type `state.hpp`), the private seam
   `sdk.hpp`, and the boundary files `stm32_*_boundary.cpp`, the only files that include HAL or CMSIS headers
   (`deviations/boundary-files.yml`).

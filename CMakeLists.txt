@@ -23,7 +23,7 @@ set(KB_PORT_STM32_DEVICE "" CACHE STRING "CMSIS device macro, e.g. STM32G474xx (
 set(KB_PORT_STM32_HAL_CONF_DIR "" CACHE PATH "Folder of the application's stm32<family>xx_hal_conf.h")
 
 set(KB_PORT_STM32_LOGIC_SOURCES
-    src/adc_pwm.cpp src/can.cpp src/error.cpp src/gpio.cpp src/i2c_controller.cpp src/port.cpp src/spi_device.cpp
+    src/adc_pwm.cpp src/can.cpp src/error.cpp src/gpio.cpp src/i2c.cpp src/port.cpp src/spi.cpp
     src/time.cpp src/uart.cpp)
 # The only files that include HAL or CMSIS headers (deviations/boundary-files.yml).
 set(KB_PORT_STM32_BOUNDARY_SOURCES src/stm32_bus_boundary.cpp src/stm32_can_boundary.cpp src/stm32_io_boundary.cpp)
