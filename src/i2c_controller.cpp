@@ -1,5 +1,6 @@
-// I2cController: argument checks, the TIMINGR computation, the controller lock, failure
-// classification and the bit-banged bus recovery. Platform-free; every HAL call goes through
+// I2cController: argument checks, the TIMINGR computation, the controller lock, the
+// interrupt-driven transfers and their bounded waits, failure classification, the handle restore
+// after a failure and the bit-banged bus recovery. Platform-free; every HAL call goes through
 // sdk.hpp (src/stm32_bus_boundary.cpp, src/stm32_io_boundary.cpp). SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The port-stm32 authors
 #include <cstddef>
@@ -7,12 +8,15 @@
 #include <span>
 
 #include "kb/interfaces/types.hpp"
+#include "kb/port/stm32/completion.hpp"
 #include "kb/port/stm32/error.hpp"
 #include "kb/port/stm32/i2c.hpp"
 #include "kb/port/stm32/time.hpp"
 #include "kb/rtos/mutex.hpp"
+#include "kb/rtos/time.hpp"
 #include "kb/utils/status.hpp"
 #include "sdk.hpp"
+#include "state.hpp"
 
 namespace kb::port::stm32 {
 
@@ -22,11 +26,17 @@ constexpr uint32_t kMinClockHz = 10000U;
 constexpr uint32_t kMaxClockHz = 1000000U;         // Fast-mode Plus (I2C v2: G4, H7, L4)
 constexpr uint32_t kMaxClockV1Hz = 400000U;        // Fast mode (I2C v1: F4)
 constexpr std::size_t kMaxTransferBytes = 0xFFFFU; // the HAL's uint16_t length
-constexpr uint32_t kMaxMemAddress = 2U; // HAL_I2C_Mem_Read takes a 1- or 2-byte memory address
 constexpr uint32_t kRecoveryClocks = 9U;
-constexpr uint32_t kHalfPeriodUs = 5U; // 100 kHz while recovering
+constexpr uint32_t kSclReleaseMs = 25U; // the SMBus clock-low timeout (25 to 35 ms)
+constexpr uint32_t kHalfPeriodUs = 5U;  // 100 kHz while recovering
 // HAL_I2C_ERROR_AF (acknowledge failure): bit 2 of ErrorCode on every family.
 constexpr uint32_t kErrorAf = 0x04U;
+// HAL_I2C_ERROR_TIMEOUT: bit 5 of ErrorCode on every family.
+constexpr uint32_t kErrorTimeout = 0x20U;
+
+[[nodiscard]] bool Created(const kb::Result<void>& r) noexcept {
+  return r.IsOk() || (r.Error() == kb::Status::AlreadyStarted);
+}
 
 // The I2C specification's timings of one mode, in nanoseconds.
 struct ModeTimes {
@@ -123,7 +133,7 @@ bool I2cController::configValid() const noexcept {
          config_.sda.Used() && config_.sda.Valid() && sdk::PortExists(config_.scl.port) &&
          sdk::PortExists(config_.sda.port) && (config_.clock_hz >= kMinClockHz) &&
          (config_.clock_hz <= (sdk::I2cHasTimingRegister() ? kMaxClockHz : kMaxClockV1Hz)) &&
-         (config_.timeout.Count() > 0U);
+         ConfiguredTimeoutValid(config_.timeout) && RtosIrqPriorityValid(config_.irq_priority);
 }
 
 uint32_t I2cController::timingRegister(bool& ok) const noexcept {
@@ -142,17 +152,28 @@ kb::Status I2cController::EnsureReady() noexcept {
   kb::Status status = kb::Status::Ok;
   if (!ready_) {
     bool timing_ok = false;
-    const uint32_t timing = configValid() ? timingRegister(timing_ok) : 0U;
-    if (!timing_ok) {
-      status = error_.Set(kb::Status::InvalidArgument, port_code::kInvalidArgument);
+    uint32_t code = hal::kOk;
+    if (!configValid()) {
+      code = port_code::kInvalidArgument;
+    } else if (sdk::I2cKernelClockHz(config_.instance) == 0U) {
+      code = port_code::kNoClock; // the peripheral's clock source is not running
     } else {
-      static_cast<void>(mutex_.Create()); // AlreadyStarted after a Release() is fine
-      const uint32_t code = sdk::I2cOpen(config_, timing);
-      status = error_.Set(MapHalStatus(code & 0xFFU), code);
-      ready_ = status == kb::Status::Ok;
-      stats_ = I2cStats{};
-      last_failure_ = I2cFailure::None;
+      const uint32_t timing = timingRegister(timing_ok);
+      if (!timing_ok) {
+        code = port_code::kInvalidArgument;
+      } else if (!Created(mutex_.Create()) || (done_.Create() != kb::Status::Ok)) {
+        code = port_code::kRtosObject;
+      } else {
+        code = sdk::I2cOpen(config_, timing, done_); // never probes a device
+      }
     }
+    status = error_.Set(MapHalStatus(code & 0xFFU), code);
+    ready_ = status == kb::Status::Ok;
+    if (ready_) {
+      const IrqGuard guard{};
+      stats_ = I2cStats{};
+    }
+    last_failure_.store(I2cFailure::None, std::memory_order_relaxed);
   }
   return status;
 }
@@ -167,8 +188,18 @@ kb::Status I2cController::Release() noexcept {
   return status;
 }
 
+I2cStats I2cController::Stats() const noexcept {
+  const IrqGuard guard{};
+  return stats_;
+}
+
+void I2cController::count(uint32_t I2cStats::* field) noexcept {
+  const IrqGuard guard{};
+  ++(stats_.*field);
+}
+
 kb::Status I2cController::Write(uint8_t address, std::span<const uint8_t> tx) noexcept {
-  return transfer(Op::Write, address, tx, std::span<uint8_t>{});
+  return transfer(tx.empty() ? Op::Probe : Op::Write, address, tx, std::span<uint8_t>{});
 }
 
 kb::Status I2cController::WriteRead(uint8_t address, std::span<const uint8_t> tx,
@@ -176,8 +207,6 @@ kb::Status I2cController::WriteRead(uint8_t address, std::span<const uint8_t> tx
   kb::Status status = kb::Status::InvalidArgument;
   if (tx.empty() || rx.empty()) {
     static_cast<void>(error_.Set(status, port_code::kInvalidArgument));
-  } else if (tx.size() > kMaxMemAddress) {
-    status = error_.Set(kb::Status::Unsupported, port_code::kUnsupported);
   } else {
     status = transfer(Op::WriteRead, address, tx, rx);
   }
@@ -194,18 +223,30 @@ kb::Status I2cController::Read(uint8_t address, std::span<uint8_t> rx) noexcept 
   return status;
 }
 
+uint32_t I2cController::await(uint32_t started, Deadline& deadline) noexcept {
+  uint32_t code = started;
+  if (started == hal::kOk) {
+    code = done_.Wait(deadline) ? done_.Code() : VendorCode(hal::kTimeout, kErrorTimeout);
+  }
+  return code;
+}
+
 uint32_t I2cController::run(Op op, uint8_t address, std::span<const uint8_t> tx,
-                            std::span<uint8_t> rx) const noexcept {
-  const uint32_t ms = config_.timeout.Count();
+                            std::span<uint8_t> rx) noexcept {
+  Deadline deadline{config_.timeout};
+  const uint8_t instance = config_.instance;
+  sdk::I2cPrepare(instance); // flush TXDR/RXDR, clear stale CR2 transfer fields
   uint32_t code = hal::kOk;
-  if ((op == Op::Write) && tx.empty()) {
-    code = sdk::I2cProbe(config_.instance, address, ms);
-  } else if (op == Op::Write) {
-    code = sdk::I2cTransmit(config_.instance, address, tx, ms);
-  } else if (op == Op::WriteRead) {
-    code = sdk::I2cMemRead(config_.instance, address, tx, rx, ms);
+  done_.Arm();
+  if (op == Op::Read) {
+    code = await(sdk::I2cStartReceive(instance, address, rx, false), deadline);
   } else {
-    code = sdk::I2cReceive(config_.instance, address, rx, ms);
+    const bool hold = op == Op::WriteRead; // no STOP: a repeated START and the read follow
+    code = await(sdk::I2cStartTransmit(instance, address, tx, hold), deadline);
+    if ((code == hal::kOk) && hold) {
+      done_.Arm();
+      code = await(sdk::I2cStartReceive(instance, address, rx, true), deadline);
+    }
   }
   return code;
 }
@@ -221,13 +262,13 @@ kb::Status I2cController::transfer(Op op, uint8_t address, std::span<const uint8
   } else {
     const kb::rtos::LockGuard lock{mutex_, config_.timeout};
     if (!lock.OwnsLock()) {
-      ++stats_.lock_timeouts;
+      count(&I2cStats::lock_timeouts);
       status = error_.Set(kb::Status::Busy, port_code::kLockTimeout);
     } else {
-      ++stats_.transfers;
-      status = classify(run(op, address, tx, rx), address);
+      count(&I2cStats::transfers);
+      status = classify(run(op, address, tx, rx), op, address);
       if (status != kb::Status::Ok) {
-        ++stats_.failures;
+        count(&I2cStats::failures);
       }
     }
   }
@@ -235,22 +276,36 @@ kb::Status I2cController::transfer(Op op, uint8_t address, std::span<const uint8
 }
 
 bool I2cController::linesIdle() const noexcept {
-  return sdk::PinRead(config_.sda) && sdk::PinRead(config_.scl);
+  const bool sda = sdk::PinRead(config_.sda); // both read, always
+  const bool scl = sdk::PinRead(config_.scl);
+  return sda && scl;
 }
 
-kb::iface::I2cFailure I2cController::failureOf(uint32_t code, uint8_t address) const noexcept {
+kb::iface::I2cFailure I2cController::failureOf(uint32_t code, Op op, uint8_t address) noexcept {
   const uint32_t hal_status = code & 0xFFU;
   const uint32_t error_code = code >> 8U;
   I2cFailure failure = I2cFailure::Bus;
   if (hal_status == hal::kOk) {
     failure = I2cFailure::None;
   } else if ((error_code & kErrorAf) != 0U) {
-    // The HAL reports a NACK of the address and of data with one bit: probe the address once.
-    const uint32_t probe = sdk::I2cProbe(config_.instance, address, config_.timeout.Count());
-    failure = ((probe & 0xFFU) == hal::kOk) ? I2cFailure::DataNack : I2cFailure::AddressNack;
+    if ((op == Op::Read) || (op == Op::Probe)) {
+      failure = I2cFailure::AddressNack; // a read's or a probe's only acknowledge is the address's
+    } else if (config_.nack_probe) {
+      // One address-only probe tells an address NACK from a data NACK (opt-in: see i2c.hpp).
+      restoreLocked();
+      Deadline probe_deadline{config_.timeout};
+      done_.Arm();
+      const uint32_t probe =
+          await(sdk::I2cStartTransmit(config_.instance, address, std::span<const uint8_t>{}, false),
+                probe_deadline);
+      failure = ((probe & 0xFFU) == hal::kOk) ? I2cFailure::DataNack : I2cFailure::AddressNack;
+    } else {
+      failure = I2cFailure::DataNack; // the address or a data byte: not split without a probe
+    }
   } else if (hal_status == hal::kTimeout) {
     failure = linesIdle() ? I2cFailure::Timeout : I2cFailure::BusStuck;
   } else {
+    // A bus error, arbitration loss, or HAL_BUSY (the BUSY flag set before the start).
     failure = linesIdle() ? I2cFailure::Bus : I2cFailure::BusStuck;
   }
   return failure;
@@ -280,28 +335,57 @@ kb::Status I2cController::statusOf(kb::iface::I2cFailure failure) noexcept {
   return status;
 }
 
-kb::Status I2cController::classify(uint32_t code, uint8_t address) noexcept {
-  last_failure_ = failureOf(code, address);
-  const kb::Status status = statusOf(last_failure_);
-  if ((last_failure_ == I2cFailure::BusStuck) && config_.auto_recover) {
-    static_cast<void>(recoverLocked());
-    last_failure_ = I2cFailure::BusStuck; // the transfer failed even if the bus is free now
+void I2cController::restoreLocked() noexcept {
+  // The handle back to ready, error flags cleared, data registers flushed. The peripheral is reset
+  // (PE toggled) only while BUSY stays set: a reset after a plain NACK is never needed.
+  sdk::I2cRestore(config_.instance);
+  if (sdk::I2cBusy(config_.instance)) {
+    count(&I2cStats::recoveries);
+    static_cast<void>(sdk::I2cReset(config_.instance));
   }
-  return error_.Set(status, code);
+}
+
+kb::Status I2cController::classify(uint32_t code, Op op, uint8_t address) noexcept {
+  I2cFailure failure = failureOf(code, op, address);
+  if (failure != I2cFailure::None) {
+    restoreLocked();
+  }
+  if ((failure == I2cFailure::BusStuck) && config_.auto_recover) {
+    static_cast<void>(recoverLocked());
+    failure = I2cFailure::BusStuck; // the transfer failed even if the bus is free now
+  }
+  last_failure_.store(failure, std::memory_order_relaxed);
+  return error_.Set(statusOf(failure), code);
 }
 
 kb::Status I2cController::recoverLocked() noexcept {
-  ++stats_.recoveries;
+  count(&I2cStats::recoveries);
   BusyWait wait{};
+  const Pull pull = config_.internal_pullups ? Pull::Up : Pull::None; // the configured pull stays
   uint32_t code = sdk::I2cClose(config_.instance);
   // SCL and SDA as open-drain outputs, released (high): clock SCL until a slave lets SDA go.
-  code = First(code, sdk::PinOutput(config_.scl, true, Pull::None, Speed::Low, true));
-  code = First(code, sdk::PinOutput(config_.sda, true, Pull::None, Speed::Low, true));
-  for (uint32_t i = 0U; (i < kRecoveryClocks) && !sdk::PinRead(config_.sda); ++i) {
-    sdk::PinWrite(config_.scl, false);
-    wait.WaitUs(kb::Microseconds{kHalfPeriodUs});
-    sdk::PinWrite(config_.scl, true);
-    wait.WaitUs(kb::Microseconds{kHalfPeriodUs});
+  code = First(code, sdk::PinOutput(config_.scl, true, pull, Speed::Low, true));
+  code = First(code, sdk::PinOutput(config_.sda, true, pull, Speed::Low, true));
+  // SCL rising slowly after the release, or a device stretching the clock, reads low for a while:
+  // wait up to the SMBus clock-low timeout for it to rise. A device that still holds SCL low
+  // cannot be clocked free: counted apart (scl_held), no clocks sent.
+  Deadline release{kb::Milliseconds{kSclReleaseMs}};
+  bool scl_held = !sdk::PinRead(config_.scl);
+  while (scl_held && !release.Expired()) {
+    kb::rtos::SleepFor(kb::Milliseconds{1U});
+    release.Slept(1U);
+    scl_held = !sdk::PinRead(config_.scl);
+  }
+  if (scl_held) {
+    count(&I2cStats::scl_held);
+  }
+  for (uint32_t i = 0U; (i < kRecoveryClocks) && !scl_held; ++i) {
+    if (!sdk::PinRead(config_.sda)) { // clocks only while a slave holds SDA
+      sdk::PinWrite(config_.scl, false);
+      wait.WaitUs(kb::Microseconds{kHalfPeriodUs});
+      sdk::PinWrite(config_.scl, true);
+      wait.WaitUs(kb::Microseconds{kHalfPeriodUs});
+    }
   }
   // A STOP: SDA low to high while SCL is high.
   sdk::PinWrite(config_.sda, false);
@@ -311,12 +395,18 @@ kb::Status I2cController::recoverLocked() noexcept {
   const bool idle = linesIdle();
   bool timing_ok = false;
   const uint32_t timing = timingRegister(timing_ok);
-  code = First(code, sdk::I2cOpen(config_, timing));
+  const uint32_t opened = sdk::I2cOpen(config_, timing, done_);
+  code = First(code, opened);
+  if (opened != hal::kOk) {
+    ready_.store(
+        false); // the peripheral is not open: the next call is NotReady, never a null handle
+  }
   kb::Status status = MapHalStatus(code & 0xFFU);
   if ((status == kb::Status::Ok) && !idle) {
-    status = kb::Status::BusError; // a device still holds a line low
+    status = kb::Status::BusError; // a device still holds a line low (SCL or SDA)
   }
-  last_failure_ = (status == kb::Status::Ok) ? I2cFailure::None : I2cFailure::BusStuck;
+  last_failure_.store((status == kb::Status::Ok) ? I2cFailure::None : I2cFailure::BusStuck,
+                      std::memory_order_relaxed);
   return error_.Set(status, code);
 }
 
@@ -327,7 +417,7 @@ kb::Status I2cController::RecoverBus() noexcept {
   } else {
     const kb::rtos::LockGuard lock{mutex_, config_.timeout};
     if (!lock.OwnsLock()) {
-      ++stats_.lock_timeouts;
+      count(&I2cStats::lock_timeouts);
       status = error_.Set(kb::Status::Busy, port_code::kLockTimeout);
     } else {
       status = recoverLocked();

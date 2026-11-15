@@ -83,8 +83,9 @@ Checks: >-
 WarningsAsErrors: ''
 # .ipp is a header: drivers include src/<chip>.ipp from inc/<chip>.hpp (misc-definitions-in-headers, Rule 6.2.4).
 HeaderFileExtensions: ['', 'h', 'hh', 'hpp', 'hxx', 'ipp']
-HeaderFilterRegex: '.*/(inc|include|src|lib|handlers)/.*'
-ExcludeHeaderFilterRegex: '.*/(build[^/]*|_deps|third_party|managed_components|external)/.*'
+# Only the port's own headers (inc/kb/port/stm32, src). ExcludeHeaderFilterRegex is not used: clang-tidy 18 (the
+# host job's, ru-host-ci) rejects the key, and a rejected configuration reports nothing at all.
+HeaderFilterRegex: '.*/(inc/kb/port/stm32|src)/[^/]+$'
 FormatStyle: file
 
 CheckOptions:

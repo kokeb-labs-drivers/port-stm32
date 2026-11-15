@@ -50,27 +50,47 @@ public:
 
   /** @brief Takes one count, waiting at most `timeout`. */
   [[nodiscard]] bool TakeFor(Milliseconds timeout) noexcept {
-    return created_ && backend::SemaphoreTake(storage_, ToTicksAtLeast(timeout));
+    bool done = false;
+    if (created_) {
+      done = backend::SemaphoreTake(storage_, ToTicksAtLeast(timeout));
+    }
+    return done;
   }
 
   /** @brief Takes one count if one is available now. */
   [[nodiscard]] bool TryTake() noexcept {
-    return created_ && backend::SemaphoreTake(storage_, 0U);
+    bool done = false;
+    if (created_) {
+      done = backend::SemaphoreTake(storage_, 0U);
+    }
+    return done;
   }
 
   /** @brief Gives one count; false when not created or already at the maximum. */
   [[nodiscard]] bool Give() noexcept {
-    return created_ && backend::SemaphoreGive(storage_);
+    bool done = false;
+    if (created_) {
+      done = backend::SemaphoreGive(storage_);
+    }
+    return done;
   }
 
   /** @brief Gives one count from an interrupt handler (ISR-safe); false when at the maximum. */
   [[nodiscard]] bool GiveFromIsr() noexcept {
-    return created_ && backend::SemaphoreGiveFromIsr(storage_);
+    bool done = false;
+    if (created_) {
+      done = backend::SemaphoreGiveFromIsr(storage_);
+    }
+    return done;
   }
 
   /** @brief The current count; 0 when not created. */
   [[nodiscard]] uint32_t Count() noexcept {
-    return created_ ? backend::SemaphoreCount(storage_) : 0U;
+    uint32_t value = 0U;
+    if (created_) {
+      value = backend::SemaphoreCount(storage_);
+    }
+    return value;
   }
 
 private:

@@ -1,6 +1,10 @@
 ---
 # The all_drivers firmware (the port, the pinned STM32Cube HAL and CMSIS, kb-core and three drivers) compiled and
-# linked with the Arm GNU toolchain for one device of each family: STM32G474, STM32H743, STM32F446 and STM32L476.
+# linked with the Arm GNU toolchain for one device of each family: STM32G474, STM32H743, STM32F446 and STM32L476,
+# bare metal (kb::rtos none backend), plus one FreeRTOS build (G4, the pinned FreeRTOS-Kernel) so the port's waits on
+# kb::rtos semaphores and kb-core's FreeRTOS backend are compiled and linked for a target. After each link the
+# example checks with nm that every vector and HAL callback the port defines is a strong symbol in the firmware
+# (tools/check_vectors.cmake): a firmware that links but would run Default_Handler fails here.
 # Calls kokeb-labs/ci-tools ru-cmake-matrix (its toolchain file per core; the example adds the link options).
 name: STM32 families
 
@@ -25,4 +29,6 @@ jobs:
         [{"name": "stm32g4", "toolchain": "arm-none-eabi", "core": "cortex-m4f", "cmake_args": "-DEXAMPLE_BOARD=g4"},
          {"name": "stm32h7", "toolchain": "arm-none-eabi", "core": "cortex-m7f", "cmake_args": "-DEXAMPLE_BOARD=h7"},
          {"name": "stm32f4", "toolchain": "arm-none-eabi", "core": "cortex-m4f", "cmake_args": "-DEXAMPLE_BOARD=f4"},
-         {"name": "stm32l4", "toolchain": "arm-none-eabi", "core": "cortex-m4f", "cmake_args": "-DEXAMPLE_BOARD=l4"}]
+         {"name": "stm32l4", "toolchain": "arm-none-eabi", "core": "cortex-m4f", "cmake_args": "-DEXAMPLE_BOARD=l4"},
+         {"name": "stm32g4-freertos", "toolchain": "arm-none-eabi", "core": "cortex-m4f",
+          "cmake_args": "-DEXAMPLE_BOARD=g4 -DEXAMPLE_RTOS=FREERTOS"}]

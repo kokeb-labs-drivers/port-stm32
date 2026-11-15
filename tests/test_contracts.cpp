@@ -46,6 +46,7 @@ KB_TEST("contracts: bus references reach the port") {
   KB_CHECK(bus.Read(0x41U, rx) == Status::NoDevice);
   KB_CHECK(bus.LastFailure() == i::I2cFailure::AddressNack);
 
+  SystemCoreClock = 640000000U; // the fake's 160 MHz SPI kernel clock needs a fast core's ceiling
   stm::SpiBusConfig sc{};
   sc.sck = PinId{GpioPort::A, 5U, 5U};
   sc.mosi = PinId{GpioPort::A, 7U, 5U};
@@ -121,4 +122,32 @@ KB_TEST("contracts: pin, ADC, PWM, CAN, clock, delay and log references reach th
   stm::ItmLogSink itm{};
   i::LogSinkRef log_ref{itm};
   log_ref.Write(i::LogLevel::Info, "hello");
+}
+
+KB_TEST("contracts: an interrupt priority outside the RTOS-callable range is refused") {
+  static_assert(stm::RtosIrqPriorityValid(stm::kMinRtosIrqPriority));
+  static_assert(stm::RtosIrqPriorityValid(15U));
+  static_assert(!stm::RtosIrqPriorityValid(16U));
+  Fresh();
+  stm::UartConfig u{};
+  u.tx = PinId{GpioPort::A, 2U, 7U};
+  u.rx = PinId{GpioPort::A, 3U, 7U};
+  u.irq_priority = 16U;
+  stm::Uart uart{u};
+  KB_CHECK_EQ(uart.EnsureReady(), Status::InvalidArgument);
+  stm::I2cConfig i{};
+  i.scl = PinId{GpioPort::B, 8U, 4U};
+  i.sda = PinId{GpioPort::B, 9U, 4U};
+  i.irq_priority = 16U;
+  stm::I2cController bus{i};
+  KB_CHECK_EQ(bus.EnsureReady(), Status::InvalidArgument);
+  stm::AdcConfig a{};
+  a.channel = 1U;
+  a.irq_priority = 7U; // configurable, the instance's first channel sets it
+  stm::AdcChannel adc{a};
+  KB_REQUIRE(adc.EnsureReady() == Status::Ok);
+  KB_CHECK_EQ(fake::IrqPriority(kF4 ? ADC_IRQn : ADC1_2_IRQn), 7U);
+  a.irq_priority = 16U;
+  stm::AdcChannel bad{a};
+  KB_CHECK_EQ(bad.EnsureReady(), Status::InvalidArgument);
 }

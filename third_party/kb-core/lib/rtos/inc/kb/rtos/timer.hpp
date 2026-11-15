@@ -59,12 +59,20 @@ public:
 
   /** @brief Starts (or restarts) the timer. */
   [[nodiscard]] bool Start() noexcept {
-    return created_ && backend::TimerStart(storage_);
+    bool done = false;
+    if (created_) {
+      done = backend::TimerStart(storage_);
+    }
+    return done;
   }
 
   /** @brief Stops the timer. */
   [[nodiscard]] bool Stop() noexcept {
-    return created_ && backend::TimerStop(storage_);
+    bool done = false;
+    if (created_) {
+      done = backend::TimerStop(storage_);
+    }
+    return done;
   }
 
 private:

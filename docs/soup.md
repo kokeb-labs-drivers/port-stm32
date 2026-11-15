@@ -18,6 +18,7 @@ of the same commit may stand in (`FETCHCONTENT_SOURCE_DIR_KB_STM32_HAL`, `..._KB
 | `STMicroelectronics/stm32l4xx-hal-driver` | v1.13.6 | `047a8610c7dc0dcfdb4cd63b86cd3a2cbd3e5899` | L4 HAL |
 | `STMicroelectronics/cmsis-device-l4` | v1.7.5 | `dc04e41afbd7c204cd09f2fa5dd29658efbaff6c` | L4 device files |
 | `STMicroelectronics/cmsis-core` | v5.9.0_20250520 | `b7487de1303e2eb77c402432e368691e9dcfb5f0` | CMSIS-Core (core_cm4.h, core_cm7.h: NVIC, DWT, ITM) |
+| `FreeRTOS/FreeRTOS-Kernel` | V11.1.0 | `dbf70559b27d39c1fdb68dfb9a32140b6a6777a0` | The example under `EXAMPLE_RTOS=FREERTOS` (`cmake/kb_port_stm32_freertos.cmake`); an application brings its own kernel |
 | The pinned drivers | v0.1.0-rc.1 each | `drivers/drivers.lock.yml` | Examples only |
 
 The HAL sources are compiled as their own static library (`kb_port_stm32_hal`) with their own warnings off; their
@@ -25,31 +26,37 @@ headers reach the port as system headers. Known anomalies the port handles:
 
 | Anomaly | How the port handles it |
 | --- | --- |
-| One `HAL_I2C_ERROR_AF` bit for address and data NACK | One `HAL_I2C_IsDeviceReady` probe tells them apart |
-| `HAL_I2C_Mem_Read` takes a 1- or 2-byte register address | `WriteRead()` with more is `Unsupported` |
-| `HAL_I2C_Master_Transmit` takes a non-const data pointer | One `const_cast` at that call (DEV-002); the HAL only reads the data |
+| One `HAL_I2C_ERROR_AF` bit for address and data NACK | Not split by default (a write NACK is `Nack`); `nack_probe` adds one address-only probe |
+| A latched TXIS or stale CR2 fields after an earlier call (I2C v2) | TXDR and RXDR flushed and the CR2 transfer fields cleared before every transfer |
+| The I2C BUSY flag can stay set after an error | The handle restored and the flags cleared after every failure; the peripheral reset only while BUSY stays set |
+| `HAL_I2C_Master_Seq_Transmit_IT` takes a non-const data pointer | One `const_cast` at that call (DEV-002); the HAL only reads the data |
+| Every HAL blocking call and `HAL_I2C_IsDeviceReady` wait on `HAL_GetTick()` | Not used: the port's transfers use the interrupt APIs and wait on its own clock ([How the port waits](waits.md)) |
+| The HAL's initialisation waits (UART, ADC enable, CAN) use `HAL_GetTick()` | `EnsureReady()` checks that the HAL time base runs first |
 | The HAL I2C has no bus recovery | The port clocks SCL itself on the pins as GPIO |
 | HAL lengths are `uint16_t` | I2C refuses spans above 65535 bytes; SPI and UART transfer in chunks |
-| `HAL_UART_IRQHandler` and its callbacks expect the HAL's interrupt receive state machine | The port's own handler reads the data and flag registers |
-| A HAL SPI timeout leaves the peripheral mid-frame | `HAL_SPI_Abort`, then a fresh `HAL_SPI_Init` before the next frame |
+| `HAL_UART_IRQHandler` and its callbacks expect the HAL's interrupt state machine | The port's own handler reads the data and flag registers, receives and transmits |
+| The F4 HAL has no 7-bit UART word | 7N1 refused on F4 |
+| A 7-bit frame with parity carries the parity bit in bit 7 of the data register | The received word is masked to the data bits |
+| A SPI timeout leaves the peripheral mid-frame | `HAL_SPI_Abort`, then a fresh `HAL_SPI_Init` before the next frame |
+| H7 `HAL_SPI_Receive` switches to simplex receive | Read-only frames are full-duplex transfers of the zeroed buffer |
 | FDCAN stays in INIT after bus-off | `Recover()` stops and starts it |
 
 ## kb-core
 
-kb-core (`kokeb-labs/kb-core`) is a private repository of another organisation, so this repository's CI cannot
-fetch it. The port therefore carries an **unchanged copy** of the kb-core files it builds against in
-`third_party/kb-core`, at the commit recorded in `third_party/kb-core.lock` with the SHA-256 of every file:
+kb-core (`kokeb-labs/kb-core`) is private and not yet tagged, so this repository's CI cannot fetch it. The port
+therefore carries an **unchanged copy** of the kb-core files it builds against in `third_party/kb-core`, at a commit
+of kb-core's `main` recorded in `third_party/kb-core.lock` with the SHA-256 of every file:
 
-- `tools/kb_core_snapshot.py --update <kb-core checkout>` is the only writer (it refuses a checkout with local
-  changes in the copied paths);
+- `tools/kb_core_snapshot.py --update <kb-core checkout>` is the only writer; it refuses a commit that is not on
+  kb-core's `origin/main` and a checkout with local changes in the copied paths;
 - `tools/kb_core_snapshot.py --check` and every CMake configure re-hash every file against the lock; a difference
   stops the build;
 - the port uses kb-core only through its public `kb/<part>/` headers (kb-core ADR-0007), checked by the layering
   rules (`tools/layering/rules.yml`).
 
-When kb-core becomes readable from this organisation's CI, the copy is replaced by a submodule pinned to a kb-core
-release tag, with no change to the port's code.
+The copy is interim. [How the port depends on kb-core](kb-core-dependency.md) is the plan that replaces it with a
+release tag fetched by `find_package` or `FetchContent`.
 
 | kb-core | Commit | Parts used |
 | --- | --- | --- |
-| `m3-interfaces` (the M3 contracts) | see `third_party/kb-core.lock` | `utils`, `rtos` (none or FreeRTOS backend on target, none on the host), `interfaces` |
+| `main` (M1 to M5: utils, rtos, interfaces, handlers) | `efd67da9b3c8`, see `third_party/kb-core.lock` | `utils`, `rtos` (none or FreeRTOS backend on target, none on the host), `interfaces` |

@@ -1,4 +1,5 @@
-// I2cController over the fake HAL I2C: TIMINGR, every member, every result and the bit-banged
+// I2cController over the fake HAL I2C: TIMINGR, every member, every result, the interrupt-driven
+// transfers and their bounded waits, the handle restore, the BUSY reset and the bit-banged
 // recovery.
 // Test code. SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The port-stm32 authors
@@ -151,7 +152,7 @@ KB_TEST("i2c: HAL failures while initialising are reported") {
   KB_CHECK_EQ(bus.Release(), Status::Fault);
 }
 
-KB_TEST("i2c: write, write-read with a 1- or 2-byte register and read") {
+KB_TEST("i2c: write, write-read of any length with a repeated START, and read") {
   Fresh();
   fake::I2cPresent(kDev, true);
   stm::I2cController bus{Config()};
@@ -159,22 +160,27 @@ KB_TEST("i2c: write, write-read with a 1- or 2-byte register and read") {
   const std::array<uint8_t, 3> tx{0x06U, 0xA5U, 0x5AU};
   KB_CHECK_EQ(bus.Write(kDev, tx), Status::Ok);
   KB_CHECK_EQ(fake::I2cWritten().size(), 3U);
+  KB_CHECK_EQ(fake::I2cLastOptions(), I2C_FIRST_AND_LAST_FRAME);
   const std::array<uint8_t, 2> reply{0x12U, 0x34U};
   fake::I2cReply(reply);
   std::array<uint8_t, 2> rx{};
   KB_CHECK_EQ(bus.WriteRead(kDev, std::span<const uint8_t>{tx}.first(1), rx), Status::Ok);
-  KB_CHECK_EQ(fake::I2cMemAddress(), 0x06U);
-  KB_CHECK_EQ(fake::I2cMemSize(), I2C_MEMADD_SIZE_8BIT);
+  KB_CHECK_EQ(fake::I2cWritten().size(), 1U);
+  KB_CHECK_EQ(fake::I2cLastOptions(), I2C_LAST_FRAME); // the read after the write, no STOP between
   KB_CHECK_EQ(rx[1], 0x34U);
-  KB_CHECK_EQ(bus.WriteRead(kDev, std::span<const uint8_t>{tx}.first(2), rx), Status::Ok);
-  KB_CHECK_EQ(fake::I2cMemAddress(), 0x06A5U);
-  KB_CHECK_EQ(fake::I2cMemSize(), I2C_MEMADD_SIZE_16BIT);
+  // Three bytes or more before the repeated START (was Unsupported with HAL_I2C_Mem_Read).
+  rx = {};
+  KB_CHECK_EQ(bus.WriteRead(kDev, tx, rx), Status::Ok);
+  KB_CHECK_EQ(fake::I2cWritten().size(), 3U);
+  KB_CHECK_EQ(rx[0], 0x12U);
   rx = {};
   KB_CHECK_EQ(bus.Read(kDev, rx), Status::Ok);
+  KB_CHECK_EQ(fake::I2cLastOptions(), I2C_FIRST_AND_LAST_FRAME);
   KB_CHECK_EQ(rx[0], 0x12U);
   KB_CHECK(bus.LastFailure() == I2cFailure::None);
   KB_CHECK_EQ(bus.Stats().transfers, 4U);
   KB_CHECK(bus.LastError().IsOk());
+  KB_CHECK_EQ(fake::Calls("HAL_I2C_Master_Transmit_IT"), 0U); // no probe anywhere
 }
 
 KB_TEST("i2c: arguments outside the contract are refused before the bus") {
@@ -187,7 +193,6 @@ KB_TEST("i2c: arguments outside the contract are refused before the bus") {
   KB_CHECK_EQ(bus.Write(0x78U, tx), Status::InvalidArgument);
   KB_CHECK_EQ(bus.WriteRead(kDev, std::span<const uint8_t>{}, rx), Status::InvalidArgument);
   KB_CHECK_EQ(bus.WriteRead(kDev, tx, std::span<uint8_t>{}), Status::InvalidArgument);
-  KB_CHECK_EQ(bus.WriteRead(kDev, tx, rx), Status::Unsupported); // 3 bytes: not a memory address
   KB_CHECK_EQ(bus.Read(kDev, std::span<uint8_t>{}), Status::InvalidArgument);
   static std::array<uint8_t, 0x10000U> big{}; // one byte more than the HAL's uint16_t length
   KB_CHECK_EQ(bus.Write(kDev, big), Status::InvalidArgument);
@@ -195,24 +200,78 @@ KB_TEST("i2c: arguments outside the contract are refused before the bus") {
   KB_CHECK_EQ(bus.Stats().transfers, 0U);
 }
 
-KB_TEST("i2c: an empty write probes; address and data NACK are told apart") {
+KB_TEST("i2c: timeouts above the port maximum are refused; init never probes") {
+  Fresh();
+  stm::I2cConfig c = Config();
+  c.timeout = kb::Milliseconds{stm::kMaxTimeout.Count() + 1U};
+  stm::I2cController too_long{c};
+  KB_CHECK_EQ(too_long.EnsureReady(), Status::InvalidArgument);
+  c.timeout = kb::Milliseconds{0xFFFFFFFFU}; // HAL_MAX_DELAY: would be "forever" in the HAL
+  stm::I2cController forever{c};
+  KB_CHECK_EQ(forever.EnsureReady(), Status::InvalidArgument);
+  c.timeout = stm::kMaxTimeout;
+  stm::I2cController longest{c};
+  KB_CHECK_EQ(longest.EnsureReady(), Status::Ok);
+  KB_CHECK_EQ(fake::I2cFrames(), 0U); // nothing on the bus at start
+}
+
+KB_TEST("i2c: an empty write probes; a write NACK is not split unless nack_probe is set") {
   Fresh();
   stm::I2cController bus{Config()};
   KB_REQUIRE(bus.EnsureReady() == Status::Ok);
   const std::array<uint8_t, 1> tx{0U};
   KB_CHECK_EQ(bus.Write(kDev, std::span<const uint8_t>{}), Status::NoDevice);
   KB_CHECK(bus.LastFailure() == I2cFailure::AddressNack);
-  KB_CHECK_EQ(bus.Write(kDev, tx), Status::NoDevice);
-  KB_CHECK(FailedWith(bus.LastError(), Status::NoDevice, Code(HAL_ERROR, HAL_I2C_ERROR_AF)));
+  KB_CHECK_EQ(bus.Write(kDev, tx), Status::Nack); // unsplit: no address-only frame follows
+  KB_CHECK(FailedWith(bus.LastError(), Status::Nack, Code(HAL_ERROR, HAL_I2C_ERROR_AF)));
+  KB_CHECK_EQ(fake::Calls("HAL_I2C_Master_Transmit_IT"), 1U); // only the explicit probe
+  std::array<uint8_t, 1> rx{};
+  KB_CHECK_EQ(bus.Read(kDev, rx), Status::NoDevice); // a read's NACK is the address's
   fake::I2cPresent(kDev, true);
   KB_CHECK_EQ(bus.Write(kDev, std::span<const uint8_t>{}), Status::Ok);
-  fake::I2cDataNack(true);
-  KB_CHECK_EQ(bus.Write(kDev, tx), Status::Nack);
-  KB_CHECK(bus.LastFailure() == I2cFailure::DataNack);
+  KB_CHECK_EQ(fake::Calls("HAL_I2C_DeInit"), 0U); // a NACK never resets the peripheral
   KB_CHECK_EQ(bus.Stats().failures, 3U);
+  KB_CHECK_EQ(bus.Release(), Status::Ok);
+
+  stm::I2cConfig c = Config();
+  c.nack_probe = true;
+  stm::I2cController probing{c};
+  KB_REQUIRE(probing.EnsureReady() == Status::Ok);
+  fake::I2cPresent(kDev, false);
+  KB_CHECK_EQ(probing.Write(kDev, tx), Status::NoDevice);
+  KB_CHECK(probing.LastFailure() == I2cFailure::AddressNack);
+  fake::I2cPresent(kDev, true);
+  fake::I2cDataNack(true);
+  KB_CHECK_EQ(probing.Write(kDev, tx), Status::Nack);
+  KB_CHECK(probing.LastFailure() == I2cFailure::DataNack);
 }
 
-KB_TEST("i2c: timeouts and bus errors with idle lines; a stuck line is recovered") {
+KB_TEST("i2c: a transfer that never completes times out on the port clock, the handle restored") {
+  Fresh();
+  fake::I2cPresent(kDev, true);
+  stm::I2cConfig c = Config();
+  c.timeout = kb::Milliseconds{5U};
+  stm::I2cController bus{c};
+  KB_REQUIRE(bus.EnsureReady() == Status::Ok);
+  const std::array<uint8_t, 1> tx{0U};
+  fake::ForceLevel(kPortB, 8, 1);
+  fake::ForceLevel(kPortB, 9, 1);
+  fake::SetTickStep(0U); // the HAL tick stands still: the wait must not depend on it
+  fake::Stall("I2C", true);
+  KB_CHECK_EQ(bus.Write(kDev, tx), Status::Timeout);
+  KB_CHECK(bus.LastFailure() == I2cFailure::Timeout);
+  KB_CHECK(FailedWith(bus.LastError(), Status::Timeout, Code(HAL_TIMEOUT, HAL_I2C_ERROR_TIMEOUT)));
+  KB_CHECK(fake::CyclesRead() > 0U); // measured on the DWT (or the port clock), not HAL_GetTick
+  fake::Stall("I2C", false);
+  KB_CHECK_EQ(bus.Write(kDev, tx), Status::Ok); // the restored handle works again
+  fake::Fail("i2c_error", HAL_ERROR, HAL_I2C_ERROR_ARLO);
+  KB_CHECK_EQ(bus.Write(kDev, tx), Status::BusError);
+  KB_CHECK(bus.LastFailure() == I2cFailure::Bus);
+  KB_CHECK_EQ(bus.Stats().recoveries, 0U);
+  KB_CHECK_EQ(fake::Calls("HAL_I2C_DeInit"), 0U);
+}
+
+KB_TEST("i2c: BUSY that stays set with idle lines resets the peripheral (PE), then recovers") {
   Fresh();
   fake::I2cPresent(kDev, true);
   stm::I2cController bus{Config()};
@@ -220,15 +279,44 @@ KB_TEST("i2c: timeouts and bus errors with idle lines; a stuck line is recovered
   const std::array<uint8_t, 1> tx{0U};
   fake::ForceLevel(kPortB, 8, 1);
   fake::ForceLevel(kPortB, 9, 1);
-  fake::Fail("HAL_I2C_Master_Transmit", HAL_TIMEOUT, HAL_I2C_ERROR_TIMEOUT);
-  KB_CHECK_EQ(bus.Write(kDev, tx), Status::Timeout);
-  KB_CHECK(bus.LastFailure() == I2cFailure::Timeout);
-  fake::Fail("HAL_I2C_Master_Transmit", HAL_ERROR, HAL_I2C_ERROR_ARLO);
+  fake::I2cBusyFlag(true); // after an error: BUSY set, both lines high
   KB_CHECK_EQ(bus.Write(kDev, tx), Status::BusError);
   KB_CHECK(bus.LastFailure() == I2cFailure::Bus);
-  KB_CHECK_EQ(bus.Stats().recoveries, 0U);
+  KB_CHECK_EQ(bus.Stats().recoveries, 1U);
+  KB_CHECK_EQ(fake::Calls("HAL_I2C_DeInit"), 1U); // the reset: PE low, SWRST on F4
+  KB_CHECK_EQ(fake::Calls("HAL_I2C_Init"), 2U);
+  KB_CHECK(fake::IrqEnabled(I2C1_EV_IRQn));
+  KB_CHECK_EQ(bus.Write(kDev, tx), Status::Ok); // the next transfer works without the application
+}
+
+KB_TEST("i2c: the data registers are flushed and stale CR2 transfer fields cleared each time") {
+  Fresh();
+  fake::I2cPresent(kDev, true);
+  stm::I2cController bus{Config()};
+  KB_REQUIRE(bus.EnsureReady() == Status::Ok);
+#if !defined(KB_FAKE_STM32F4)
+  {
+    kb_fake_i2c[1].ISR |= I2C_ISR_TXIS | I2C_ISR_RXNE; // TXIS left latched by an earlier call
+    kb_fake_i2c[1].CR2 = I2C_CR2_NBYTES | I2C_CR2_AUTOEND | I2C_CR2_RD_WRN;
+    kb_fake_i2c[1].TXDR = 0x77U;
+    const std::array<uint8_t, 1> tx{0x01U};
+    KB_CHECK_EQ(bus.Write(kDev, tx), Status::Ok);
+    KB_CHECK_EQ(fake::I2cRegs(1).TXDR, 0U);               // the dummy byte that clears TXIS
+    KB_CHECK((fake::I2cRegs(1).ISR & I2C_ISR_TXE) != 0U); // the flush
+    KB_CHECK_EQ(fake::I2cRegs(1).CR2 & (I2C_CR2_NBYTES | I2C_CR2_AUTOEND | I2C_CR2_RD_WRN), 0U);
+  }
+#endif
+}
+
+KB_TEST("i2c: a stuck line is recovered by the nine clocks") {
+  Fresh();
+  fake::I2cPresent(kDev, true);
+  stm::I2cController bus{Config()};
+  KB_REQUIRE(bus.EnsureReady() == Status::Ok);
+  const std::array<uint8_t, 1> tx{0U};
+  fake::ForceLevel(kPortB, 8, 1);
   fake::ForceLevel(kPortB, 9, 0); // SDA held low by a slave
-  fake::Fail("HAL_I2C_Master_Transmit", HAL_BUSY);
+  fake::Fail("HAL_I2C_Master_Seq_Transmit_IT", HAL_BUSY);
   KB_CHECK_EQ(bus.Write(kDev, tx), Status::BusError);
   KB_CHECK(bus.LastFailure() == I2cFailure::BusStuck);
   KB_CHECK_EQ(bus.Stats().recoveries, 1U);
@@ -241,18 +329,22 @@ KB_TEST("i2c: RecoverBus clocks SCL until SDA is released, makes a STOP and chec
   Fresh();
   stm::I2cConfig c = Config();
   c.auto_recover = false;
+  c.internal_pullups = true;
+  c.timeout = kb::Milliseconds{2U};
   stm::I2cController bus{c};
   KB_REQUIRE(bus.EnsureReady() == Status::Ok);
   fake::ForceLevel(kPortB, 8, 1);
   fake::ForceLevel(kPortB, 9, 0);
   std::array<uint8_t, 1> rx{};
   fake::I2cPresent(kDev, true);
-  fake::Fail("HAL_I2C_Master_Receive", HAL_TIMEOUT);
+  fake::Stall("I2C", true);
   KB_CHECK_EQ(bus.Read(kDev, rx), Status::BusError);
+  fake::Stall("I2C", false);
   KB_CHECK(bus.LastFailure() == I2cFailure::BusStuck);
   KB_CHECK_EQ(bus.Stats().recoveries, 0U);
   KB_CHECK_EQ(bus.RecoverBus(), Status::BusError); // SDA still low
   KB_CHECK(bus.LastFailure() == I2cFailure::BusStuck);
+  KB_CHECK_EQ(fake::PullOf(kPortB, 9), GPIO_PULLUP); // the configured pull stays while recovering
   KB_CHECK(fake::CyclesRead() > 0U); // the half periods were timed on the cycle counter
   fake::ForceLevel(kPortB, 9, -1);
   fake::ForceLevel(kPortB, 8, -1);
@@ -269,7 +361,7 @@ KB_TEST("i2c: a call while the controller is held is Busy") {
   stm::I2cController bus{Config()};
   KB_REQUIRE(bus.EnsureReady() == Status::Ok);
   const std::array<uint8_t, 1> tx{0U};
-  fake::Hook("HAL_I2C_Master_Transmit", ReenterWrite, &bus);
+  fake::Hook("HAL_I2C_Master_Seq_Transmit_IT", ReenterWrite, &bus);
   KB_CHECK_EQ(bus.Write(kDev, tx), Status::Ok);
   fake::Hook(
       "HAL_I2C_DeInit",
@@ -288,8 +380,69 @@ KB_TEST("i2c: one controller per instance; free again after Release or a failed 
   fake::Fail("HAL_I2C_Init", HAL_ERROR);
   KB_CHECK_EQ(first.EnsureReady(), Status::Fault);
   KB_REQUIRE(second.EnsureReady() == Status::Ok); // the failed start left the instance free
+  KB_CHECK(fake::IrqEnabled(I2C1_EV_IRQn) && fake::IrqEnabled(I2C1_ER_IRQn));
   KB_CHECK_EQ(first.EnsureReady(), Status::Busy);
   KB_CHECK(FailedWith(first.LastError(), Status::Busy, stm::port_code::kOwned));
   KB_CHECK_EQ(second.Release(), Status::Ok);
+  KB_CHECK(!fake::IrqEnabled(I2C1_EV_IRQn));
   KB_CHECK_EQ(first.EnsureReady(), Status::Ok);
+  stm::HandleI2cIrq(1U, false); // the vectors reach the HAL's handlers of the open instance
+  stm::HandleI2cIrq(1U, true);
+  stm::HandleI2cIrq(2U, false); // not open: nothing
+  stm::HandleI2cIrq(9U, false);
+  KB_CHECK_EQ(fake::Calls("HAL_I2C_EV_IRQHandler"), 1U);
+  KB_CHECK_EQ(fake::Calls("HAL_I2C_ER_IRQHandler"), 1U);
+}
+
+KB_TEST("i2c: a failed re-initialisation in recovery leaves the controller not ready") {
+  Fresh();
+  fake::I2cPresent(kDev, true);
+  stm::I2cController bus{Config()};
+  KB_REQUIRE(bus.EnsureReady() == Status::Ok);
+  fake::ForceLevel(kPortB, 8, 1);
+  fake::ForceLevel(kPortB, 9, 0);        // SDA held low: a failure starts the recovery
+  fake::Fail("HAL_I2C_Init", HAL_ERROR); // the re-initialisation after the nine clocks fails
+  const std::array<uint8_t, 1> tx{0U};
+  fake::Fail("HAL_I2C_Master_Seq_Transmit_IT", HAL_BUSY);
+  KB_CHECK_EQ(bus.Write(kDev, tx), Status::BusError);
+  KB_CHECK_EQ(bus.Write(kDev, tx), Status::NotReady); // never a transfer on a null handle
+  fake::ForceLevel(kPortB, 9, -1);
+  fake::ForceLevel(kPortB, 8, -1);
+  KB_CHECK_EQ(bus.EnsureReady(), Status::Ok); // started again by its owner
+  KB_CHECK_EQ(bus.Write(kDev, tx), Status::Ok);
+}
+
+KB_TEST("i2c: a recovery that finds SCL held low is counted apart and sends no clocks") {
+  Fresh();
+  stm::I2cConfig c = Config();
+  c.auto_recover = false;
+  stm::I2cController bus{c};
+  KB_REQUIRE(bus.EnsureReady() == Status::Ok);
+  fake::ForceLevel(kPortB, 8, 0); // SCL held low by a device
+  fake::ForceLevel(kPortB, 9, 1);
+  const uint32_t writes = fake::Calls("HAL_GPIO_WritePin");
+  KB_CHECK_EQ(bus.RecoverBus(), Status::BusError);
+  KB_CHECK_EQ(bus.Stats().scl_held, 1U);
+  KB_CHECK(fake::Calls("HAL_GPIO_WritePin") - writes <= 4U); // the pins set and a STOP, no clocks
+}
+
+KB_TEST("i2c: an interrupt of an instance the port does not own is switched off") {
+  Fresh();
+  HAL_NVIC_EnableIRQ(I2C2_EV_IRQn); // as an application that owns I2C2 would
+  stm::HandleI2cIrq(2U, false);
+  KB_CHECK(!fake::IrqEnabled(I2C2_EV_IRQn)); // no endless re-entry
+}
+
+KB_TEST("i2c: SCL that rises late (or a short clock stretch) is waited for, then the bus clocked") {
+  Fresh();
+  stm::I2cConfig c = Config();
+  c.auto_recover = false;
+  stm::I2cController bus{c};
+  KB_REQUIRE(bus.EnsureReady() == Status::Ok);
+  fake::ForceLevelFor(kPortB, 8, 0, 50U); // SCL low for its first 50 reads, then released
+  fake::ForceLevelFor(kPortB, 9, 0, 3U);  // SDA held by a slave for a few clocks
+  const uint32_t writes = fake::Calls("HAL_GPIO_WritePin");
+  KB_CHECK_EQ(bus.RecoverBus(), Status::Ok);
+  KB_CHECK_EQ(bus.Stats().scl_held, 0U);                    // not given up on the first low read
+  KB_CHECK(fake::Calls("HAL_GPIO_WritePin") - writes > 4U); // the clocks were sent
 }

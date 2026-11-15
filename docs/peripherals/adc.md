@@ -1,26 +1,31 @@
 # ADC
 
 `kb::port::stm32::AdcChannel` is one regular channel of an ADC and satisfies `kb::iface::AdcChannel`. HAL
-`stm32<family>xx_hal_adc`, single conversion, software start, polled.
+`stm32<family>xx_hal_adc`, single conversion, software start, ended by the end-of-conversion interrupt
+([How the port waits](../waits.md)).
 
 ## How it works
 
 | Call | HAL call |
 | --- | --- |
-| `EnsureReady()` | The pin as analog (when given); the instance's clock and `HAL_ADC_Init` the first time a channel of the instance starts (counted); on G4, H7 and L4 `HAL_ADCEx_Calibration_Start` (single ended) once |
-| `ReadRaw()` | The instance lock; `HAL_ADC_ConfigChannel` (the channel, rank 1, the sampling time); `HAL_ADC_Start`; `HAL_ADC_PollForConversion` at most `conversion_timeout`; `HAL_ADC_GetValue`; `HAL_ADC_Stop` |
+| `EnsureReady()` | The ADC clock checked (0 Hz: `NotReady`; above the H7 limit: `Unsupported`); the pin as analog (when given); the first channel of the instance initialises it (clock, `HAL_ADC_Init`, on G4 and L4 `HAL_ADCEx_Calibration_Start` single ended, on H7 offset and linearity, the instance's interrupt at priority 5) while the others wait at most `lock_timeout`; later channels join it |
+| `ReadRaw()` | The instance lock; `HAL_ADC_ConfigChannel` (the channel, rank 1, the sampling time); `HAL_ADC_Start_IT`; the task waits for `HAL_ADC_ConvCpltCallback` (which reads `HAL_ADC_GetValue`) at most `conversion_timeout`; on a timeout `HAL_ADC_Stop_IT` |
 | `ReadMillivolts()` | `ReadRaw()` scaled by `vref_mv / FullScale()`, rounded to nearest |
-| `Release()` | The count of the instance drops; `HAL_ADC_DeInit` with the last channel |
+| `Release()` | The instance's channel count drops; the last channel de-initialises it (`HAL_ADC_DeInit`), in any order of release |
+
+The instance's channel count and phase (closed, opening, open) change only with interrupts masked, so two tasks
+that start or release channels of one instance never initialise it twice or de-initialise it under the other.
 
 ## Inputs and clock
 
 | Item | Note |
 | --- | --- |
-| Instance, channel | ADC1 to ADC5 where the device has them; channel 0 to 19 (`ADC_CHANNEL_<n>`) |
+| Instance, channel | ADC1 to ADC5 where the device has them; channel 0 to 19 (`ADC_CHANNEL_<n>`), 0 to 18 on F4 |
 | Pin | The pin of the channel (datasheet pinout), set analog; unused for internal channels (temperature, VREFINT) |
 | Resolution | 12 bit (`FullScale()` 4095) on G4, F4, L4; 16 bit (65535) on H7 |
 | Reference | `vref_mv`: the voltage on VREF+ (3300 mV default); the port does not measure VREFINT |
-| ADC clock | The HAL's synchronous clock /4 on G4, H7, L4 and PCLK2 /4 on F4: within the datasheet limits from the reset clock tree; check them when the application raises the bus clocks |
+| ADC clock | The HAL's synchronous clock HCLK / 4 on G4, H7, L4 and PCLK2 / 4 on F4. On H7, when HCLK / 4 is above 36 MHz (the lower of the H7 revisions' limits), the asynchronous kernel clock (RCC ADCSEL, `HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_ADC)`) with the smallest of the HAL's dividers (1 to 256) that brings it to 36 MHz or less (`AdcAsyncDividerIndex()`); the HAL sets the BOOST mode from the chosen clock. The application starts the ADC kernel clock source; a kernel clock of 0 Hz is `NotReady` |
+| Interrupt | `irq_priority` (default 5; the instance's first channel sets it), at or above `KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY` |
 
 Sampling time per `AdcSampling` class, in ADC clock cycles:
 
@@ -34,9 +39,9 @@ Sampling time per `AdcSampling` class, in ADC clock cycles:
 
 | Wait | Bound |
 | --- | --- |
-| The instance lock | `lock_timeout` (default 10 ms) |
-| One conversion | `conversion_timeout` (default 5 ms) as the HAL's poll timeout |
-| Calibration | The HAL's own bounded wait, once |
+| The instance lock | `lock_timeout` (default 10 ms, at most 2 s) |
+| One conversion | `conversion_timeout` (default 5 ms, at most 2 s) on the port's clock |
+| Initialisation, calibration | The HAL's own bounded waits, once (the HAL time base must run: checked) |
 
 ## Results
 
@@ -45,6 +50,7 @@ Sampling time per `AdcSampling` class, in ADC clock cycles:
 | `Ok` | One conversion |
 | `Timeout` | No end of conversion within `conversion_timeout` |
 | `Busy` | The instance lock was not had in time |
-| `InvalidArgument` | An instance or channel the device does not have, `vref_mv` 0 |
+| `InvalidArgument` | An instance or channel the device does not have, `vref_mv` 0, a timeout above 2 s |
+| `Unsupported` | H7: no divider brings the ADC kernel clock to 36 MHz |
 | `Fault` | A HAL refusal (Detail: the vendor code with `HAL_ADC_ERROR_*`) |
-| `NotReady` | Before `EnsureReady()` |
+| `NotReady` | Before `EnsureReady()`; or the ADC clock reads 0 Hz, or the HAL time base does not run |

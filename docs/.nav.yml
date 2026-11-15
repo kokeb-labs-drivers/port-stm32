@@ -4,6 +4,8 @@ nav:
   - Home: index.md
   - Getting started: getting-started.md
   - Families: families.md
+  - How the port waits: waits.md
+  - "Integration: CubeMX, interrupts, RTOS, caches": integration.md
   - Peripherals:
       - I2C: peripherals/i2c.md
       - SPI: peripherals/spi.md
@@ -20,5 +22,7 @@ nav:
   - Quality:
       - Testing and CI: testing.md
       - MISRA boundary and deviations: deviations.md
+      - MISRA review of "to review" findings: misra-review.md
       - SOUP and kb-core: soup.md
+      - kb-core dependency plan: kb-core-dependency.md
   - Changelog: changelog.md

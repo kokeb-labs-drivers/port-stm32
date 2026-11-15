@@ -14,6 +14,7 @@
 #include "kb/interfaces/i2c.hpp"
 #include "kb/interfaces/log.hpp"
 #include "kb/interfaces/pwm.hpp"
+#include "kb/interfaces/refs.hpp"
 #include "kb/interfaces/spi.hpp"
 #include "kb/interfaces/time.hpp"
 #include "kb/interfaces/types.hpp"

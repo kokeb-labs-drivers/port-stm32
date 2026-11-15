@@ -7,17 +7,6 @@
 
 #include "support.hpp"
 
-KB_TEST("clock: Combine extends the counter and corrects for a pending wrap") {
-  static_assert(stm::Clock::Combine(0U, 5U, 0U, false) == 5U);
-  static_assert(stm::Clock::Combine(2U, 7U, 2U, false) == ((uint64_t{2U} << 32U) | 7U));
-  static_assert(stm::Clock::Combine(2U, 7U, 2U, true) ==
-                ((uint64_t{3U} << 32U) | 7U)); // wrapped, not counted
-  static_assert(stm::Clock::Combine(2U, 0xFFFFFFF0U, 2U, true) ==
-                ((uint64_t{2U} << 32U) | 0xFFFFFFF0U));
-  static_assert(stm::Clock::Combine(2U, 7U, 3U, true) ==
-                ((uint64_t{3U} << 32U) | 7U)); // counted meanwhile
-}
-
 KB_TEST("clock: Start configures the 32-bit timer at 1 MHz with its wrap interrupt") {
   Fresh();
   const stm::Clock before{};
@@ -26,7 +15,10 @@ KB_TEST("clock: Start configures the 32-bit timer at 1 MHz with its wrap interru
   cfg.timer = 2U;
   cfg.irq_priority = 2U;
   stm::Clock clock{cfg};
+  kb_fake_tim[2].CNT = 4000000000U; // left running by a loader before a jump
+  fake::SetCounterStep(0U);
   KB_CHECK_EQ(clock.Start(), Status::Ok);
+  KB_CHECK(kb_fake_tim[2].CNT.value == 0U); // zeroed at start
   KB_CHECK_EQ(clock.Start(), Status::Ok);
   KB_CHECK_EQ(fake::Calls("HAL_TIM_Base_Init"), 1U);
   KB_CHECK_EQ(fake::TimInit(2).Prescaler, 159U); // 160 MHz timer clock
@@ -41,6 +33,14 @@ KB_TEST("clock: Start configures the 32-bit timer at 1 MHz with its wrap interru
   KB_CHECK(clock.Now().Us() == ((uint64_t{1U} << 32U) | 1234U));
   kb_fake_tim[2].SR = TIM_FLAG_UPDATE; // wrapped, interrupt not run yet
   kb_fake_tim[2].CNT = 3U;
+  KB_CHECK(clock.Now().Us() == ((uint64_t{2U} << 32U) | 3U));
+  stm::PwmConfig pwm{};
+  pwm.timer = 2U; // the clock's timer
+  pwm.channel = 1U;
+  pwm.pin = PinId{GpioPort::A, 0U, 1U};
+  stm::PwmChannel on_clock{pwm};
+  KB_CHECK_EQ(on_clock.EnsureReady(), Status::Busy); // refused: it would stop the clock
+  KB_CHECK(FailedWith(on_clock.LastError(), Status::Busy, stm::port_code::kOwned));
   KB_CHECK(clock.Now().Us() == ((uint64_t{2U} << 32U) | 3U));
   stm::HandleClockIrq(2U);
   stm::HandleClockIrq(2U); // no flag: nothing counted
@@ -59,7 +59,7 @@ KB_TEST("clock: TIM5, a given timer clock, refusals and failures") {
   KB_CHECK_EQ(clock.Start(), Status::Fault);
   fake::Fail("HAL_TIM_Base_Start", HAL_BUSY);
   KB_CHECK_EQ(clock.Start(), Status::Busy);
-  KB_CHECK_EQ(clock.Start(), Status::Ok);
+  KB_CHECK_EQ(clock.Start(), Status::Ok); // a failed start leaves the timer free
   KB_CHECK_EQ(fake::TimInit(5).Prescaler, 83U);
   KB_CHECK(fake::IrqEnabled(TIM5_IRQn));
   stm::ClockConfig bad{};

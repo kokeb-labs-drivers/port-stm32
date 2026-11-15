@@ -12,18 +12,25 @@ deviations:
     reason: >-
       The HAL keeps each peripheral's state in a handle (I2C_HandleTypeDef, SPI_HandleTypeDef,
       UART_HandleTypeDef, ADC_HandleTypeDef, TIM_HandleTypeDef, FDCAN_HandleTypeDef or CAN_HandleTypeDef) that
-      must outlive every call of the port object that opened it and be reachable from the interrupt handlers,
-      and no HAL type may appear in the port's public headers. The boundary files keep the handles in one table
-      per peripheral, indexed by the instance number; a function-local static is the form with a defined
-      initialisation point (constant initialisation, no static-order dependency). The pin claims, the EXTI
-      line table, the ADC locks, the timer wrap counters and the CAN owners are tables of the same kind.
+      must outlive every call of the port object that opened it and be reachable from the interrupt handlers and
+      the HAL callbacks, and no HAL type may appear in the port's public headers. The boundary files keep the
+      handles in one table per peripheral, indexed by the instance number, beside the owner's Completion pointer;
+      a function-local static is the form with a defined initialisation point (constant initialisation, no
+      static-order dependency). The port's shared state (src/state.hpp: pin claims, the EXTI line table, timer
+      ownership, the clock's wrap counters, the shared ADC instances), whose type and every rule are in the
+      platform-free files, has its one instance in the same form in src/stm32_io_boundary.cpp (sdk::State()).
     mitigation: >-
-      Each table is reached only through one accessor in an anonymous namespace of its boundary file; every
-      entry is written by the owning object's EnsureReady() and cleared by its Release(); a second object on the
-      same hardware is refused (port code 0xF5, kb::Status::Busy); entries shared with an interrupt are changed
-      only with that interrupt masked or inside a kb::rtos critical section; the host tests exercise every
-      accessor over the HAL fakes, including the refusal of a second owner and the release paths.
-    approved_by: maintainer
+      Each table is reached only through one accessor in an anonymous namespace of its boundary file (the shared
+      state through sdk::State()); every handle entry is written by the owning object's EnsureReady() and
+      cleared by its Release(); a second object on the same hardware is refused (port code 0xF5,
+      kb::Status::Busy). Entries shared with an interrupt are std::atomic and are changed only inside an IrqGuard
+      (PRIMASK saved, interrupts masked for a few instructions, restored; src/time.cpp), never a kb::rtos critical
+      section: an EXTI callback and its context are stored and cleared together with interrupts masked, the
+      clock's wrap is counted and its flag cleared together with interrupts masked, pin claims, timer ownership
+      and the ADC instances' channel counts change with interrupts masked. The host tests exercise every accessor
+      over the HAL fakes, including the refusal of a second owner, the release paths in either order and the
+      clock's read rule over every interleaving with its interrupt.
+    approved_by: maintainer of record (.github/CODEOWNERS)
     date: 2026-11-14
     review_by: 2027-11-14
   - id: DEV-002
@@ -31,16 +38,35 @@ deviations:
     where: >-
       src/stm32_bus_boundary.cpp
     reason: >-
-      HAL_I2C_Master_Transmit takes the data to send as `uint8_t*` although it only reads it; the port's
+      HAL_I2C_Master_Seq_Transmit_IT takes the data to send as `uint8_t*` although it only reads it; the port's
       I2cBus::Write receives the caller's bytes as std::span<const uint8_t>, as the kb::iface contract requires. A
       copy into a writable buffer would bound the length of a write by that buffer (a write is one START to STOP
       transaction and cannot be split) and cost a copy per transfer. clang-tidy's cppcoreguidelines-pro-type-const-cast
       reports the cast; the CodeQL query of Rule 8.2.3 does not, and the suppression cites this record.
     mitigation: >-
-      One call site (I2cTransmit). The pinned HAL (docs/soup.md) only reads through the pointer in its blocking
-      transmit (each byte is copied from *pBuffPtr to TXDR or DR). The host tests check that the bytes reach the bus
-      unchanged and that the caller's buffer is not written.
-    approved_by: maintainer
+      One call site (I2cStartTransmit). The pinned HAL (docs/soup.md) only reads through the pointer in its
+      interrupt-driven transmit (each byte is copied from *pBuffPtr to TXDR or DR in the event handler). The host
+      tests check that the bytes reach the bus unchanged and that the caller's buffer is not written.
+    approved_by: maintainer of record (.github/CODEOWNERS)
     date: 2026-11-14
     review_by: 2027-11-14
 
+  - id: DEV-003
+    check: misra/Rule 10.2.3
+    where: >-
+      src/stm32_bus_boundary.cpp
+    reason: >-
+      I2C_HandleTypeDef keeps its state in two volatile fields of the HAL's unscoped enumerations without a
+      fixed underlying type (HAL_I2C_StateTypeDef State, HAL_I2C_ModeTypeDef Mode); the vendor types cannot be
+      changed. After an aborted transfer the port returns the handle to ready while keeping its configuration,
+      and the pinned HAL has no call that does this short of HAL_I2C_DeInit and HAL_I2C_Init (which would also
+      reconfigure the timing and drop the bus between transfers). The only way is to store the HAL's own
+      enumerators HAL_I2C_STATE_READY and HAL_I2C_MODE_NONE in those fields, as the HAL itself does.
+    mitigation: >-
+      Two assignments in one function (I2cRestore), each of an enumerator of the field's own type, so no value
+      outside the enumeration is stored and no conversion takes place. Called only with the bus lock held and the
+      instance's interrupts already disabled (__HAL_I2C_DISABLE_IT before the store). The host tests check that a
+      transfer after a NACK, a timeout and a bus recovery starts from the ready state.
+    approved_by: maintainer of record (.github/CODEOWNERS)
+    date: 2026-11-14
+    review_by: 2027-11-14

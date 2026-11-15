@@ -36,8 +36,10 @@ What the port does **not** implement, and why:
 
 | Not implemented | Why |
 | --- | --- |
-| `WriteRead()` with more than 2 bytes to write | The HAL's repeated-START read (`HAL_I2C_Mem_Read`) takes a 1- or 2-byte register address; longer writes return `Unsupported` (use `Write()` then `Read()` when the device allows a STOP between them) |
-| DMA and interrupt-driven I2C, SPI and UART transmit | Not yet kb-core contracts (asynchronous I2C/SPI are planned, M4/M5); the blocking calls are bounded by their timeouts |
+| DMA | The transfers are interrupt driven (CPU copies, no cache maintenance needed); DMA, with the H7 cache rules of [Integration](integration.md), comes later |
+| An asynchronous Start/Poll form of the calls | Not yet a kb-core contract (planned); the port is built to adopt it ([How the port waits](waits.md)) |
+| UART FIFO mode (G4, H7, L4) | Off; at the highest baud rates keep masked sections short |
+| Dual-core STM32H7 | Refused at configure time ([Integration](integration.md)) |
 | CAN FD frames, CAN filters | `CanFrame` is classic CAN; FDCAN runs in classic mode and accepts every frame into RX FIFO 0 |
 | LPTIM, low-power modes, I3C, OCTOSPI, USB | kb-core has no contract for them |
 | `PulseTx` | Not yet a kb-core contract |
@@ -47,8 +49,9 @@ What the port does **not** implement, and why:
 
 ## Rules that hold everywhere
 
-- **Every wait is bounded**: every HAL call gets the configured timeout, every lock is taken with
-  `TryLockFor(timeout)`, every poll counts `HAL_GetTick()` or a fixed number of spins.
+- **Every wait is bounded and sleeps**: every timeout is at most 2 s, measured on the port's own clock (never
+  `HAL_GetTick()`), every operation is ended by its interrupt into a `Completion` waited on a `kb::rtos` semaphore,
+  every lock is taken with `TryLockFor(timeout)` ([How the port waits](waits.md)).
 - **Errors are values**: every call returns `kb::Status` or `kb::Result<T>`; the HAL status and the handle's
   `ErrorCode` are kept as the vendor code (`Detail()`, and `LastError()` on every object). See
   [Error mapping](error-mapping.md).

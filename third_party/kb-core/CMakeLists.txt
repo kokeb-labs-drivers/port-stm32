@@ -42,7 +42,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(KB_BUILD_TESTS "Build the unit tests of the selected parts" OFF)
-option(KB_BUILD_INTEGRATION "Build the driver integration tests (needs enabled drivers)" OFF)
+option(KB_BUILD_INTEGRATION "Build the driver integration tests (every checked-out driver)" OFF)
+option(KB_CHECK_BINDINGS "Compile every checked-out driver's binding header on its own (no tests)" OFF)
 option(KB_BUILD_FUZZERS "Build the libFuzzer targets (Clang)" OFF)
 option(KB_BUILD_EXAMPLES "Build the host examples" OFF)
 option(KB_INSTALL "Generate the install and package rules" ${PROJECT_IS_TOP_LEVEL})
@@ -77,6 +78,8 @@ foreach(_dir IN ITEMS tests/integration tests/standalone tests/install_consumer 
     add_subdirectory(${_dir})
   endif()
 endforeach()
+
+include("${CMAKE_CURRENT_LIST_DIR}/cmake/kb_tool_tests.cmake")
 
 if(KB_INSTALL)
   include(CMakePackageConfigHelpers)

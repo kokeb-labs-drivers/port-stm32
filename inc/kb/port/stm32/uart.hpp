@@ -4,12 +4,20 @@
  * satisfies `kb::iface::UartPort`, `UartBaudControl` and `UartTxDrain`, with optional RS-485
  * direction control on a GPIO.
  *
- * Reception is interrupt driven: the port's handler (HandleUartIrq(), called from the peripheral's
- * interrupt vector, see irq.hpp) moves each byte into a ring of kUartRxBytes and latches overrun,
- * framing, parity and noise errors; it never calls the HAL's interrupt machinery or its callbacks.
- * Transmission is `HAL_UART_Transmit` (polling), bounded by `write_timeout`. Read() waits at most
- * its timeout for the first byte, then takes whatever else has arrived. Reader and writer have
- * separate locks. Waits count `HAL_GetTick()` milliseconds.
+ * Both directions are interrupt driven by the port's own handler (HandleUartIrq(), called from the
+ * peripheral's vector, irq.hpp); it never calls the HAL's interrupt machinery. The boundary reads
+ * the flags and the data register into a UartEvent; OnInterrupt() decides: each received byte
+ * (masked to the configured data bits, so a 7-bit frame's parity bit never reaches the caller) goes
+ * into a ring of kUartRxBytes and wakes a waiting Read(); overrun, framing, parity and noise errors
+ * are latched; on transmit-empty the next byte of the current Write() goes out, and the last one
+ * ends the Write() (with RS-485 direction control, the transmit-complete interrupt ends it, so DE
+ * stays high until the last stop bit has left).
+ *
+ * Every wait is a Completion on the port's clock (completion.hpp), never `HAL_GetTick()`: Read()
+ * waits at most its timeout for the first byte, then takes whatever else has arrived; Write()
+ * waits at most `write_timeout` for the whole frame; WaitTxDone() at most its timeout. Under an
+ * RTOS the task blocks while it waits. Reader and writer have separate locks. Timeouts above
+ * kMaxTimeout are refused.
  *
  * | Result | Meaning |
  * | --- | --- |
@@ -18,7 +26,8 @@
  * | `Overflow` | Read: the ring or the receiver overflowed since the last Read (Detail: flags) |
  * | `BusError` | Read: framing, parity or noise error since the last Read (Detail: flags) |
  * | `Busy` | The reader or writer lock was not had in time |
- * | `InvalidArgument` | Empty span, baud 0, or a bad configuration |
+ * | `InvalidArgument` | Empty span, baud 0, a timeout above kMaxTimeout, or a bad configuration |
+ * | `Unsupported` | 7 data bits without parity on F4 (its USART has no 7-bit word) |
  * | `NotReady` | EnsureReady() has not succeeded |
  *
  * SPDX-License-Identifier: MIT
@@ -27,11 +36,15 @@
 #ifndef KB_PORT_STM32_UART_HPP
 #define KB_PORT_STM32_UART_HPP
 
+// State shared with interrupts needs lock-free std::atomic (as kb-core's SpscRing does).
+// misra-lint: ignore KB-CPP-012
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <span>
 
 #include "kb/interfaces/uart.hpp"
+#include "kb/port/stm32/completion.hpp"
 #include "kb/port/stm32/error.hpp"
 #include "kb/rtos/mutex.hpp"
 #include "kb/utils/result.hpp"
@@ -75,11 +88,20 @@ struct UartConfig {
   PinId rx{};             ///< RX with its alternate function.
   PinId de{};             ///< RS-485 DE driven as a GPIO (high while sending), or unused.
   uint32_t baud{115200U}; ///< Bits per second.
-  uint8_t data_bits{8U};  ///< 7 or 8 data bits (9 with parity off is not offered).
+  uint8_t data_bits{8U};  ///< 7 or 8 data bits (9 is not offered; 7 without parity: not on F4).
   UartParity parity{UartParity::None};       ///< Parity.
   UartStopBits stop_bits{UartStopBits::One}; ///< Stop bits.
   uint8_t irq_priority{5U};                  ///< NVIC priority of the receive interrupt.
-  kb::Milliseconds write_timeout{kb::Milliseconds{100U}}; ///< Write() and lock waits.
+  kb::Milliseconds write_timeout{kb::Milliseconds{100U}}; ///< Write() (whole frame) and lock waits.
+};
+
+/** @brief What the interrupt found, read by the boundary from the flag and data registers. */
+struct UartEvent {
+  bool received{false};    ///< A byte was in the receive data register (`data`).
+  uint16_t data{0U};       ///< The received word, parity bit included.
+  uint32_t errors{0U};     ///< Receive errors (uart_flags).
+  bool tx_empty{false};    ///< Transmit-empty, with its interrupt enabled.
+  bool tx_complete{false}; ///< Transmit-complete, with its interrupt enabled.
 };
 
 /** @brief Counters of a UART since EnsureReady(). */
@@ -121,20 +143,22 @@ public:
   [[nodiscard]] kb::Result<void> LastError() const noexcept {
     return error_.Get();
   }
-  /** @brief The counters. */
-  [[nodiscard]] UartStats Stats() const noexcept {
-    return stats_;
-  }
+  /** @brief The counters (a consistent copy). */
+  [[nodiscard]] UartStats Stats() const noexcept;
   /** @brief The configuration (with the current baud rate). */
   [[nodiscard]] const UartConfig& Config() const noexcept {
     return config_;
   }
-  /** @brief Interrupt context only (called by HandleUartIrq): one received byte. */
-  void OnByte(uint8_t byte) noexcept;
-  /** @brief Interrupt context only (called by HandleUartIrq): receive error flags (uart_flags). */
-  void OnErrors(uint32_t flags) noexcept;
+  /** @brief Interrupt context only (called by HandleUartIrq): what the interrupt found. */
+  void OnInterrupt(const UartEvent& event) noexcept;
 
 private:
+  void onByte(uint8_t byte) noexcept;
+  void onErrors(uint32_t flags) noexcept;
+  void onTxEmpty() noexcept;
+  void count(uint32_t UartStats::* field, uint32_t n = 1U) noexcept;
+  [[nodiscard]] kb::Status sendLocked(std::span<const uint8_t> tx, bool wait_complete,
+                                      kb::Milliseconds timeout) noexcept;
   [[nodiscard]] bool configValid() const noexcept;
   [[nodiscard]] kb::Status writeLocked(std::span<const uint8_t> tx) noexcept;
   [[nodiscard]] kb::Result<std::size_t> readLocked(std::span<uint8_t> rx,
@@ -149,6 +173,15 @@ private:
   UartStats stats_;
   kb::utils::SpscRing<uint8_t, kUartRxBytes> ring_;
   kb::utils::SpscRing<uint32_t, 4U> errors_;
+  Completion rx_wake_; ///< Notified by every received byte and error.
+  Completion tx_done_; ///< Completed when a Write() or WaitTxDone() has finished.
+  // The frame the transmit interrupt sends: the size is stored last with release order before the
+  // interrupt is enabled, and read first with acquire order by the interrupt.
+  std::atomic<const uint8_t*> tx_data_{nullptr};
+  std::atomic<std::size_t> tx_size_{0U};
+  std::atomic<std::size_t> tx_next_{0U};
+  std::atomic<bool> tx_wait_complete_{false};
+  uint16_t rx_mask_{0xFFU};
   bool ready_{false};
 };
 

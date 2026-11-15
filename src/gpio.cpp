@@ -1,15 +1,21 @@
-// OutputPin and InputPin: pin claims, level conversion and the EXTI hook. Platform-free; every HAL
-// call goes through sdk.hpp (src/stm32_io_boundary.cpp).
+// OutputPin and InputPin: pin claims, level conversion, the EXTI line table and its dispatch from
+// the interrupt. Platform-free; every HAL call goes through sdk.hpp (src/stm32_io_boundary.cpp).
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The port-stm32 authors
+// State shared with interrupts needs lock-free std::atomic (as kb-core's SpscRing does).
+// misra-lint: ignore KB-CPP-012
+#include <atomic>
+#include <cstddef>
 #include <cstdint>
 
 #include "kb/interfaces/gpio.hpp"
 #include "kb/interfaces/types.hpp"
 #include "kb/port/stm32/error.hpp"
 #include "kb/port/stm32/gpio.hpp"
+#include "kb/port/stm32/irq.hpp"
 #include "kb/utils/status.hpp"
 #include "sdk.hpp"
+#include "state.hpp"
 
 namespace kb::port::stm32 {
 
@@ -18,19 +24,54 @@ namespace {
   return pin.Used() && pin.Valid() && sdk::PortExists(pin.port);
 }
 
+[[nodiscard]] uint16_t MaskOf(PinId pin) noexcept {
+  return static_cast<uint16_t>(1U << pin.pin);
+}
+
 // Claims the pin, then configures it; the claim is given back when configuring fails.
 template <typename Fn>
 [[nodiscard]] uint32_t ClaimAndConfigure(PinId pin, Fn configure) noexcept {
-  uint32_t code = sdk::PinClaim(pin);
+  uint32_t code = ClaimPin(pin);
   if (code == hal::kOk) {
     code = configure();
     if (code != hal::kOk) {
-      sdk::PinUnclaim(pin);
+      UnclaimPin(pin);
     }
   }
   return code;
 }
 } // namespace
+
+uint32_t ClaimPin(PinId pin) noexcept {
+  const IrqGuard guard{};
+  uint16_t& claims = sdk::State().pin_claims[static_cast<std::size_t>(pin.port)];
+  const bool free = (claims & MaskOf(pin)) == 0U;
+  if (free) {
+    claims = static_cast<uint16_t>(claims | MaskOf(pin));
+  }
+  return free ? hal::kOk : port_code::kOwned;
+}
+
+void UnclaimPin(PinId pin) noexcept {
+  const IrqGuard guard{};
+  uint16_t& claims = sdk::State().pin_claims[static_cast<std::size_t>(pin.port)];
+  claims = static_cast<uint16_t>(claims & static_cast<uint16_t>(~MaskOf(pin)));
+}
+
+void HandleExtiIrq(uint8_t first, uint8_t last) noexcept {
+  for (uint8_t line = first; (line <= last) && (line < kExtiLines); ++line) {
+    if (sdk::ExtiTakePending(line)) {
+      const ExtiLine& entry = sdk::State().exti[line];
+      // The task changes an entry only with interrupts masked (atomic stores), so the handler
+      // always sees a callback together with its own context.
+      void* const context = entry.context.load(std::memory_order_acquire);
+      const kb::iface::GpioCallback fn = entry.fn.load(std::memory_order_acquire);
+      if (fn != nullptr) {
+        fn(context);
+      }
+    }
+  }
+}
 
 // --- OutputPin -----------------------------------------------------------------------------------
 
@@ -72,7 +113,10 @@ kb::Status OutputPin::Toggle() noexcept {
   if (!ready_) {
     static_cast<void>(error_.Set(status, port_code::kNotReady));
   } else {
-    sdk::PinToggle(config_.pin);
+    {
+      const IrqGuard guard{}; // the toggle reads and writes the output register
+      sdk::PinToggle(config_.pin);
+    }
     status = error_.Clear();
   }
   return status;
@@ -81,7 +125,7 @@ kb::Status OutputPin::Toggle() noexcept {
 kb::Status OutputPin::Release() noexcept {
   if (ready_) {
     sdk::PinReset(config_.pin);
-    sdk::PinUnclaim(config_.pin);
+    UnclaimPin(config_.pin);
     ready_ = false;
   }
   return error_.Clear();
@@ -128,7 +172,29 @@ kb::Status InputPin::EnableInterrupt(kb::iface::Edge edge, kb::iface::GpioCallba
   } else if (!ready_) {
     status = error_.Set(kb::Status::NotReady, port_code::kNotReady);
   } else {
-    const uint32_t code = sdk::ExtiEnable(config_.pin, edge, fn, context, config_.irq_priority);
+    ExtiLine& line = sdk::State().exti[config_.pin.pin];
+    uint32_t code = hal::kOk;
+    {
+      const IrqGuard guard{};
+      if (line.owned && (line.port != config_.pin.port)) {
+        code = port_code::kOwned; // the line belongs to the same pin number on another port
+      } else {
+        line.owned = true;
+        line.port = config_.pin.port;
+        line.fn.store(nullptr, std::memory_order_release); // no call while the line is reconfigured
+        line.context.store(context, std::memory_order_release);
+      }
+    }
+    if (code == hal::kOk) {
+      code = sdk::ExtiConfigure(config_.pin, edge, config_.irq_priority);
+      const IrqGuard guard{};
+      if (code == hal::kOk) {
+        line.fn.store(fn, std::memory_order_release);
+      } else {
+        line.owned = irq_; // keep a line this pin had before
+        line.context.store(nullptr, std::memory_order_release);
+      }
+    }
     status = error_.Set(MapHalStatus(code & 0xFFU), code);
     irq_ = irq_ || (status == kb::Status::Ok);
   }
@@ -140,7 +206,17 @@ kb::Status InputPin::DisableInterrupt() noexcept {
   if (!ready_) {
     static_cast<void>(error_.Set(status, port_code::kNotReady));
   } else {
-    const uint32_t code = irq_ ? sdk::ExtiDisable(config_.pin) : hal::kOk;
+    uint32_t code = hal::kOk;
+    if (irq_) {
+      ExtiLine& line = sdk::State().exti[config_.pin.pin];
+      {
+        const IrqGuard guard{};
+        line.fn.store(nullptr, std::memory_order_release); // the callback first, then its context
+        line.context.store(nullptr, std::memory_order_release);
+        line.owned = false;
+      }
+      code = sdk::ExtiDeconfigure(config_.pin);
+    }
     status = error_.Set(MapHalStatus(code & 0xFFU), code);
     irq_ = false;
   }
@@ -152,7 +228,7 @@ kb::Status InputPin::Release() noexcept {
   if (ready_) {
     status = DisableInterrupt();
     sdk::PinReset(config_.pin);
-    sdk::PinUnclaim(config_.pin);
+    UnclaimPin(config_.pin);
     ready_ = false;
   }
   return status;

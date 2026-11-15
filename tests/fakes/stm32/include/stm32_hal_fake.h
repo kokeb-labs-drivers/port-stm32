@@ -2,9 +2,12 @@
  * Host fake of the STM32 HAL and CMSIS declarations the port's boundary files use: the same names,
  * types, macros and signatures (a subset), so the boundary files compile on the host unchanged and
  * link against tests/fakes/stm32/fake_stm32_hal.cpp (a link seam per HAL call). Two families: the
- * default is G4-like (I2C v2 with TIMINGR, USART ISR/ICR/RDR, FDCAN, ADC calibration);
- * KB_FAKE_STM32F4 is F4-like (I2C v1, USART SR/DR, bxCAN, no ADC calibration). Every HAL header
- * name the boundary files include is a one-line file next to this one.
+ * default is G4-like (I2C v2 with TIMINGR, USART ISR/ICR/RDR/TDR, FDCAN, ADC calibration, a 7-bit
+ * UART word); KB_FAKE_STM32F4 is F4-like (I2C v1, USART SR/DR, bxCAN, no ADC calibration, no
+ * 7-bit UART word): each variant has only the macros its family's HAL has. The interrupt APIs
+ * (`*_IT`) call the HAL callbacks the port defines at once, as the interrupt would, unless the test
+ * stalls them (fake::Stall). Every HAL header name the boundary files include is a one-line file
+ * next to this one.
  *
  * Test code. SPDX-License-Identifier: MIT
  * Copyright (c) 2026 The port-stm32 authors
@@ -34,6 +37,9 @@ typedef enum {
   HAL_TIMEOUT = 0x03U
 } HAL_StatusTypeDef;
 typedef enum { DISABLE = 0U, ENABLE = 1U } FunctionalState;
+typedef enum { RESET = 0U, SET = 1U } FlagStatus;
+typedef enum { HAL_UNLOCKED = 0x00U, HAL_LOCKED = 0x01U } HAL_LockTypeDef;
+#define __HAL_UNLOCK(h) ((h)->Lock = HAL_UNLOCKED)
 typedef enum {
   EXTI0_IRQn = 6,
   EXTI1_IRQn = 7,
@@ -50,10 +56,41 @@ typedef enum {
   UART4_IRQn = 52,
   UART5_IRQn = 53,
   USART6_IRQn = 71,
-  LPUART1_IRQn = 91
+  LPUART1_IRQn = 91,
+  I2C1_EV_IRQn = 31,
+  I2C1_ER_IRQn = 32,
+  I2C2_EV_IRQn = 33,
+  I2C2_ER_IRQn = 34,
+  I2C3_EV_IRQn = 72,
+  I2C3_ER_IRQn = 73,
+  I2C4_EV_IRQn = 82,
+  I2C4_ER_IRQn = 83,
+  SPI1_IRQn = 35,
+  SPI2_IRQn = 36,
+  SPI3_IRQn = 51,
+  SPI4_IRQn = 84,
+  ADC1_2_IRQn = 18,
+  ADC_IRQn = 118,
+  ADC3_IRQn = 47,
+  ADC4_IRQn = 61,
+  ADC5_IRQn = 62,
+  FDCAN1_IT0_IRQn = 21,
+  FDCAN2_IT0_IRQn = 86,
+  CAN1_TX_IRQn = 19,
+  CAN1_RX0_IRQn = 20,
+  CAN1_SCE_IRQn = 22,
+  CAN2_TX_IRQn = 63,
+  CAN2_RX0_IRQn = 64,
+  CAN2_SCE_IRQn = 66
 } IRQn_Type;
 extern uint32_t SystemCoreClock;
 uint32_t HAL_GetTick(void);
+typedef enum {
+  HAL_TICK_FREQ_10HZ = 100U,
+  HAL_TICK_FREQ_100HZ = 10U,
+  HAL_TICK_FREQ_1KHZ = 1U
+} HAL_TickFreqTypeDef;
+HAL_TickFreqTypeDef HAL_GetTickFreq(void);
 uint32_t HAL_RCC_GetHCLKFreq(void);
 uint32_t HAL_RCC_GetPCLK1Freq(void);
 uint32_t HAL_RCC_GetPCLK2Freq(void);
@@ -171,10 +208,23 @@ extern volatile uint32_t kb_fake_exti_pr;
 
 /* --- timers -------------------------------------------------------------------------------------
  */
+#ifdef __cplusplus
+}
+/* The counter runs: each read returns the count, then adds the step (fake::SetCounterStep). */
+struct KbFakeCounter {
+  uint32_t value;
+  operator uint32_t();
+  KbFakeCounter& operator=(uint32_t v) {
+    value = v;
+    return *this;
+  }
+};
+extern "C" {
+#endif
 typedef struct {
   volatile uint32_t SR;
   volatile uint32_t DIER;
-  volatile uint32_t CNT;
+  struct KbFakeCounter CNT;
   volatile uint32_t PSC;
   volatile uint32_t ARR;
   volatile uint32_t CCR[4];
@@ -252,6 +302,7 @@ HAL_StatusTypeDef HAL_TIM_GenerateEvent(TIM_HandleTypeDef* h, uint32_t source);
     (h)->Init.Period = (v);                                                                        \
   } while (0)
 #define __HAL_TIM_SET_COMPARE(h, ch, v) ((h)->Instance->CCR[(ch) >> 2U] = (v))
+#define __HAL_TIM_SET_COUNTER(h, v) ((h)->Instance->CNT = (v))
 #define __HAL_TIM_GET_FLAG(h, f) ((((h)->Instance->SR) & (f)) == (f))
 #define __HAL_TIM_CLEAR_FLAG(h, f) ((h)->Instance->SR = ~(f) & (h)->Instance->SR)
 #define __HAL_TIM_ENABLE_IT(h, it) ((h)->Instance->DIER |= (it))
@@ -326,15 +377,23 @@ HAL_StatusTypeDef HAL_ADC_Init(ADC_HandleTypeDef* h);
 HAL_StatusTypeDef HAL_ADC_DeInit(ADC_HandleTypeDef* h);
 HAL_StatusTypeDef HAL_ADC_ConfigChannel(ADC_HandleTypeDef* h, const ADC_ChannelConfTypeDef* c);
 HAL_StatusTypeDef HAL_ADC_Start(ADC_HandleTypeDef* h);
-HAL_StatusTypeDef HAL_ADC_PollForConversion(ADC_HandleTypeDef* h, uint32_t timeout);
+HAL_StatusTypeDef HAL_ADC_Start_IT(ADC_HandleTypeDef* h);
+HAL_StatusTypeDef HAL_ADC_Stop_IT(ADC_HandleTypeDef* h);
+void HAL_ADC_IRQHandler(ADC_HandleTypeDef* h);
 uint32_t HAL_ADC_GetValue(const ADC_HandleTypeDef* h);
-HAL_StatusTypeDef HAL_ADC_Stop(ADC_HandleTypeDef* h);
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc);
+void HAL_ADC_ErrorCallback(ADC_HandleTypeDef* hadc);
 HAL_StatusTypeDef HAL_ADCEx_Calibration_Start(ADC_HandleTypeDef* h, uint32_t single_diff);
 
 /* --- I2C ----------------------------------------------------------------------------------------
  */
 typedef struct {
   volatile uint32_t CR1;
+  volatile uint32_t CR2;
+  volatile uint32_t ISR;
+  volatile uint32_t ICR;
+  volatile uint32_t TXDR;
+  volatile uint32_t RXDR;
 } I2C_TypeDef;
 extern I2C_TypeDef kb_fake_i2c[5];
 #define I2C1 (&kb_fake_i2c[1])
@@ -359,11 +418,54 @@ typedef struct {
   uint32_t GeneralCallMode;
   uint32_t NoStretchMode;
 } I2C_InitTypeDef;
+typedef enum { HAL_I2C_STATE_RESET = 0x00U, HAL_I2C_STATE_READY = 0x20U } HAL_I2C_StateTypeDef;
+typedef enum { HAL_I2C_MODE_NONE = 0x00U, HAL_I2C_MODE_MASTER = 0x10U } HAL_I2C_ModeTypeDef;
 typedef struct {
   I2C_TypeDef* Instance;
   I2C_InitTypeDef Init;
+  HAL_LockTypeDef Lock;
+  volatile HAL_I2C_StateTypeDef State;
+  volatile HAL_I2C_ModeTypeDef Mode;
   volatile uint32_t ErrorCode;
+  volatile uint32_t PreviousState;
 } I2C_HandleTypeDef;
+#define I2C_FLAG_BUSY (1UL << 15U)
+#define I2C_FLAG_AF (1UL << 4U)
+#define I2C_FLAG_BERR (1UL << 8U)
+#define I2C_FLAG_ARLO (1UL << 9U)
+#define I2C_FLAG_OVR (1UL << 10U)
+#define __HAL_I2C_GET_FLAG(h, f) ((((h)->Instance->ISR) & (f)) == (f) ? SET : RESET)
+#define __HAL_I2C_CLEAR_FLAG(h, f) ((h)->Instance->ISR &= ~(uint32_t)(f))
+#define __HAL_I2C_DISABLE_IT(h, it) ((h)->Instance->CR1 &= ~(uint32_t)(it))
+#if defined(KB_FAKE_STM32F4)
+#define I2C_IT_EVT (1UL << 9U)
+#define I2C_IT_BUF (1UL << 10U)
+#define I2C_IT_ERR (1UL << 8U)
+#define I2C_FIRST_FRAME 0x00000001U
+#define I2C_FIRST_AND_LAST_FRAME 0x00000008U
+#define I2C_LAST_FRAME 0x00000020U
+#else
+#define I2C_IT_ERRI (1UL << 7U)
+#define I2C_IT_TCI (1UL << 6U)
+#define I2C_IT_STOPI (1UL << 5U)
+#define I2C_IT_NACKI (1UL << 4U)
+#define I2C_IT_ADDRI (1UL << 3U)
+#define I2C_IT_RXI (1UL << 2U)
+#define I2C_IT_TXI (1UL << 1U)
+#define I2C_FLAG_STOPF (1UL << 5U)
+#define I2C_ISR_TXE (1UL << 0U)
+#define I2C_ISR_TXIS (1UL << 1U)
+#define I2C_ISR_RXNE (1UL << 2U)
+#define I2C_CR2_NBYTES (0xFFUL << 16U)
+#define I2C_CR2_RELOAD (1UL << 24U)
+#define I2C_CR2_AUTOEND (1UL << 25U)
+#define I2C_CR2_START (1UL << 13U)
+#define I2C_CR2_STOP (1UL << 14U)
+#define I2C_CR2_RD_WRN (1UL << 10U)
+#define I2C_FIRST_FRAME 0x00000000U
+#define I2C_FIRST_AND_LAST_FRAME 0x02000000U
+#define I2C_LAST_FRAME 0x02000000U
+#endif
 #define I2C_DUTYCYCLE_2 0x00000000U
 #define I2C_OA2_NOMASK 0x00U
 #define I2C_ADDRESSINGMODE_7BIT 0x00000001U
@@ -379,15 +481,18 @@ typedef struct {
 #define HAL_I2C_ERROR_TIMEOUT 0x00000020U
 HAL_StatusTypeDef HAL_I2C_Init(I2C_HandleTypeDef* h);
 HAL_StatusTypeDef HAL_I2C_DeInit(I2C_HandleTypeDef* h);
-HAL_StatusTypeDef HAL_I2C_Master_Transmit(I2C_HandleTypeDef* h, uint16_t address, uint8_t* data,
-                                          uint16_t size, uint32_t timeout);
-HAL_StatusTypeDef HAL_I2C_Master_Receive(I2C_HandleTypeDef* h, uint16_t address, uint8_t* data,
-                                         uint16_t size, uint32_t timeout);
-HAL_StatusTypeDef HAL_I2C_Mem_Read(I2C_HandleTypeDef* h, uint16_t address, uint16_t mem,
-                                   uint16_t mem_size, uint8_t* data, uint16_t size,
-                                   uint32_t timeout);
-HAL_StatusTypeDef HAL_I2C_IsDeviceReady(I2C_HandleTypeDef* h, uint16_t address, uint32_t trials,
-                                        uint32_t timeout);
+HAL_StatusTypeDef HAL_I2C_Master_Transmit_IT(I2C_HandleTypeDef* h, uint16_t address, uint8_t* data,
+                                             uint16_t size);
+HAL_StatusTypeDef HAL_I2C_Master_Seq_Transmit_IT(I2C_HandleTypeDef* h, uint16_t address,
+                                                 uint8_t* data, uint16_t size, uint32_t options);
+HAL_StatusTypeDef HAL_I2C_Master_Seq_Receive_IT(I2C_HandleTypeDef* h, uint16_t address,
+                                                uint8_t* data, uint16_t size, uint32_t options);
+void HAL_I2C_EV_IRQHandler(I2C_HandleTypeDef* h);
+void HAL_I2C_ER_IRQHandler(I2C_HandleTypeDef* h);
+void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef* hi2c);
+void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef* hi2c);
+void HAL_I2C_ErrorCallback(I2C_HandleTypeDef* hi2c);
+void HAL_I2C_AbortCpltCallback(I2C_HandleTypeDef* hi2c);
 HAL_StatusTypeDef HAL_I2CEx_ConfigAnalogFilter(I2C_HandleTypeDef* h, uint32_t filter);
 
 /* --- SPI ----------------------------------------------------------------------------------------
@@ -450,22 +555,40 @@ typedef struct {
 #define HAL_SPI_ERROR_ABORT 0x00000040U
 HAL_StatusTypeDef HAL_SPI_Init(SPI_HandleTypeDef* h);
 HAL_StatusTypeDef HAL_SPI_DeInit(SPI_HandleTypeDef* h);
-HAL_StatusTypeDef HAL_SPI_Transmit(SPI_HandleTypeDef* h, const uint8_t* data, uint16_t size,
-                                   uint32_t timeout);
-HAL_StatusTypeDef HAL_SPI_Receive(SPI_HandleTypeDef* h, uint8_t* data, uint16_t size,
-                                  uint32_t timeout);
-HAL_StatusTypeDef HAL_SPI_TransmitReceive(SPI_HandleTypeDef* h, const uint8_t* tx, uint8_t* rx,
-                                          uint16_t size, uint32_t timeout);
+HAL_StatusTypeDef HAL_SPI_Transmit_IT(SPI_HandleTypeDef* h, const uint8_t* data, uint16_t size);
+HAL_StatusTypeDef HAL_SPI_TransmitReceive_IT(SPI_HandleTypeDef* h, const uint8_t* tx, uint8_t* rx,
+                                             uint16_t size);
+void HAL_SPI_IRQHandler(SPI_HandleTypeDef* h);
+void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef* hspi);
+void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef* hspi);
+void HAL_SPI_ErrorCallback(SPI_HandleTypeDef* hspi);
 HAL_StatusTypeDef HAL_SPI_Abort(SPI_HandleTypeDef* h);
 
 /* --- UART ---------------------------------------------------------------------------------------
  */
+#ifdef __cplusplus
+}
+/* A transmit data register: each write is a byte sent (fake::UartSent()). */
+struct KbFakeTdr {
+  KbFakeTdr& operator=(uint32_t v);
+};
+/* F4's DR: a write is a byte sent; a read returns `rx` (what the test put there). */
+struct KbFakeDr {
+  uint32_t rx;
+  KbFakeDr& operator=(uint32_t v);
+  operator uint32_t() const {
+    return rx;
+  }
+};
+extern "C" {
+#endif
 typedef struct {
   volatile uint32_t ISR;
   volatile uint32_t ICR;
   volatile uint32_t RDR;
+  struct KbFakeTdr TDR;
   volatile uint32_t SR;
-  volatile uint32_t DR;
+  struct KbFakeDr DR;
 } USART_TypeDef;
 extern USART_TypeDef kb_fake_usart[12];
 #define USART1 (&kb_fake_usart[1])
@@ -487,7 +610,10 @@ extern USART_TypeDef kb_fake_usart[12];
 #define USART_SR_ORE (1UL << 3U)
 #define USART_SR_RXNE (1UL << 5U)
 #define USART_SR_TC (1UL << 6U)
+#define USART_SR_TXE (1UL << 7U)
 #define UART_FLAG_TC USART_SR_TC
+#define UART_FLAG_TXE USART_SR_TXE
+#define UART_FLAG_RXNE USART_SR_RXNE
 #define __HAL_UART_GET_FLAG(h, f) ((((h)->Instance->SR) & (f)) == (f))
 #else
 #define LPUART1 (&kb_fake_usart[11])
@@ -498,12 +624,15 @@ extern USART_TypeDef kb_fake_usart[12];
 #define USART_ISR_ORE (1UL << 3U)
 #define USART_ISR_RXNE_RXFNE (1UL << 5U)
 #define USART_ISR_TC (1UL << 6U)
+#define USART_ISR_TXE_TXFNF (1UL << 7U)
 #define USART_ICR_PECF (1UL << 0U)
 #define USART_ICR_FECF (1UL << 1U)
 #define USART_ICR_NECF (1UL << 2U)
 #define USART_ICR_ORECF (1UL << 3U)
 #define USART_PRESC_PRESCALER 0xFU
 #define UART_FLAG_TC USART_ISR_TC
+#define UART_FLAG_TXE USART_ISR_TXE_TXFNF
+#define UART_FLAG_RXNE USART_ISR_RXNE_RXFNE
 #define UART_WORDLENGTH_7B 0x10000000U
 #define UART_ONE_BIT_SAMPLE_DISABLE 0x00000000U
 #define UART_PRESCALER_DIV1 0x00000000U
@@ -541,14 +670,19 @@ typedef struct {
 #define UART_MODE_TX_RX 0x0000000CU
 #define UART_HWCONTROL_NONE 0x00000000U
 #define UART_OVERSAMPLING_16 0x00000000U
-#define UART_IT_RXNE 0x0525U
-#define UART_IT_PE 0x0028U
-#define UART_IT_ERR 0x0060U
-#define __HAL_UART_ENABLE_IT(h, it) ((h)->Interrupts |= (it))
+#define UART_IT_RXNE (1UL << 0U)
+#define UART_IT_PE (1UL << 1U)
+#define UART_IT_ERR (1UL << 2U)
+#define UART_IT_TXE (1UL << 3U)
+#define UART_IT_TC (1UL << 4U)
+/* Enabling a transmit interrupt runs the port's handler while its flag is set (as the hardware
+ * would), unless fake::Stall("UART") holds it. */
+void kb_fake_uart_it(UART_HandleTypeDef* h, uint32_t it, int on);
+#define __HAL_UART_ENABLE_IT(h, it) kb_fake_uart_it((h), (it), 1)
+#define __HAL_UART_DISABLE_IT(h, it) kb_fake_uart_it((h), (it), 0)
+#define __HAL_UART_GET_IT_SOURCE(h, it) (((h)->Interrupts & (it)) != 0U ? 1U : 0U)
 HAL_StatusTypeDef HAL_UART_Init(UART_HandleTypeDef* h);
 HAL_StatusTypeDef HAL_UART_DeInit(UART_HandleTypeDef* h);
-HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef* h, const uint8_t* data, uint16_t size,
-                                    uint32_t timeout);
 
 /* --- CAN ----------------------------------------------------------------------------------------
  */
@@ -627,6 +761,17 @@ typedef struct {
 #define FDCAN_CLASSIC_CAN 0x00000000U
 #define FDCAN_NO_TX_EVENTS 0x00000000U
 #define FDCAN_RX_FIFO0 0x00000040U
+#define FDCAN_IT_RX_FIFO0_NEW_MESSAGE (1UL << 0U)
+#define FDCAN_IT_RX_FIFO0_MESSAGE_LOST (1UL << 3U)
+#define FDCAN_IT_TX_COMPLETE (1UL << 9U)
+#define FDCAN_TX_BUFFER0 0x00000001U
+#define FDCAN_TX_BUFFER1 0x00000002U
+#define FDCAN_TX_BUFFER2 0x00000004U
+HAL_StatusTypeDef HAL_FDCAN_ActivateNotification(FDCAN_HandleTypeDef* h, uint32_t its,
+                                                 uint32_t buffers);
+void HAL_FDCAN_IRQHandler(FDCAN_HandleTypeDef* h);
+void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs);
+void HAL_FDCAN_TxBufferCompleteCallback(FDCAN_HandleTypeDef* hfdcan, uint32_t BufferIndexes);
 HAL_StatusTypeDef HAL_FDCAN_Init(FDCAN_HandleTypeDef* h);
 HAL_StatusTypeDef HAL_FDCAN_DeInit(FDCAN_HandleTypeDef* h);
 HAL_StatusTypeDef HAL_FDCAN_Start(FDCAN_HandleTypeDef* h);
@@ -726,6 +871,21 @@ typedef struct {
 #define CAN_ESR_TEC_Msk (0xFFUL << 16U)
 #define CAN_ESR_REC_Pos 24U
 #define CAN_ESR_REC_Msk (0xFFUL << 24U)
+#define CAN_IT_TX_MAILBOX_EMPTY (1UL << 0U)
+#define CAN_IT_RX_FIFO0_MSG_PENDING (1UL << 1U)
+#define CAN_IT_RX_FIFO0_OVERRUN (1UL << 3U)
+#define HAL_CAN_ERROR_RX_FOV0 0x00000200U
+HAL_StatusTypeDef HAL_CAN_ActivateNotification(CAN_HandleTypeDef* h, uint32_t its);
+HAL_StatusTypeDef HAL_CAN_ResetError(CAN_HandleTypeDef* h);
+void HAL_CAN_IRQHandler(CAN_HandleTypeDef* h);
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef* hcan);
+void HAL_CAN_ErrorCallback(CAN_HandleTypeDef* hcan);
+void HAL_CAN_TxMailbox0CompleteCallback(CAN_HandleTypeDef* hcan);
+void HAL_CAN_TxMailbox1CompleteCallback(CAN_HandleTypeDef* hcan);
+void HAL_CAN_TxMailbox2CompleteCallback(CAN_HandleTypeDef* hcan);
+void HAL_CAN_TxMailbox0AbortCallback(CAN_HandleTypeDef* hcan);
+void HAL_CAN_TxMailbox1AbortCallback(CAN_HandleTypeDef* hcan);
+void HAL_CAN_TxMailbox2AbortCallback(CAN_HandleTypeDef* hcan);
 HAL_StatusTypeDef HAL_CAN_Init(CAN_HandleTypeDef* h);
 HAL_StatusTypeDef HAL_CAN_DeInit(CAN_HandleTypeDef* h);
 HAL_StatusTypeDef HAL_CAN_ConfigFilter(CAN_HandleTypeDef* h, const CAN_FilterTypeDef* f);

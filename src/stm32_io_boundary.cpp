@@ -1,23 +1,27 @@
 // Boundary file (deviations/boundary-files.yml): the system, GPIO, EXTI, ADC, timer (PWM and
-// clock), DWT and ITM calls of the STM32 HAL and CMSIS behind sdk.hpp. Family differences use the
-// CMSIS family macros (STM32F4, STM32G4, STM32H7, STM32L4) and the instance macros of the device
-// header, here and in the other boundary files only. SPDX-License-Identifier: MIT Copyright (c)
-// 2026 The port-stm32 authors
+// clock), DWT and ITM calls of the STM32 HAL and CMSIS behind sdk.hpp, the ADC completion callbacks
+// and the port's shared state (state.hpp). Family differences use the CMSIS family macros (STM32F4,
+// STM32G4, STM32H7, STM32L4) and the instance macros of the device header, here and in the other
+// boundary files only. Every rule over the shared state is in the platform-free files.
+// SPDX-License-Identifier: MIT Copyright (c) 2026 The port-stm32 authors
 #include <array>
+// Slot pointers shared with the interrupts are std::atomic.
+// misra-lint: ignore KB-CPP-012
+#include <atomic>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
 
 #include "kb/interfaces/types.hpp"
 #include "kb/port/stm32/adc.hpp"
+#include "kb/port/stm32/completion.hpp"
 #include "kb/port/stm32/error.hpp"
 #include "kb/port/stm32/gpio.hpp"
 #include "kb/port/stm32/irq.hpp"
 #include "kb/port/stm32/pwm.hpp"
 #include "kb/port/stm32/time.hpp"
-#include "kb/rtos/mutex.hpp"
-#include "kb/utils/time.hpp"
 #include "sdk.hpp"
+#include "state.hpp"
 #if defined(KB_PORT_STM32_G4)
 #include "stm32g4xx_hal.h"
 #elif defined(KB_PORT_STM32_H7)
@@ -29,6 +33,11 @@
 #else
 #error "define one of KB_PORT_STM32_G4, KB_PORT_STM32_H7, KB_PORT_STM32_F4, KB_PORT_STM32_L4"
 #endif
+#if defined(STM32H7) && defined(CORE_CM4)
+// The second core of a dual-core H7 has its own EXTI pending registers (C2PR1) and shares the
+// peripherals with the first: not supported (docs/families.md).
+#error "port-stm32 supports the Cortex-M7 of STM32H7 only, not CORE_CM4"
+#endif
 
 namespace kb::port::stm32::sdk {
 
@@ -39,10 +48,7 @@ static_assert(hal::kBusy == static_cast<uint32_t>(HAL_BUSY));
 static_assert(hal::kTimeout == static_cast<uint32_t>(HAL_TIMEOUT));
 
 namespace {
-constexpr std::size_t kPorts = 11U;
-constexpr std::size_t kLines = 16U;
-constexpr std::size_t kAdcs = 6U;
-constexpr std::size_t kTimers = 21U;
+constexpr std::size_t kPorts = kGpioPorts;
 
 [[nodiscard]] uint32_t Code(HAL_StatusTypeDef status, uint32_t error_code) noexcept {
   return VendorCode(static_cast<uint32_t>(status), error_code);
@@ -199,24 +205,6 @@ void PortClock(GpioPort port) noexcept {
   return s;
 }
 
-std::array<uint16_t, kPorts>& Claims() noexcept {
-  // codeql::misra_deviation_next_line(DEV-001)
-  static std::array<uint16_t, kPorts> claims{};
-  return claims;
-}
-
-struct ExtiSlot {
-  kb::iface::GpioCallback fn{nullptr};
-  void* context{nullptr};
-  GpioPort port{GpioPort::A};
-};
-
-std::array<ExtiSlot, kLines>& Exti() noexcept {
-  // codeql::misra_deviation_next_line(DEV-001)
-  static std::array<ExtiSlot, kLines> lines{};
-  return lines;
-}
-
 [[nodiscard]] IRQn_Type ExtiIrq(uint8_t line) noexcept {
   IRQn_Type irq = EXTI15_10_IRQn;
   if (line == 0U) {
@@ -240,14 +228,58 @@ std::array<ExtiSlot, kLines>& Exti() noexcept {
 // --- ADC -----------------------------------------------------------------------------------------
 struct AdcSlot {
   ADC_HandleTypeDef handle{};
-  uint32_t users{0U};
-  kb::rtos::Mutex lock;
+  std::atomic<Completion*> conversion{nullptr}; ///< The instance's completion while it is open.
 };
 
 std::array<AdcSlot, kAdcs>& Adcs() noexcept {
   // codeql::misra_deviation_next_line(DEV-001)
   static std::array<AdcSlot, kAdcs> adcs{};
   return adcs;
+}
+
+[[nodiscard]] IRQn_Type AdcIrq(uint8_t instance) noexcept {
+#if defined(STM32F4)
+  static_cast<void>(instance);
+  return ADC_IRQn; // ADC1 to ADC3 share one vector
+#elif defined(STM32H7)
+  IRQn_Type irq = ADC_IRQn; // ADC1 and ADC2
+#if defined(ADC3)
+  if (instance == 3U) {
+    irq = ADC3_IRQn;
+  }
+#endif
+  return irq;
+#elif defined(STM32G4)
+  IRQn_Type irq = ADC1_2_IRQn;
+#if defined(ADC3)
+  if (instance == 3U) {
+    irq = ADC3_IRQn;
+  }
+#endif
+#if defined(ADC4)
+  if (instance == 4U) {
+    irq = ADC4_IRQn;
+  }
+#endif
+#if defined(ADC5)
+  if (instance == 5U) {
+    irq = ADC5_IRQn;
+  }
+#endif
+  return irq;
+#else
+#if defined(ADC2)
+  IRQn_Type irq = ADC1_2_IRQn;
+#else
+  IRQn_Type irq = ADC1_IRQn;
+#endif
+#if defined(ADC3)
+  if (instance == 3U) {
+    irq = ADC3_IRQn;
+  }
+#endif
+  return irq;
+#endif
 }
 
 [[nodiscard]] ADC_TypeDef* AdcOf(uint8_t instance) noexcept {
@@ -312,7 +344,6 @@ void AdcClock(uint8_t instance) noexcept {
 }
 
 void AdcInitFields(ADC_HandleTypeDef& h) noexcept {
-  h.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
 #if !defined(STM32H7)
   h.Init.DataAlign = ADC_DATAALIGN_RIGHT; // H7: right aligned unless LeftBitShift says otherwise
 #endif
@@ -371,7 +402,8 @@ void AdcInitFields(ADC_HandleTypeDef& h) noexcept {
   static_cast<void>(h); // the F4 ADC has no calibration
   return hal::kOk;
 #elif defined(STM32H7)
-  const HAL_StatusTypeDef s = HAL_ADCEx_Calibration_Start(&h, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED);
+  const HAL_StatusTypeDef s =
+      HAL_ADCEx_Calibration_Start(&h, ADC_CALIB_OFFSET_LINEARITY, ADC_SINGLE_ENDED);
   return Code(s, h.ErrorCode);
 #else
   const HAL_StatusTypeDef s = HAL_ADCEx_Calibration_Start(&h, ADC_SINGLE_ENDED);
@@ -379,8 +411,8 @@ void AdcInitFields(ADC_HandleTypeDef& h) noexcept {
 #endif
 }
 
-[[nodiscard]] uint32_t AdcOne(ADC_HandleTypeDef& h, uint8_t channel, AdcSampling sampling,
-                              uint32_t conversion_ms, uint32_t& raw) noexcept {
+[[nodiscard]] uint32_t AdcStartOne(ADC_HandleTypeDef& h, uint8_t channel,
+                                   AdcSampling sampling) noexcept {
   ADC_ChannelConfTypeDef c{};
   c.Channel = AdcChannelOf(channel);
   c.SamplingTime = SamplingOf(sampling);
@@ -393,33 +425,17 @@ void AdcInitFields(ADC_HandleTypeDef& h) noexcept {
 #endif
   HAL_StatusTypeDef s = HAL_ADC_ConfigChannel(&h, &c);
   if (s == HAL_OK) {
-    s = HAL_ADC_Start(&h);
+    s = HAL_ADC_Start_IT(&h); // ends in HAL_ADC_ConvCpltCallback or HAL_ADC_ErrorCallback
   }
-  if (s == HAL_OK) {
-    s = HAL_ADC_PollForConversion(&h, conversion_ms);
-    raw = (s == HAL_OK) ? HAL_ADC_GetValue(&h) : 0U;
-    const HAL_StatusTypeDef stop = HAL_ADC_Stop(&h); // always, so the next conversion starts clean
-    s = (s == HAL_OK) ? stop : s;
-  }
-  return Code(s, h.ErrorCode);
+  // ErrorCode only when the start failed: the conversion may already have ended.
+  return (s == HAL_OK) ? hal::kOk : Code(s, h.ErrorCode);
 }
 
 // --- timers --------------------------------------------------------------------------------------
-struct TimerSlot {
-  TIM_HandleTypeDef handle{};
-  uint32_t users{0U};
-};
-
-std::array<TimerSlot, kTimers>& Timers() noexcept {
+std::array<TIM_HandleTypeDef, kTimers>& Timers() noexcept {
   // codeql::misra_deviation_next_line(DEV-001)
-  static std::array<TimerSlot, kTimers> timers{};
+  static std::array<TIM_HandleTypeDef, kTimers> timers{};
   return timers;
-}
-
-std::array<uint32_t, kTimers>& Wraps() noexcept {
-  // codeql::misra_deviation_next_line(DEV-001)
-  static std::array<uint32_t, kTimers> wraps{};
-  return wraps;
 }
 
 // The timers the port serves, by number, in two halves.
@@ -600,23 +616,40 @@ void TimerClock(uint8_t timer) noexcept {
   return kChannels[static_cast<std::size_t>(channel - 1U)];
 }
 
-[[nodiscard]] uint32_t TimerInit(TimerSlot& slot, uint8_t timer, const PwmPeriod& period) noexcept {
+[[nodiscard]] uint32_t TimerInit(TIM_HandleTypeDef& h, uint8_t timer,
+                                 const PwmPeriod& period) noexcept {
   TimerClock(timer);
-  slot.handle.Instance = TimerOf(timer);
-  slot.handle.Init.Prescaler = period.prescaler;
-  slot.handle.Init.CounterMode = TIM_COUNTERMODE_UP;
-  slot.handle.Init.Period = period.reload;
-  slot.handle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  slot.handle.Init.RepetitionCounter = 0U;
-  slot.handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
-  const HAL_StatusTypeDef s = HAL_TIM_PWM_Init(&slot.handle);
+  h.Instance = TimerOf(timer);
+  h.Init.Prescaler = period.prescaler;
+  h.Init.CounterMode = TIM_COUNTERMODE_UP;
+  h.Init.Period = period.reload;
+  h.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  h.Init.RepetitionCounter = 0U;
+  h.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  const HAL_StatusTypeDef s = HAL_TIM_PWM_Init(&h);
   return Code(s, 0U);
+}
+
+// True when the timer clock prescaler selection (TIMPRE) is set: the timer clock is then HCLK for
+// an APB divider up to 4 (F42x/F43x/F446 DCKCFGR, H7 CFGR).
+[[nodiscard]] bool TimerPrescalerSelect() noexcept {
+#if defined(RCC_DCKCFGR_TIMPRE)
+  return (RCC->DCKCFGR & RCC_DCKCFGR_TIMPRE) != 0U;
+#elif defined(RCC_CFGR_TIMPRE)
+  return (RCC->CFGR & RCC_CFGR_TIMPRE) != 0U;
+#else
+  return false;
+#endif
 }
 } // namespace
 
 // --- system --------------------------------------------------------------------------------------
 uint32_t TickMs() noexcept {
   return HAL_GetTick();
+}
+
+uint32_t TickPeriodMs() noexcept {
+  return static_cast<uint32_t>(HAL_GetTickFreq());
 }
 
 uint32_t CoreClockHz() noexcept {
@@ -629,34 +662,30 @@ uint32_t Cycles() noexcept {
 #if defined(STM32H7)
     DWT->LAR = 0xC5ACCE55U; // the Cortex-M7 DWT is locked after reset
 #endif
-    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk; // CYCCNT itself is never written
   }
   return DWT->CYCCNT;
+}
+
+uint32_t IrqMask() noexcept {
+  const uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+  return primask;
+}
+
+void IrqRestore(uint32_t saved) noexcept {
+  __set_PRIMASK(saved);
+}
+
+PortState& State() noexcept {
+  // codeql::misra_deviation_next_line(DEV-001)
+  static PortState state{};
+  return state;
 }
 
 // --- GPIO ----------------------------------------------------------------------------------------
 bool PortExists(GpioPort port) noexcept {
   return PortOf(port) != nullptr;
-}
-
-uint32_t PinClaim(PinId pin) noexcept {
-  uint16_t& claims = Claims()[static_cast<std::size_t>(pin.port)];
-  const uint32_t primask = __get_PRIMASK();
-  __disable_irq();
-  const bool free = (claims & MaskOf(pin)) == 0U;
-  if (free) {
-    claims = static_cast<uint16_t>(claims | MaskOf(pin));
-  }
-  __set_PRIMASK(primask);
-  return free ? hal::kOk : port_code::kOwned;
-}
-
-void PinUnclaim(PinId pin) noexcept {
-  uint16_t& claims = Claims()[static_cast<std::size_t>(pin.port)];
-  const uint32_t primask = __get_PRIMASK();
-  __disable_irq();
-  claims = static_cast<uint16_t>(claims & static_cast<uint16_t>(~MaskOf(pin)));
-  __set_PRIMASK(primask);
 }
 
 uint32_t PinOutput(PinId pin, bool open_drain, Pull pull, Speed speed, bool high) noexcept {
@@ -718,10 +747,7 @@ bool PinRead(PinId pin) noexcept {
 }
 
 void PinToggle(PinId pin) noexcept {
-  const uint32_t primask = __get_PRIMASK();
-  __disable_irq();
   HAL_GPIO_TogglePin(PortOf(pin.port), MaskOf(pin));
-  __set_PRIMASK(primask);
 }
 
 namespace {
@@ -733,34 +759,21 @@ namespace {
 }
 } // namespace
 
-uint32_t ExtiEnable(PinId pin, kb::iface::Edge edge, kb::iface::GpioCallback fn, void* context,
-                    uint8_t priority) noexcept {
-  ExtiSlot& slot = Exti()[pin.pin];
-  uint32_t code = port_code::kOwned; // the line belongs to the same pin number on another port
-  if ((slot.fn == nullptr) || (slot.port == pin.port)) {
-    __HAL_RCC_SYSCFG_CLK_ENABLE();
-    GPIO_InitTypeDef init{};
-    init.Pin = MaskOf(pin);
-    init.Mode = ExtiModeOf(edge);
-    init.Pull = PullBitsOf(pin);
-    init.Speed = GPIO_SPEED_FREQ_LOW;
-    slot.fn = nullptr; // no call while the line is reconfigured
-    slot.context = context;
-    slot.port = pin.port;
-    HAL_GPIO_Init(PortOf(pin.port), &init);
-    slot.fn = fn;
-    HAL_NVIC_SetPriority(ExtiIrq(pin.pin), priority, 0U);
-    HAL_NVIC_EnableIRQ(ExtiIrq(pin.pin));
-    code = hal::kOk;
-  }
-  return code;
+uint32_t ExtiConfigure(PinId pin, kb::iface::Edge edge, uint8_t priority) noexcept {
+  __HAL_RCC_SYSCFG_CLK_ENABLE();
+  GPIO_InitTypeDef init{};
+  init.Pin = MaskOf(pin);
+  init.Mode = ExtiModeOf(edge);
+  init.Pull = PullBitsOf(pin);
+  init.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(PortOf(pin.port), &init);
+  HAL_NVIC_SetPriority(ExtiIrq(pin.pin), priority, 0U);
+  HAL_NVIC_EnableIRQ(ExtiIrq(pin.pin));
+  return hal::kOk;
 }
 
-uint32_t ExtiDisable(PinId pin) noexcept {
-  ExtiSlot& slot = Exti()[pin.pin];
+uint32_t ExtiDeconfigure(PinId pin) noexcept {
   const uint32_t pull = PullBitsOf(pin);
-  slot.fn = nullptr;
-  slot.context = nullptr;
   HAL_GPIO_DeInit(PortOf(pin.port), MaskOf(pin)); // clears the EXTI line's configuration
   GPIO_InitTypeDef init{};
   init.Pin = MaskOf(pin);
@@ -771,9 +784,22 @@ uint32_t ExtiDisable(PinId pin) noexcept {
   return hal::kOk;
 }
 
+bool ExtiTakePending(uint8_t line) noexcept {
+  const uint32_t mask = 1U << line;
+  const bool pending = __HAL_GPIO_EXTI_GET_IT(mask) != 0U;
+  if (pending) {
+    __HAL_GPIO_EXTI_CLEAR_IT(mask);
+  }
+  return pending;
+}
+
 // --- ADC -----------------------------------------------------------------------------------------
 bool AdcExists(uint8_t instance, uint8_t channel) noexcept {
+#if defined(STM32F4)
+  constexpr uint8_t kMaxChannel = 18U; // IN0 to IN15, temperature, VREFINT, VBAT
+#else
   constexpr uint8_t kMaxChannel = 19U;
+#endif
   return (instance < kAdcs) && (AdcOf(instance) != nullptr) && (channel <= kMaxChannel);
 }
 
@@ -786,48 +812,77 @@ uint8_t AdcBits(uint8_t instance) noexcept {
 #endif
 }
 
-uint32_t AdcOpen(uint8_t instance) noexcept {
+namespace {
+// The ADC clock: the synchronous HCLK / 4 (PCLK2 / 4 on F4); on H7, when HCLK / 4 is above the
+// limit, the asynchronous kernel clock (RCC ADCSEL) with the smallest divider that meets it.
+[[nodiscard]] uint32_t AdcClockChoice(uint32_t& prescaler) noexcept {
+  prescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+#if defined(STM32F4)
+  const uint32_t sync_hz = HAL_RCC_GetPCLK2Freq() / 4U;
+#else
+  const uint32_t sync_hz = HAL_RCC_GetHCLKFreq() / 4U;
+#endif
+  uint32_t code = (sync_hz == 0U) ? port_code::kNoClock : hal::kOk;
+#if defined(STM32H7)
+  if ((code == hal::kOk) && (sync_hz > kH7AdcMaxHz)) {
+    constexpr std::array<uint32_t, kAdcAsyncDividers.size()> kAsync{
+        ADC_CLOCK_ASYNC_DIV1,  ADC_CLOCK_ASYNC_DIV2,   ADC_CLOCK_ASYNC_DIV4,
+        ADC_CLOCK_ASYNC_DIV6,  ADC_CLOCK_ASYNC_DIV8,   ADC_CLOCK_ASYNC_DIV10,
+        ADC_CLOCK_ASYNC_DIV12, ADC_CLOCK_ASYNC_DIV16,  ADC_CLOCK_ASYNC_DIV32,
+        ADC_CLOCK_ASYNC_DIV64, ADC_CLOCK_ASYNC_DIV128, ADC_CLOCK_ASYNC_DIV256};
+    const uint32_t kernel_hz = HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_ADC);
+    bool ok = false;
+    const std::size_t index = AdcAsyncDividerIndex(kernel_hz, kH7AdcMaxHz, ok);
+    prescaler = kAsync[index];
+    code = ok ? hal::kOk : ((kernel_hz == 0U) ? port_code::kNoClock : port_code::kUnsupported);
+  }
+#endif
+  return code;
+}
+} // namespace
+
+uint32_t AdcClockCheck() noexcept {
+  uint32_t prescaler = 0U;
+  return AdcClockChoice(prescaler);
+}
+
+uint32_t AdcOpen(uint8_t instance, Completion& conversion, uint8_t priority) noexcept {
   AdcSlot& slot = Adcs()[instance];
-  uint32_t code = hal::kOk;
-  if (slot.users == 0U) {
-    AdcClock(instance);
-    slot.handle.Instance = AdcOf(instance);
-    AdcInitFields(slot.handle);
-    const HAL_StatusTypeDef s = HAL_ADC_Init(&slot.handle);
-    code = Code(s, slot.handle.ErrorCode);
-    if (code == hal::kOk) {
-      code = AdcCalibrate(slot.handle);
-    }
-    static_cast<void>(slot.lock.Create());
+  AdcClock(instance);
+  slot.handle.Instance = AdcOf(instance);
+  AdcInitFields(slot.handle);
+  uint32_t prescaler = 0U;
+  static_cast<void>(AdcClockChoice(prescaler)); // checked by AdcClockCheck() before the open
+  slot.handle.Init.ClockPrescaler = prescaler;  // the HAL sets the H7 BOOST mode from it
+  const HAL_StatusTypeDef s = HAL_ADC_Init(&slot.handle);
+  uint32_t code = Code(s, slot.handle.ErrorCode);
+  if (code == hal::kOk) {
+    code = AdcCalibrate(slot.handle);
   }
   if (code == hal::kOk) {
-    ++slot.users;
+    slot.conversion.store(&conversion, std::memory_order_release);
+    HAL_NVIC_SetPriority(AdcIrq(instance), priority, 0U);
+    HAL_NVIC_EnableIRQ(
+        AdcIrq(instance)); // shared vectors stay enabled: the handler checks the slot
   }
   return code;
 }
 
 uint32_t AdcClose(uint8_t instance) noexcept {
   AdcSlot& slot = Adcs()[instance];
-  uint32_t code = hal::kOk;
-  if (slot.users > 0U) {
-    --slot.users;
-  }
-  if (slot.users == 0U) {
-    const HAL_StatusTypeDef s = HAL_ADC_DeInit(&slot.handle);
-    code = Code(s, slot.handle.ErrorCode);
-  }
-  return code;
+  slot.conversion.store(nullptr, std::memory_order_release);
+  const HAL_StatusTypeDef s = HAL_ADC_DeInit(&slot.handle);
+  return Code(s, slot.handle.ErrorCode);
 }
 
-uint32_t AdcConvert(uint8_t instance, uint8_t channel, AdcSampling sampling, uint32_t conversion_ms,
-                    uint32_t lock_ms, uint32_t& raw) noexcept {
-  AdcSlot& slot = Adcs()[instance];
-  uint32_t code = port_code::kLockTimeout;
-  if (slot.lock.TryLockFor(kb::Milliseconds{lock_ms})) {
-    code = AdcOne(slot.handle, channel, sampling, conversion_ms, raw);
-    slot.lock.Unlock();
-  }
-  return code;
+uint32_t AdcStart(uint8_t instance, uint8_t channel, AdcSampling sampling) noexcept {
+  return AdcStartOne(Adcs()[instance].handle, channel, sampling);
+}
+
+uint32_t AdcStop(uint8_t instance) noexcept {
+  ADC_HandleTypeDef& h = Adcs()[instance].handle;
+  const HAL_StatusTypeDef s = HAL_ADC_Stop_IT(&h);
+  return Code(s, h.ErrorCode);
 }
 
 // --- timers (PWM) --------------------------------------------------------------------------------
@@ -838,15 +893,24 @@ bool TimerExists(uint8_t timer) noexcept {
 uint32_t TimerClockHz(uint8_t timer) noexcept {
   const uint32_t hclk = HAL_RCC_GetHCLKFreq();
   const uint32_t pclk = OnApb2(timer) ? HAL_RCC_GetPCLK2Freq() : HAL_RCC_GetPCLK1Freq();
-  return (pclk == hclk) ? pclk : (2U * pclk); // the timer clock doubles behind an APB divider
+  uint32_t hz = 0U;
+  if (pclk == 0U) {
+    hz = 0U;
+  } else if (TimerPrescalerSelect()) {
+    hz = ((hclk / pclk) <= 4U) ? hclk : (4U * pclk);
+  } else {
+    hz = (pclk == hclk) ? pclk : (2U * pclk); // the timer clock doubles behind an APB divider
+  }
+  return hz;
 }
 
-uint32_t PwmOpen(const PwmConfig& config, const PwmPeriod& period) noexcept {
-  TimerSlot& slot = Timers()[config.timer];
-  uint32_t code = (slot.users == 0U) ? TimerInit(slot, config.timer, period) : hal::kOk;
-  if (code == hal::kOk) {
-    code = PinAlternate(config.pin, false, Pull::None);
-  }
+uint32_t PwmInit(uint8_t timer, const PwmPeriod& period) noexcept {
+  return TimerInit(Timers()[timer], timer, period);
+}
+
+uint32_t PwmStart(uint8_t timer, uint8_t channel, PinId pin) noexcept {
+  TIM_HandleTypeDef& h = Timers()[timer];
+  uint32_t code = PinAlternate(pin, false, Pull::None);
   if (code == hal::kOk) {
     TIM_OC_InitTypeDef oc{};
     oc.OCMode = TIM_OCMODE_PWM1;
@@ -856,20 +920,17 @@ uint32_t PwmOpen(const PwmConfig& config, const PwmPeriod& period) noexcept {
     oc.OCFastMode = TIM_OCFAST_DISABLE;
     oc.OCIdleState = TIM_OCIDLESTATE_RESET;
     oc.OCNIdleState = TIM_OCNIDLESTATE_RESET;
-    HAL_StatusTypeDef s = HAL_TIM_PWM_ConfigChannel(&slot.handle, &oc, ChannelOf(config.channel));
+    HAL_StatusTypeDef s = HAL_TIM_PWM_ConfigChannel(&h, &oc, ChannelOf(channel));
     if (s == HAL_OK) {
-      s = HAL_TIM_PWM_Start(&slot.handle, ChannelOf(config.channel));
+      s = HAL_TIM_PWM_Start(&h, ChannelOf(channel));
     }
     code = Code(s, 0U);
-  }
-  if (code == hal::kOk) {
-    ++slot.users;
   }
   return code;
 }
 
 uint32_t PwmSetPeriod(uint8_t timer, const PwmPeriod& period) noexcept {
-  TIM_HandleTypeDef& h = Timers()[timer].handle;
+  TIM_HandleTypeDef& h = Timers()[timer];
   __HAL_TIM_SET_PRESCALER(&h, period.prescaler);
   __HAL_TIM_SET_AUTORELOAD(&h, period.reload);
   const HAL_StatusTypeDef s = HAL_TIM_GenerateEvent(&h, TIM_EVENTSOURCE_UPDATE);
@@ -877,19 +938,17 @@ uint32_t PwmSetPeriod(uint8_t timer, const PwmPeriod& period) noexcept {
 }
 
 void PwmSetCompare(uint8_t timer, uint8_t channel, uint32_t compare) noexcept {
-  TIM_HandleTypeDef& h = Timers()[timer].handle;
+  TIM_HandleTypeDef& h = Timers()[timer];
   __HAL_TIM_SET_COMPARE(&h, ChannelOf(channel), compare);
 }
 
-uint32_t PwmClose(uint8_t timer, uint8_t channel) noexcept {
-  TimerSlot& slot = Timers()[timer];
-  HAL_StatusTypeDef s = HAL_TIM_PWM_Stop(&slot.handle, ChannelOf(channel));
-  if (slot.users > 0U) {
-    --slot.users;
-  }
-  if ((s == HAL_OK) && (slot.users == 0U)) {
-    s = HAL_TIM_PWM_DeInit(&slot.handle);
-  }
+uint32_t PwmStop(uint8_t timer, uint8_t channel) noexcept {
+  const HAL_StatusTypeDef s = HAL_TIM_PWM_Stop(&Timers()[timer], ChannelOf(channel));
+  return Code(s, 0U);
+}
+
+uint32_t PwmDeInit(uint8_t timer) noexcept {
+  const HAL_StatusTypeDef s = HAL_TIM_PWM_DeInit(&Timers()[timer]);
   return Code(s, 0U);
 }
 
@@ -900,99 +959,109 @@ bool ClockTimerExists(uint8_t timer) noexcept {
 
 uint32_t ClockStart(const ClockConfig& config) noexcept {
   constexpr uint32_t kTickHz = 1000000U;
-  TimerSlot& slot = Timers()[config.timer];
-  uint32_t code = hal::kOk;
-  if (slot.users == 0U) {
-    const uint32_t clock =
-        (config.timer_clock_hz != 0U) ? config.timer_clock_hz : TimerClockHz(config.timer);
-    TimerClock(config.timer);
-    slot.handle.Instance = TimerOf(config.timer);
-    slot.handle.Init.Prescaler = ((clock + (kTickHz / 2U)) / kTickHz) - 1U;
-    slot.handle.Init.CounterMode = TIM_COUNTERMODE_UP;
-    slot.handle.Init.Period = 0xFFFFFFFFU;
-    slot.handle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-    slot.handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-    HAL_StatusTypeDef s = HAL_TIM_Base_Init(&slot.handle);
-    if (s == HAL_OK) {
-      __HAL_TIM_CLEAR_FLAG(&slot.handle, TIM_FLAG_UPDATE);
-      __HAL_TIM_ENABLE_IT(&slot.handle, TIM_IT_UPDATE);
-      const IRQn_Type irq = (config.timer == 2U) ? TIM2_IRQn : TIM5_IRQn;
-      HAL_NVIC_SetPriority(irq, config.irq_priority, 0U);
-      HAL_NVIC_EnableIRQ(irq);
-      s = HAL_TIM_Base_Start(&slot.handle);
-    }
-    code = Code(s, 0U);
-    slot.users = (code == hal::kOk) ? 1U : 0U;
+  TIM_HandleTypeDef& h = Timers()[config.timer];
+  TimerClock(config.timer);
+  h.Instance = TimerOf(config.timer);
+  h.Init.Prescaler = ((config.timer_clock_hz + (kTickHz / 2U)) / kTickHz) - 1U;
+  h.Init.CounterMode = TIM_COUNTERMODE_UP;
+  h.Init.Period = 0xFFFFFFFFU;
+  h.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  h.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  HAL_StatusTypeDef s = HAL_TIM_Base_Init(&h);
+  if (s == HAL_OK) {
+    __HAL_TIM_SET_COUNTER(&h, 0U); // a timer keeps counting across a jump from a loader
+    __HAL_TIM_CLEAR_FLAG(&h, TIM_FLAG_UPDATE);
+    __HAL_TIM_ENABLE_IT(&h, TIM_IT_UPDATE);
+    const IRQn_Type irq = (config.timer == 2U) ? TIM2_IRQn : TIM5_IRQn;
+    HAL_NVIC_SetPriority(irq, config.irq_priority, 0U);
+    HAL_NVIC_EnableIRQ(irq);
+    s = HAL_TIM_Base_Start(&h);
   }
-  return code;
+  return Code(s, 0U);
 }
 
-void ClockSample(uint8_t timer, uint32_t& high_before, uint32_t& counter, uint32_t& high_after,
-                 bool& wrap_pending) noexcept {
-  TimerSlot& slot = Timers()[timer];
-  if (slot.users == 0U) {
-    high_before = 0U;
-    counter = 0U;
-    high_after = 0U;
-    wrap_pending = false;
-  } else {
-    const volatile uint32_t& wraps = Wraps()[timer];
-    high_before = wraps;
-    counter = slot.handle.Instance->CNT;
-    high_after = wraps;
-    wrap_pending = __HAL_TIM_GET_FLAG(&slot.handle, TIM_FLAG_UPDATE) != 0U;
-  }
+uint32_t ClockCounter(uint8_t timer) noexcept {
+  return Timers()[timer].Instance->CNT;
+}
+
+bool ClockWrapPending(uint8_t timer) noexcept {
+  return __HAL_TIM_GET_FLAG(&Timers()[timer], TIM_FLAG_UPDATE) != 0U;
+}
+
+void ClockIrqOff(uint8_t timer) noexcept {
+  HAL_NVIC_DisableIRQ((timer == 5U) ? TIM5_IRQn : TIM2_IRQn);
+}
+
+void ClockClearWrap(uint8_t timer) noexcept {
+  __HAL_TIM_CLEAR_FLAG(&Timers()[timer], TIM_FLAG_UPDATE);
 }
 
 // --- ITM -----------------------------------------------------------------------------------------
 bool ItmEnabled() noexcept {
-  return ((ITM->TCR & ITM_TCR_ITMENA_Msk) != 0U) && ((ITM->TER & 1U) != 0U);
+  const uint32_t tcr = ITM->TCR;
+  const uint32_t ter = ITM->TER;
+  return ((tcr & ITM_TCR_ITMENA_Msk) != 0U) && ((ter & 1U) != 0U);
 }
 
-bool ItmPut(char c, uint32_t spins) noexcept {
-  uint32_t left = spins;
-  while ((ITM->PORT[0U].u32 == 0U) && (left > 0U)) {
-    --left;
-  }
-  const bool free = ITM->PORT[0U].u32 != 0U;
-  if (free) {
-    ITM->PORT[0U].u8 = std::bit_cast<uint8_t>(c); // the same bits, no numeric conversion
-  }
-  return free;
+bool ItmPortFree() noexcept {
+  return ITM->PORT[0U].u32 != 0U;
 }
 
-// --- interrupt entry points ----------------------------------------------------------------------
-void HandleExtiIrq(uint8_t first, uint8_t last) noexcept {
-  for (uint8_t line = first; (line <= last) && (line < kLines); ++line) {
-    const uint32_t mask = 1U << line;
-    if (__HAL_GPIO_EXTI_GET_IT(mask) != 0U) {
-      __HAL_GPIO_EXTI_CLEAR_IT(mask);
-      const ExtiSlot& slot = Exti()[line];
-      if (slot.fn != nullptr) {
-        slot.fn(slot.context);
-      }
+void ItmWrite(char c) noexcept {
+  ITM->PORT[0U].u8 = std::bit_cast<uint8_t>(c); // the same bits, no numeric conversion
+}
+
+namespace {
+// The slot of the ADC handle `h`, or nullptr.
+[[nodiscard]] AdcSlot* AdcSlotOf(const ADC_HandleTypeDef* h) noexcept {
+  AdcSlot* found = nullptr;
+  for (AdcSlot& slot : Adcs()) {
+    if (&slot.handle == h) {
+      found = &slot;
     }
   }
+  return found;
 }
-
-void HandleClockIrq(uint8_t timer) noexcept {
-  if (timer < kTimers) {
-    TimerSlot& slot = Timers()[timer];
-    if ((slot.users != 0U) && (__HAL_TIM_GET_FLAG(&slot.handle, TIM_FLAG_UPDATE) != 0U)) {
-      __HAL_TIM_CLEAR_FLAG(&slot.handle, TIM_FLAG_UPDATE);
-      ++Wraps()[timer];
-    }
-  }
-}
+} // namespace
 
 } // namespace kb::port::stm32::sdk
 
 namespace kb::port::stm32 {
-// The public entry points (irq.hpp) are the boundary's: they reach the tables above.
-void HandleExtiIrq(uint8_t first, uint8_t last) noexcept {
-  sdk::HandleExtiIrq(first, last);
-}
-void HandleClockIrq(uint8_t timer) noexcept {
-  sdk::HandleClockIrq(timer);
+// The interrupt entry point (irq.hpp): the HAL's ADC handler of each open instance on the vector.
+void HandleAdcIrq(uint8_t first, uint8_t last) noexcept {
+  bool any = false;
+  for (uint8_t i = first; (i <= last) && (i < kAdcs); ++i) {
+    sdk::AdcSlot& slot = sdk::Adcs()[i];
+    if (slot.conversion.load(std::memory_order_acquire) != nullptr) {
+      any = true;
+      HAL_ADC_IRQHandler(&slot.handle);
+    }
+  }
+  if (!any) {
+    HAL_NVIC_DisableIRQ(sdk::AdcIrq(first)); // no instance of the vector is the port's
+  }
 }
 } // namespace kb::port::stm32
+
+// The HAL's ADC callbacks (weak in the HAL, defined here): the end of the conversion the port
+// started. C linkage and global names by definition.
+extern "C" {
+// NOLINTBEGIN(readability-identifier-naming): the HAL fixes these names
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
+  kb::port::stm32::sdk::AdcSlot* const slot = kb::port::stm32::sdk::AdcSlotOf(hadc);
+  kb::port::stm32::Completion* const done =
+      (slot != nullptr) ? slot->conversion.load(std::memory_order_acquire) : nullptr;
+  if (done != nullptr) {
+    done->Complete(kb::port::stm32::hal::kOk, HAL_ADC_GetValue(hadc));
+  }
+}
+void HAL_ADC_ErrorCallback(ADC_HandleTypeDef* hadc) {
+  kb::port::stm32::sdk::AdcSlot* const slot = kb::port::stm32::sdk::AdcSlotOf(hadc);
+  kb::port::stm32::Completion* const done =
+      (slot != nullptr) ? slot->conversion.load(std::memory_order_acquire) : nullptr;
+  if (done != nullptr) {
+    done->Complete(kb::port::stm32::VendorCode(static_cast<uint32_t>(HAL_ERROR), hadc->ErrorCode));
+  }
+}
+// NOLINTEND(readability-identifier-naming)
+} // extern "C"

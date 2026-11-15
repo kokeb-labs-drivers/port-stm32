@@ -15,6 +15,8 @@ function(kb_port_stm32_variant name)
   add_library(${name}_hal STATIC "${_fakes}/fake_stm32_hal.cpp")
   target_include_directories(${name}_hal PUBLIC "${_fakes}" "${_fakes}/include")
   target_compile_definitions(${name}_hal PUBLIC ${ARG_DEFINES})
+  # The fake runs the port's interrupt entry points as the hardware would (irq.hpp).
+  target_link_libraries(${name}_hal PRIVATE kb_port_stm32_api)
   target_compile_options(${name}_hal PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra -Wpedantic -Wshadow -Wundef
                          -Werror)
   add_library(${name} STATIC ${_logic} ${_boundary} ${_vectors})
@@ -32,7 +34,7 @@ add_custom_target(kb_port_stm32_scan)
 add_dependencies(kb_port_stm32_scan kb_port_stm32_g4 kb_port_stm32_f4)
 
 set(_tests test_error.cpp test_i2c.cpp test_spi.cpp test_uart.cpp test_gpio.cpp test_adc_pwm.cpp test_can.cpp
-    test_time_log.cpp test_contracts.cpp)
+    test_time_log.cpp test_clock_read.cpp test_wait.cpp test_contracts.cpp)
 foreach(_v IN ITEMS g4 f4)
   set(_name kb_port_stm32_tests_${_v})
   add_executable(${_name} "${_harness}/kb_test_main.cpp" ${_tests})
@@ -42,6 +44,10 @@ foreach(_v IN ITEMS g4 f4)
   target_link_libraries(${_name} PRIVATE kb_port_stm32_${_v})
   add_test(NAME ${_name} COMMAND ${_name})
 endforeach()
+
+# The configure-time RTOS logic (cmake/kb_port_stm32_rtos.cmake): every KB_RTOS spelling, the FreeRTOSConfig.h read.
+add_test(NAME kb_port_stm32_rtos_config
+         COMMAND ${CMAKE_COMMAND} "-DROOT=${PROJECT_SOURCE_DIR}" -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/test_rtos.cmake")
 
 # Each public header compiles on its own as ISO C++20 with the strict flags.
 set(_headers adc can error gpio i2c irq log port pwm spi time uart version)

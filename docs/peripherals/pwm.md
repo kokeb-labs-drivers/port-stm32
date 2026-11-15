@@ -14,10 +14,15 @@
 | `Release()` | `HAL_TIM_PWM_Stop`; `HAL_TIM_PWM_DeInit` with the last channel of the timer |
 
 `ComputePwmPeriod()` picks the smallest prescaler whose period fits the 16-bit auto-reload, so the duty has the
-finest steps the timer allows (ARR + 1 steps). Channels of one timer share its frequency: the last
-`SetFrequencyHz()` wins. Advanced timers (TIM1, TIM8, TIM20) get their main output enabled by the HAL. One
-`PwmChannel` per timer channel: the port counts the channels of a timer but does not refuse a second object on the
-same channel.
+finest steps the timer allows (ARR + 1 steps). Advanced timers (TIM1, TIM8, TIM20) get their main output enabled by
+the HAL. One `PwmChannel` per timer channel: the port counts the channels of a timer but does not refuse a second
+object on the same channel.
+
+Timer ownership is enforced: the timer of a running `Clock` (TIM2 or TIM5) is refused (`Busy`, port code
+`kOwned`), since a PWM channel there would rewrite its prescaler and stop the clock at release. The channels of one
+timer share its prescaler and auto-reload, so they must run at one frequency: a channel at another frequency than
+the timer's other channels is refused (`InvalidArgument`, port code `kConflict`), and `SetFrequencyHz()` on a
+channel whose timer has other channels open is refused the same way.
 
 ## Pins and clock
 
@@ -39,5 +44,6 @@ generates (the counter restarts).
 | Result | When |
 | --- | --- |
 | `Ok` | Done |
-| `InvalidArgument` | Frequency 0 or above timer clock / 2, a timer, channel or pin the device does not have |
-| `NotReady` | Before `EnsureReady()` |
+| `InvalidArgument` | Frequency 0 or above timer clock / 2, a timer, channel or pin the device does not have; another frequency on a shared timer (`kConflict`) |
+| `Busy` | The timer is the clock's (`kOwned`) |
+| `NotReady` | Before `EnsureReady()`; or the timer clock reads 0 Hz |

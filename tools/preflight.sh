@@ -49,10 +49,20 @@ coverage() {
 complexity() { library | xargs lizard -l cpp -m -w -C 15 -L 60 -a 6; }
 tidy_run() {
   local sdk=(); [ "$(uname)" = Darwin ] && sdk=(--extra-arg=-isysroot "--extra-arg=$(xcrun --show-sdk-path)")
-  local f bad=0
+  local f bad=0 tidy18
+  # The configuration must be valid for clang-tidy 20 (lint job) and 18 (host job, when installed): a key a
+  # version does not know makes it report nothing, which once passed CI silently.
+  clang-tidy --verify-config --config-file=_config/.clang-tidy || bad=1
+  tidy18="$(command -v clang-tidy-18 || true)"
+  # clang-tidy 18 only warns about the newer checks it does not know (it skips them); an unknown key is an error.
+  if [ -n "$tidy18" ] && "$tidy18" --verify-config --config-file=_config/.clang-tidy 2>&1 | grep -E 'error:'; then
+    bad=1
+  fi
   for f in src/*.cpp; do
-    clang-tidy -p "$out/clang" --config-file=_config/.clang-tidy "${sdk[@]}" --quiet "$f" 2>/dev/null |
-      grep -E '(warning|error):' && bad=1
+    # stderr kept: a configuration error is an error, not silence. Compiler warnings echoed by clang-tidy are
+    # not findings; "N warnings generated" lines are dropped.
+    clang-tidy -p "$out/clang" --config-file=_config/.clang-tidy "${sdk[@]}" --quiet "$f" 2>&1 |
+      grep -v 'warnings\? generated' | grep -E '(warning|error):' && bad=1
   done
   [ "$bad" = 0 ]
 }
