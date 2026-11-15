@@ -1,10 +1,10 @@
 # kb::rtos: depends on kb::utils. The typed API is header-only (kb_rtos_api); KB_RTOS selects the one backend that
-# kb::rtos links (lib/rtos/README.md):
+# kb::rtos links (components/lib/rtos/README.md):
 #   NONE      backends/none/          no scheduler, deterministic (host default)
-#   HOST      host/rtos/              std::thread, PC tests only, outside the MISRA claim
+#   HOST      the host port (paths.yml: host_port): std::thread, PC tests only, outside the MISRA claim
 #   FREERTOS  backends/freertos/      the boundary files; ESP-IDF provides the kernel, elsewhere KB_FREERTOS_INCLUDE_DIRS
 #   THREADX   planned (backends/threadx/README.md)
-# With KB_BUILD_TESTS the none backend, the FreeRTOS boundary over the fake kernel (tests/fakes/freertos) and, on a
+# With KB_BUILD_TESTS (or KB_BUILD_EXAMPLES) the none backend, the FreeRTOS boundary over the fake kernel (tests/fakes/freertos) and, on a
 # host build, the std::thread backend are all built, each tested against the same API tests.
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 The kb-core authors
@@ -24,8 +24,8 @@ if(KB_BUILD_TESTS OR KB_RTOS STREQUAL "FREERTOS")
 endif()
 
 string(TOLOWER "${KB_RTOS}" _kb_backend)
-if(KB_RTOS STREQUAL "HOST" OR (KB_BUILD_TESTS AND NOT CMAKE_CROSSCOMPILING))
-  add_subdirectory("${KB_ROOT}/host/rtos" "${CMAKE_CURRENT_BINARY_DIR}/host-backend")
+if(KB_RTOS STREQUAL "HOST" OR ((KB_BUILD_TESTS OR KB_BUILD_EXAMPLES) AND NOT CMAKE_CROSSCOMPILING))
+  add_subdirectory("${KB_HOST_PORT_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/host-backend")
 endif()
 target_link_libraries(kb_rtos INTERFACE kb_rtos_api kb_rtos_backend_${_kb_backend})
 install(TARGETS kb_rtos_api kb_rtos_backend_${_kb_backend} EXPORT kb_rtosTargets)
@@ -41,7 +41,7 @@ if(KB_BUILD_TESTS)
   set_property(GLOBAL APPEND PROPERTY KB_CROSS_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/backends/freertos/freertos_boundary.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/backends/freertos/freertos_isr.cpp")
-  set_property(GLOBAL APPEND PROPERTY KB_CROSS_SYSTEM_INCLUDES "${KB_ROOT}/tests/fakes/freertos")
+  set_property(GLOBAL APPEND PROPERTY KB_CROSS_SYSTEM_INCLUDES "${KB_TESTS_DIR}/fakes/freertos")
 endif()
 
 if(KB_BUILD_TESTS AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")

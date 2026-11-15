@@ -3,10 +3,10 @@
  * @brief The seam between kb::rtos's typed API and one RTOS backend: opaque storage and the backend
  * functions.
  *
- * Exactly one backend folder (`lib/rtos/backends/<rtos>/`, or `host/rtos/` for the std::thread test
- * backend) defines these functions; `KB_RTOS` selects it. Application code never calls them: it
- * uses the classes in mutex.hpp, semaphore.hpp, queue.hpp, event_flags.hpp, timer.hpp, thread.hpp
- * and the functions in time.hpp.
+ * Exactly one backend folder (`components/lib/rtos/backends/<rtos>/`, or `components/ports/host/`
+ * for the std::thread test backend) defines these functions; `KB_RTOS` selects it. Application code
+ * never calls them: it uses the classes in mutex.hpp, semaphore.hpp, queue.hpp, event_flags.hpp,
+ * timer.hpp, thread.hpp and the functions in time.hpp.
  *
  * Each RTOS object lives in an `OpaqueStorage<Bytes>` inside the kb object: bytes sized and aligned
  * for the largest backend's native object (each backend `static_assert`s that its object fits),

@@ -1,5 +1,5 @@
 # The drivers kb-core knows: the driver.yml name (also the KB_ENABLE_<NAME> switch, upper-cased) and the repository
-# folder under drivers/. A driver is used only when its switch is ON; its checkout is drivers/driver-<slug> (a
+# folder under components/drivers/. A driver is used only when its switch is ON; its checkout is components/drivers/driver-<slug> (a
 # submodule, ADR-0002) unless KB_DRIVER_<NAME>_DIR points elsewhere.
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 The kb-core authors

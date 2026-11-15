@@ -1,7 +1,7 @@
 /**
  * @file host_backend.cpp
  * @brief The `host` RTOS backend: kb::rtos over the C++ standard thread library, for PC tests. Test
- * code, outside the MISRA claim (host/rtos/README.md).
+ * code, outside the MISRA claim (components/ports/host/README.md).
  *
  * Every object is a standard-library object constructed in the kb object's opaque storage. Waits
  * use steady_clock deadlines; the tick is one millisecond of that clock. Timers run on one thread

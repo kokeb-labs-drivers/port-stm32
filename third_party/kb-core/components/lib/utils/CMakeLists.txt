@@ -1,4 +1,4 @@
-# kb::utils: depends on nothing (lib/utils/README.md). Header-only.
+# kb::utils: depends on nothing (components/lib/utils/README.md). Header-only.
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 The kb-core authors
 kb_add_part(utils)

@@ -1,6 +1,6 @@
 # kb::interfaces: the contracts (C++20 concepts and *Ref values, ADR-0006) over kb::rtos and kb::utils, and the
-# platform-free host test port in host/ (lib/interfaces/README.md). MCU ports are separate CMake projects in
-# ports/<mcu>/ (ADR-0007) and are never added from here. Only the HAL, kb::handlers and the MCU ports use this target.
+# platform-free host test port in host/ (components/lib/interfaces/README.md). MCU ports are separate CMake projects in
+# components/ports/<mcu>/ (ADR-0007) and are never added from here. Only the HAL, kb::handlers and the MCU ports use this target.
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 The kb-core authors
 kb_add_part(interfaces DEPENDS rtos utils)
