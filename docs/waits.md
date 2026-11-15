@@ -84,5 +84,5 @@ for bus calls). The port is built so that it maps onto it without a new HAL path
   same port clock, and the same stop-and-restore runs when the caller gives up;
 - the blocking calls stay, written as `Start()` followed by `Completion::Wait()`.
 
-The change is then local to the platform-free files (`i2c.cpp`, `spi.cpp`, `adc_pwm.cpp`,
+The change is then local to the platform-free files (`i2c.cpp`, `spi.cpp`, `adc.cpp`, `pwm.cpp`,
 `uart.cpp`, `can.cpp`); the boundary files and the HAL callbacks stay as they are.

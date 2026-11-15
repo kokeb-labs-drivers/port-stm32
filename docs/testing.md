@@ -17,7 +17,7 @@ UART word).
 
 | Test | Proves |
 | --- | --- |
-| `kb_port_stm32_tests_g4` | Every member of every type, every refusal and every HAL error path, over a G4-like device: I2C v2 (TIMINGR), FDCAN, ADC calibration; the `*Ref` of each contract at run time; the clock's read rule over every interleaving of its reads with the wrap interrupt (`test_clock_read.cpp`); the waits with the HAL tick stopped and with no clock at all (`test_wait.cpp`) |
+| `kb_port_stm32_tests_g4` | Every member of every type, every refusal and every HAL error path, over a G4-like device: I2C v2 (TIMINGR), FDCAN, ADC calibration; the `*Ref` of each contract at run time; the clock's read rule over every interleaving of its reads with the wrap interrupt (`test_clock_read.cpp`); the waits with the HAL tick stopped and with no clock at all (`test_completion.cpp`) |
 | `kb_port_stm32_tests_f4` | The same tests over an F4-like device: I2C v1 (ClockSpeed), bxCAN, no ADC calibration, the SR-register UART flags |
 | `kb_port_stm32_compile_fail_*` | Misuse is a compile error: a `*Ref` of the wrong contract, a copied controller, an output pin as an input |
 | `kb_port_stm32_header_checks` | Each public header compiles on its own as ISO C++20 with the strict flags |

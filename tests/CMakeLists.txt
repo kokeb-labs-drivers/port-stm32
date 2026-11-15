@@ -33,8 +33,8 @@ kb_port_stm32_variant(kb_port_stm32_f4 DEFINES KB_PORT_STM32_F4 KB_FAKE_STM32F4)
 add_custom_target(kb_port_stm32_scan)
 add_dependencies(kb_port_stm32_scan kb_port_stm32_g4 kb_port_stm32_f4)
 
-set(_tests test_error.cpp test_i2c.cpp test_spi.cpp test_uart.cpp test_gpio.cpp test_adc_pwm.cpp test_can.cpp
-    test_time_log.cpp test_clock_read.cpp test_wait.cpp test_contracts.cpp)
+set(_tests test_error.cpp test_i2c.cpp test_spi.cpp test_uart.cpp test_gpio.cpp test_adc.cpp test_pwm.cpp test_can.cpp
+    test_time.cpp test_log.cpp test_clock_read.cpp test_completion.cpp test_contracts.cpp)
 foreach(_v IN ITEMS g4 f4)
   set(_name kb_port_stm32_tests_${_v})
   add_executable(${_name} "${_harness}/kb_test_main.cpp" ${_tests})

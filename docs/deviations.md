@@ -20,7 +20,7 @@ vendor code; a callback or an interrupt entry finds the owner of the handle and 
 is in the platform-free files, which include no HAL header and have **no deviation**: what a code means, retries,
 recovery and the BUSY reset, locking, timing arithmetic and the waits (`src/time.cpp`), the UART's byte handling,
 the CAN receive ring, pin claims and the EXTI table (`src/gpio.cpp`), timer ownership and the shared ADC instances
-(`src/adc_pwm.cpp`), the clock's read rule (`src/clock_read.hpp`) and its wrap count. The layering check (`ci-layering.yml`)
+(`src/adc.cpp`, `src/pwm.cpp`), the clock's read rule (`src/clock_read.hpp`) and its wrap count. The layering check (`ci-layering.yml`)
 enforces the boundary, and its poison build compiles the platform-free code with every HAL header replaced by one
 that stops the build.
 
