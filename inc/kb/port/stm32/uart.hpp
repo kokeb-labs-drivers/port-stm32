@@ -157,7 +157,8 @@ private:
   void onErrors(uint32_t flags) noexcept;
   void onTxEmpty() noexcept;
   void count(uint32_t UartStats::* field, uint32_t n = 1U) noexcept;
-  [[nodiscard]] kb::Status sendLocked(bool wait_complete, kb::Milliseconds timeout) noexcept;
+  [[nodiscard]] kb::Status sendLocked(std::span<const uint8_t> tx, bool wait_complete,
+                                      kb::Milliseconds timeout) noexcept;
   [[nodiscard]] bool configValid() const noexcept;
   [[nodiscard]] kb::Status writeLocked(std::span<const uint8_t> tx) noexcept;
   [[nodiscard]] kb::Result<std::size_t> readLocked(std::span<uint8_t> rx,
@@ -174,7 +175,10 @@ private:
   kb::utils::SpscRing<uint32_t, 4U> errors_;
   Completion rx_wake_; ///< Notified by every received byte and error.
   Completion tx_done_; ///< Completed when a Write() or WaitTxDone() has finished.
-  std::span<const uint8_t> tx_data_;
+  // The frame the transmit interrupt sends: the size is stored last with release order before the
+  // interrupt is enabled, and read first with acquire order by the interrupt.
+  std::atomic<const uint8_t*> tx_data_{nullptr};
+  std::atomic<std::size_t> tx_size_{0U};
   std::atomic<std::size_t> tx_next_{0U};
   std::atomic<bool> tx_wait_complete_{false};
   uint16_t rx_mask_{0xFFU};

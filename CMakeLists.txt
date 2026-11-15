@@ -17,6 +17,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(KB_PORT_STM32_BUILD_TESTS "Build the host tests against the HAL fakes" OFF)
 option(KB_PORT_STM32_VECTORS "Define the interrupt vectors the port serves (USART, EXTI, TIM2/TIM5, I2C, SPI, ADC, CAN)" ON)
+set(KB_PORT_STM32_VECTORS_EXCLUDE "" CACHE STRING
+    "Vectors the application keeps for itself, e.g. USART1_IRQHandler;EXTI15_10_IRQHandler (docs/integration.md)")
 set(KB_PORT_STM32_DEVICE "" CACHE STRING "CMSIS device macro, e.g. STM32G474xx (empty: off target)")
 set(KB_PORT_STM32_HAL_CONF_DIR "" CACHE PATH "Folder of the application's stm32<family>xx_hal_conf.h")
 
@@ -34,6 +36,18 @@ add_library(kb_port_stm32_api INTERFACE)
 target_compile_features(kb_port_stm32_api INTERFACE cxx_std_20)
 target_include_directories(kb_port_stm32_api INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>")
 target_link_libraries(kb_port_stm32_api INTERFACE kb::interfaces kb::rtos kb::utils)
+# The lowest NVIC priority number of an interrupt that gives a kb::rtos semaphore (error.hpp): under FreeRTOS
+# configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY. EnsureReady() refuses a lower number (a more urgent interrupt).
+set(KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY "0" CACHE STRING "Lowest NVIC priority of an RTOS-calling interrupt (0-15)")
+if(NOT KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY MATCHES "^([0-9]|1[0-5])$")
+  message(FATAL_ERROR "[kb-port-stm32] KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY must be 0 to 15")
+endif()
+target_compile_definitions(kb_port_stm32_api INTERFACE
+  "KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY=${KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY}U")
+# Whether kb::rtos takes and sleeps block (completion.hpp: the bound of a wait when the clocks stop).
+if(KB_RTOS STREQUAL "FREERTOS" OR KB_RTOS STREQUAL "HOST")
+  target_compile_definitions(kb_port_stm32_api INTERFACE KB_PORT_STM32_RTOS_BLOCKS=1)
+endif()
 
 list(TRANSFORM KB_PORT_STM32_LOGIC_SOURCES PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/" OUTPUT_VARIABLE _kb_port_logic)
 list(TRANSFORM KB_PORT_STM32_BOUNDARY_SOURCES PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/" OUTPUT_VARIABLE _kb_port_boundary)
@@ -63,6 +77,12 @@ if(KB_PORT_STM32_DEVICE)
     add_library(kb_port_stm32_vectors OBJECT "${CMAKE_CURRENT_SOURCE_DIR}/${KB_PORT_STM32_VECTOR_SOURCE}")
     target_link_libraries(kb_port_stm32_vectors PRIVATE kb_port_stm32_api kb_port_stm32_hal)
     target_compile_options(kb_port_stm32_vectors PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra -Werror)
+    foreach(_vector IN LISTS KB_PORT_STM32_VECTORS_EXCLUDE)
+      if(NOT _vector MATCHES "^[A-Za-z0-9_]+_IRQHandler$")
+        message(FATAL_ERROR "[kb-port-stm32] KB_PORT_STM32_VECTORS_EXCLUDE: '${_vector}' is not a vector name")
+      endif()
+      target_compile_definitions(kb_port_stm32_vectors PRIVATE "KB_PORT_STM32_NO_${_vector}")
+    endforeach()
     target_sources(kb_port_stm32 INTERFACE $<TARGET_OBJECTS:kb_port_stm32_vectors>)
   endif()
   # The logic with kb-core's strict flags; the boundary files without the conversion and pedantic warnings, which

@@ -233,6 +233,16 @@ KB_TEST("uart: 7-bit frames with parity mask the parity bit; 7N1 is refused on F
   }
 }
 
+KB_TEST("uart: a HAL time base advanced at 100 Hz is accepted") {
+  Fresh();
+  // A 10 ms HAL tick against the DWT: 16 MHz, 100 cycles per read, about two reads per poll, so
+  // one tick every 1000 reads is about 12 ms. The earlier 2 ms window refused this running base.
+  fake::SetTickStep(10U);
+  fake::SetTickEvery(1000U);
+  stm::Uart u{Config()};
+  KB_CHECK_EQ(u.EnsureReady(), Status::Ok);
+}
+
 KB_TEST("uart: a stopped HAL time base and timeouts above the maximum are refused") {
   Fresh();
   fake::SetTickStep(0U);
@@ -358,4 +368,11 @@ KB_TEST("uart: LPUART1 and the reader and writer locks") {
       &u);
   KB_CHECK_EQ(u.Write(tx), Status::Ok);
   KB_CHECK_EQ(u.Stats().lock_timeouts, 4U);
+}
+
+KB_TEST("uart: an interrupt of an instance the port does not own is switched off") {
+  Fresh();
+  HAL_NVIC_EnableIRQ(USART1_IRQn); // as an application whose USART1 the vector file took
+  stm::HandleUartIrq(1U);
+  KB_CHECK(!fake::IrqEnabled(USART1_IRQn)); // no endless re-entry with RXNE set
 }

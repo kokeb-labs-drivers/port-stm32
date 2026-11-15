@@ -79,7 +79,8 @@ struct I2cConfig {
 struct I2cStats {
   uint32_t transfers{0U};     ///< Transfers started.
   uint32_t failures{0U};      ///< Transfers that failed.
-  uint32_t recoveries{0U};    ///< RecoverBus() runs.
+  uint32_t recoveries{0U};    ///< RecoverBus() runs and peripheral resets.
+  uint32_t scl_held{0U};      ///< Recoveries that found SCL held low (not freed by clocking).
   uint32_t lock_timeouts{0U}; ///< Calls refused with Busy.
 };
 
@@ -171,7 +172,7 @@ private:
   LastErrorRecord error_;
   I2cStats stats_;
   std::atomic<kb::iface::I2cFailure> last_failure_{kb::iface::I2cFailure::None};
-  bool ready_{false};
+  std::atomic<bool> ready_{false}; ///< Cleared under the lock by a failed recovery.
 };
 
 static_assert(kb::iface::I2cBus<I2cController>, "I2cController satisfies kb::iface::I2cBus");

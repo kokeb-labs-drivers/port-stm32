@@ -35,6 +35,8 @@ void Stall(const char* area, bool on);
 
 // --- time ---------------------------------------------------------------------------------------
 void SetTickStep(uint32_t step);
+/** @brief The HAL tick advances by its step once every `calls` reads (a slow time base). */
+void SetTickEvery(uint32_t calls);
 /** @brief Microseconds a timer counter advances per read (default 1). */
 void SetCounterStep(uint32_t step);
 void SetCycleStep(uint32_t step);

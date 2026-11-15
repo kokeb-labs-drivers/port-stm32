@@ -348,3 +348,16 @@ KB_TEST("can: frames arrive by interrupt into the ring; a FIFO overrun is report
   KB_CHECK_EQ(can.Send(got, kb::Milliseconds{stm::kMaxTimeout.Count() + 1U}),
               Status::InvalidArgument);
 }
+
+KB_TEST("can: frames received before a Release() are not delivered after the reopen") {
+  Fresh();
+  stm::CanController can{Config()};
+  KB_REQUIRE(can.EnsureReady() == Status::Ok);
+  fake::Frame f{};
+  f.id = 0x42U;
+  fake::CanFeed(f); // into the ring
+  KB_CHECK_EQ(can.Release(), Status::Ok);
+  KB_REQUIRE(can.EnsureReady() == Status::Ok);
+  CanFrame got{};
+  KB_CHECK_EQ(can.Receive(got, kb::Milliseconds{2U}), Status::Timeout);
+}

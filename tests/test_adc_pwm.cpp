@@ -292,3 +292,23 @@ KB_TEST("pwm: one period per timer; the clock's timer is refused") {
   KB_CHECK_EQ(first.Release(), Status::Ok);
   KB_CHECK_EQ(fake::Calls("HAL_TIM_PWM_DeInit"), 1U);
 }
+
+KB_TEST("adc: the H7 asynchronous divider meets the ADC clock limit at any kernel clock") {
+  bool ok = false;
+  static_assert(stm::kAdcAsyncDividers.size() == 12U);
+  KB_CHECK_EQ(stm::AdcAsyncDividerIndex(36000000U, stm::kH7AdcMaxHz, ok), 0U); // /1
+  KB_CHECK(ok);
+  KB_CHECK_EQ(stm::AdcAsyncDividerIndex(64000000U, stm::kH7AdcMaxHz, ok), 1U);  // /2: 32 MHz
+  KB_CHECK_EQ(stm::AdcAsyncDividerIndex(200000000U, stm::kH7AdcMaxHz, ok), 3U); // /6: 33.3 MHz
+  KB_CHECK_EQ(stm::AdcAsyncDividerIndex(480000000U, stm::kH7AdcMaxHz, ok), 7U); // /16: 30 MHz
+  KB_CHECK(ok);
+  static_cast<void>(stm::AdcAsyncDividerIndex(0U, stm::kH7AdcMaxHz, ok));
+  KB_CHECK(!ok); // the kernel clock not running
+  static_cast<void>(stm::AdcAsyncDividerIndex(4000000000U, 1000000U, ok));
+  KB_CHECK(!ok); // even /256 too fast
+  for (uint32_t hz = 1000000U; hz <= 550000000U; hz += 7000000U) {
+    const std::size_t i = stm::AdcAsyncDividerIndex(hz, stm::kH7AdcMaxHz, ok);
+    KB_CHECK(ok && ((hz / stm::kAdcAsyncDividers[i]) <= stm::kH7AdcMaxHz));
+    KB_CHECK((i == 0U) || ((hz / stm::kAdcAsyncDividers[i - 1U]) > stm::kH7AdcMaxHz)); // smallest
+  }
+}

@@ -5,6 +5,9 @@
 // ErrorCode); the handles live in the table below. SPDX-License-Identifier: MIT Copyright (c) 2026
 // The port-stm32 authors
 #include <array>
+// The owners shared with the interrupts are std::atomic.
+// misra-lint: ignore KB-CPP-012
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 
@@ -450,9 +453,9 @@ std::array<family::Handle, kControllers>& Handles() noexcept {
   return handles;
 }
 
-std::array<CanController*, kControllers>& Owners() noexcept {
+std::array<std::atomic<CanController*>, kControllers>& Owners() noexcept {
   // codeql::misra_deviation_next_line(DEV-001)
-  static std::array<CanController*, kControllers> owners{};
+  static std::array<std::atomic<CanController*>, kControllers> owners{};
   return owners;
 }
 
@@ -461,7 +464,7 @@ std::array<CanController*, kControllers>& Owners() noexcept {
   CanController* found = nullptr;
   for (std::size_t i = 0U; i < kControllers; ++i) {
     if (&Handles()[i] == h) {
-      found = Owners()[i];
+      found = Owners()[i].load(std::memory_order_acquire);
     }
   }
   return found;
@@ -483,15 +486,16 @@ uint32_t CanKernelClockHz(uint8_t controller) noexcept {
 
 uint32_t CanOpen(const CanConfig& config, const CanTiming& timing, CanController& owner) noexcept {
   uint32_t code = port_code::kOwned;
-  if (Owners()[config.controller] == nullptr) {
+  if (Owners()[config.controller].load(std::memory_order_acquire) == nullptr) {
     static_cast<void>(PinAlternate(config.tx, false, Pull::None));
     static_cast<void>(PinAlternate(config.rx, false, Pull::Up));
-    Owners()[config.controller] = &owner; // before the start: a frame may arrive at once
+    Owners()[config.controller].store(
+        &owner, std::memory_order_release); // before the start: a frame may arrive at once
     code = family::Open(Handles()[config.controller], config, timing);
     if (code == hal::kOk) {
       family::Irqs(config.controller, config.irq_priority, true);
     } else {
-      Owners()[config.controller] = nullptr;
+      Owners()[config.controller].store(nullptr, std::memory_order_release);
     }
   }
   return code;
@@ -499,7 +503,7 @@ uint32_t CanOpen(const CanConfig& config, const CanTiming& timing, CanController
 
 uint32_t CanClose(uint8_t controller) noexcept {
   family::Irqs(controller, 0U, false);
-  Owners()[controller] = nullptr;
+  Owners()[controller].store(nullptr, std::memory_order_release);
   return family::Close(Handles()[controller]);
 }
 
@@ -534,8 +538,12 @@ uint32_t CanRestart(uint8_t controller) noexcept {
 namespace kb::port::stm32 {
 // The interrupt entry point (irq.hpp): the HAL's handler of the open controller.
 void HandleCanIrq(uint8_t controller) noexcept {
-  if ((controller < sdk::kControllers) && (sdk::Owners()[controller] != nullptr)) {
-    sdk::family::Interrupt(sdk::Handles()[controller]);
+  if (controller < sdk::kControllers) {
+    if (sdk::Owners()[controller].load(std::memory_order_acquire) != nullptr) {
+      sdk::family::Interrupt(sdk::Handles()[controller]);
+    } else {
+      sdk::family::Irqs(controller, 0U, false); // not the port's: no interrupt storm
+    }
   }
 }
 } // namespace kb::port::stm32

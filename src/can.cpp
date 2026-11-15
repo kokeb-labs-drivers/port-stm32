@@ -71,6 +71,20 @@ CanTiming ComputeCanTiming(uint32_t kernel_hz, uint32_t bitrate, const CanTiming
 // --- CanController -------------------------------------------------------------------------------
 
 namespace {
+[[nodiscard]] bool CanConfigValid(const CanConfig& config) noexcept {
+  return PinOk(config.tx) && PinOk(config.rx) && ConfiguredTimeoutValid(config.lock_timeout) &&
+         RtosIrqPriorityValid(config.irq_priority);
+}
+
+// The kernel clock: configured, or the controller's from the RCC (0 for a controller it lacks).
+[[nodiscard]] uint32_t CanKernelHz(const CanConfig& config) noexcept {
+  uint32_t kernel = config.kernel_clock_hz;
+  if ((kernel == 0U) && sdk::CanExists(config.controller)) {
+    kernel = sdk::CanKernelClockHz(config.controller);
+  }
+  return kernel;
+}
+
 // Frames taken from the hardware FIFO per interrupt at most (the deepest FIFO configured is 16).
 constexpr uint32_t kMaxDrain = 32U;
 } // namespace
@@ -83,14 +97,10 @@ kb::Status CanController::EnsureReady() noexcept {
   kb::Status status = kb::Status::Ok;
   if (!ready_) {
     uint32_t code = hal::kOk;
-    uint32_t kernel = config_.kernel_clock_hz;
-    if ((kernel == 0U) && sdk::CanExists(config_.controller)) {
-      kernel = sdk::CanKernelClockHz(config_.controller);
-    }
+    const uint32_t kernel = CanKernelHz(config_);
     if (!sdk::CanExists(config_.controller)) {
       code = port_code::kUnsupported;
-    } else if (!PinOk(config_.tx) || !PinOk(config_.rx) ||
-               !ConfiguredTimeoutValid(config_.lock_timeout)) {
+    } else if (!CanConfigValid(config_)) {
       code = port_code::kInvalidArgument;
     } else if (kernel == 0U) {
       code = port_code::kNoClock;
@@ -103,6 +113,10 @@ kb::Status CanController::EnsureReady() noexcept {
       bool ok = false;
       timing_ = ComputeCanTiming(kernel, config_.bitrate, sdk::CanLimits(), ok);
       rx_lost_.store(0U, std::memory_order_relaxed);
+      kb::iface::CanFrame stale{};
+      while (rx_ring_.TryPop(stale)) {
+        // frames from before a Release(): not delivered after the reopen
+      }
       code = ok ? sdk::CanOpen(config_, timing_, *this) : port_code::kInvalidArgument;
     }
     status = error_.Set(MapHalStatus(code & 0xFFU), code);
@@ -253,7 +267,8 @@ kb::Status CanController::Recover(kb::Milliseconds timeout) noexcept {
     uint32_t code =
         lock.OwnsLock() ? sdk::CanReadStatus(config_.controller, s) : port_code::kLockTimeout;
     if ((code == hal::kOk) && (s.state == CanState::BusOff)) {
-      code = sdk::CanRestart(config_.controller);
+      // FDCAN's stop and start wait on the HAL tick: refused when it does not run.
+      code = HalTickRuns() ? sdk::CanRestart(config_.controller) : port_code::kHalTickStopped;
       Deadline deadline{timeout};
       // The controller needs 128 x 11 recessive bits: look again after each bounded pause.
       while ((code == hal::kOk) && (s.state == CanState::BusOff) && tx_wake_.Pause(deadline)) {

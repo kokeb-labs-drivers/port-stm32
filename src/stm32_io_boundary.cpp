@@ -5,6 +5,9 @@
 // boundary files only. Every rule over the shared state is in the platform-free files.
 // SPDX-License-Identifier: MIT Copyright (c) 2026 The port-stm32 authors
 #include <array>
+// Slot pointers shared with the interrupts are std::atomic.
+// misra-lint: ignore KB-CPP-012
+#include <atomic>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
@@ -46,8 +49,6 @@ static_assert(hal::kTimeout == static_cast<uint32_t>(HAL_TIMEOUT));
 
 namespace {
 constexpr std::size_t kPorts = kGpioPorts;
-constexpr uint32_t kAdcIrqPriority =
-    5U; // at the RTOS syscall limit: the callback gives a semaphore
 
 [[nodiscard]] uint32_t Code(HAL_StatusTypeDef status, uint32_t error_code) noexcept {
   return VendorCode(static_cast<uint32_t>(status), error_code);
@@ -227,7 +228,7 @@ void PortClock(GpioPort port) noexcept {
 // --- ADC -----------------------------------------------------------------------------------------
 struct AdcSlot {
   ADC_HandleTypeDef handle{};
-  Completion* conversion{nullptr}; ///< The instance's completion while it is open.
+  std::atomic<Completion*> conversion{nullptr}; ///< The instance's completion while it is open.
 };
 
 std::array<AdcSlot, kAdcs>& Adcs() noexcept {
@@ -343,7 +344,6 @@ void AdcClock(uint8_t instance) noexcept {
 }
 
 void AdcInitFields(ADC_HandleTypeDef& h) noexcept {
-  h.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
 #if !defined(STM32H7)
   h.Init.DataAlign = ADC_DATAALIGN_RIGHT; // H7: right aligned unless LeftBitShift says otherwise
 #endif
@@ -648,6 +648,10 @@ uint32_t TickMs() noexcept {
   return HAL_GetTick();
 }
 
+uint32_t TickPeriodMs() noexcept {
+  return static_cast<uint32_t>(HAL_GetTickFreq());
+}
+
 uint32_t CoreClockHz() noexcept {
   return SystemCoreClock;
 }
@@ -808,34 +812,56 @@ uint8_t AdcBits(uint8_t instance) noexcept {
 #endif
 }
 
-uint32_t AdcClockCheck() noexcept {
-  // The synchronous clock this port selects is HCLK / 4 (PCLK2 / 4 on F4).
+namespace {
+// The ADC clock: the synchronous HCLK / 4 (PCLK2 / 4 on F4); on H7, when HCLK / 4 is above the
+// limit, the asynchronous kernel clock (RCC ADCSEL) with the smallest divider that meets it.
+[[nodiscard]] uint32_t AdcClockChoice(uint32_t& prescaler) noexcept {
+  prescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
 #if defined(STM32F4)
-  const uint32_t adc_hz = HAL_RCC_GetPCLK2Freq() / 4U;
+  const uint32_t sync_hz = HAL_RCC_GetPCLK2Freq() / 4U;
 #else
-  const uint32_t adc_hz = HAL_RCC_GetHCLKFreq() / 4U;
+  const uint32_t sync_hz = HAL_RCC_GetHCLKFreq() / 4U;
 #endif
-  uint32_t code = (adc_hz == 0U) ? port_code::kNoClock : hal::kOk;
+  uint32_t code = (sync_hz == 0U) ? port_code::kNoClock : hal::kOk;
 #if defined(STM32H7)
-  constexpr uint32_t kMaxAdcHz = 36000000U; // the lower of the H7 revisions' limits
-  code = (adc_hz > kMaxAdcHz) ? port_code::kUnsupported : code;
+  if ((code == hal::kOk) && (sync_hz > kH7AdcMaxHz)) {
+    constexpr std::array<uint32_t, kAdcAsyncDividers.size()> kAsync{
+        ADC_CLOCK_ASYNC_DIV1,  ADC_CLOCK_ASYNC_DIV2,   ADC_CLOCK_ASYNC_DIV4,
+        ADC_CLOCK_ASYNC_DIV6,  ADC_CLOCK_ASYNC_DIV8,   ADC_CLOCK_ASYNC_DIV10,
+        ADC_CLOCK_ASYNC_DIV12, ADC_CLOCK_ASYNC_DIV16,  ADC_CLOCK_ASYNC_DIV32,
+        ADC_CLOCK_ASYNC_DIV64, ADC_CLOCK_ASYNC_DIV128, ADC_CLOCK_ASYNC_DIV256};
+    const uint32_t kernel_hz = HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_ADC);
+    bool ok = false;
+    const std::size_t index = AdcAsyncDividerIndex(kernel_hz, kH7AdcMaxHz, ok);
+    prescaler = kAsync[index];
+    code = ok ? hal::kOk : ((kernel_hz == 0U) ? port_code::kNoClock : port_code::kUnsupported);
+  }
 #endif
   return code;
 }
+} // namespace
 
-uint32_t AdcOpen(uint8_t instance, Completion& conversion) noexcept {
+uint32_t AdcClockCheck() noexcept {
+  uint32_t prescaler = 0U;
+  return AdcClockChoice(prescaler);
+}
+
+uint32_t AdcOpen(uint8_t instance, Completion& conversion, uint8_t priority) noexcept {
   AdcSlot& slot = Adcs()[instance];
   AdcClock(instance);
   slot.handle.Instance = AdcOf(instance);
   AdcInitFields(slot.handle);
+  uint32_t prescaler = 0U;
+  static_cast<void>(AdcClockChoice(prescaler)); // checked by AdcClockCheck() before the open
+  slot.handle.Init.ClockPrescaler = prescaler;  // the HAL sets the H7 BOOST mode from it
   const HAL_StatusTypeDef s = HAL_ADC_Init(&slot.handle);
   uint32_t code = Code(s, slot.handle.ErrorCode);
   if (code == hal::kOk) {
     code = AdcCalibrate(slot.handle);
   }
   if (code == hal::kOk) {
-    slot.conversion = &conversion;
-    HAL_NVIC_SetPriority(AdcIrq(instance), kAdcIrqPriority, 0U);
+    slot.conversion.store(&conversion, std::memory_order_release);
+    HAL_NVIC_SetPriority(AdcIrq(instance), priority, 0U);
     HAL_NVIC_EnableIRQ(
         AdcIrq(instance)); // shared vectors stay enabled: the handler checks the slot
   }
@@ -844,7 +870,7 @@ uint32_t AdcOpen(uint8_t instance, Completion& conversion) noexcept {
 
 uint32_t AdcClose(uint8_t instance) noexcept {
   AdcSlot& slot = Adcs()[instance];
-  slot.conversion = nullptr;
+  slot.conversion.store(nullptr, std::memory_order_release);
   const HAL_StatusTypeDef s = HAL_ADC_DeInit(&slot.handle);
   return Code(s, slot.handle.ErrorCode);
 }
@@ -999,11 +1025,16 @@ namespace {
 namespace kb::port::stm32 {
 // The interrupt entry point (irq.hpp): the HAL's ADC handler of each open instance on the vector.
 void HandleAdcIrq(uint8_t first, uint8_t last) noexcept {
+  bool any = false;
   for (uint8_t i = first; (i <= last) && (i < kAdcs); ++i) {
     sdk::AdcSlot& slot = sdk::Adcs()[i];
-    if (slot.conversion != nullptr) {
+    if (slot.conversion.load(std::memory_order_acquire) != nullptr) {
+      any = true;
       HAL_ADC_IRQHandler(&slot.handle);
     }
+  }
+  if (!any) {
+    HAL_NVIC_DisableIRQ(sdk::AdcIrq(first)); // no instance of the vector is the port's
   }
 }
 } // namespace kb::port::stm32
@@ -1014,15 +1045,18 @@ extern "C" {
 // NOLINTBEGIN(readability-identifier-naming): the HAL fixes these names
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
   kb::port::stm32::sdk::AdcSlot* const slot = kb::port::stm32::sdk::AdcSlotOf(hadc);
-  if ((slot != nullptr) && (slot->conversion != nullptr)) {
-    slot->conversion->Complete(kb::port::stm32::hal::kOk, HAL_ADC_GetValue(hadc));
+  kb::port::stm32::Completion* const done =
+      (slot != nullptr) ? slot->conversion.load(std::memory_order_acquire) : nullptr;
+  if (done != nullptr) {
+    done->Complete(kb::port::stm32::hal::kOk, HAL_ADC_GetValue(hadc));
   }
 }
 void HAL_ADC_ErrorCallback(ADC_HandleTypeDef* hadc) {
   kb::port::stm32::sdk::AdcSlot* const slot = kb::port::stm32::sdk::AdcSlotOf(hadc);
-  if ((slot != nullptr) && (slot->conversion != nullptr)) {
-    slot->conversion->Complete(
-        kb::port::stm32::VendorCode(static_cast<uint32_t>(HAL_ERROR), hadc->ErrorCode));
+  kb::port::stm32::Completion* const done =
+      (slot != nullptr) ? slot->conversion.load(std::memory_order_acquire) : nullptr;
+  if (done != nullptr) {
+    done->Complete(kb::port::stm32::VendorCode(static_cast<uint32_t>(HAL_ERROR), hadc->ErrorCode));
   }
 }
 // NOLINTEND(readability-identifier-naming)

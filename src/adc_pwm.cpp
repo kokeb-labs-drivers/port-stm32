@@ -35,7 +35,8 @@ constexpr uint64_t kCounterSpan = 65536U; // 16-bit prescaler and auto-reload
 }
 
 // The instance's first channel initialises it; others wait (bounded) while it does.
-[[nodiscard]] uint32_t AdcShare(uint8_t instance, kb::Milliseconds wait) noexcept {
+[[nodiscard]] uint32_t AdcShare(uint8_t instance, kb::Milliseconds wait,
+                                uint8_t priority) noexcept {
   AdcEntry& entry = sdk::State().adcs[instance];
   Deadline deadline{wait};
   bool opener = false;
@@ -57,6 +58,7 @@ constexpr uint64_t kCounterSpan = 65536U; // 16-bit prescaler and auto-reload
     }
     if (!opener && !joined) {
       kb::rtos::SleepFor(kb::Milliseconds{1U});
+      deadline.Slept(1U);
     }
   }
   if (joined) {
@@ -67,7 +69,7 @@ constexpr uint64_t kCounterSpan = 65536U; // 16-bit prescaler and auto-reload
     } else if (!HalTickRuns()) {
       code = port_code::kHalTickStopped; // the HAL's enable and calibration waits use it
     } else {
-      code = sdk::AdcOpen(instance, entry.conversion);
+      code = sdk::AdcOpen(instance, entry.conversion, priority);
     }
     const IrqGuard guard{};
     const bool ok = code == hal::kOk;
@@ -192,13 +194,14 @@ kb::Status AdcChannel::EnsureReady() noexcept {
     const bool valid = sdk::AdcExists(config_.instance, config_.channel) &&
                        (config_.vref_mv > 0U) && (!config_.pin.Used() || PinOk(config_.pin)) &&
                        ConfiguredTimeoutValid(config_.conversion_timeout) &&
-                       ConfiguredTimeoutValid(config_.lock_timeout);
+                       ConfiguredTimeoutValid(config_.lock_timeout) &&
+                       RtosIrqPriorityValid(config_.irq_priority);
     uint32_t code = valid ? sdk::AdcClockCheck() : port_code::kInvalidArgument;
     if ((code == hal::kOk) && config_.pin.Used()) {
       code = sdk::PinAnalog(config_.pin);
     }
     if (code == hal::kOk) {
-      code = AdcShare(config_.instance, config_.lock_timeout);
+      code = AdcShare(config_.instance, config_.lock_timeout, config_.irq_priority);
     }
     status = error_.Set(MapHalStatus(code & 0xFFU), code);
     ready_ = status == kb::Status::Ok;

@@ -32,8 +32,8 @@ macros (`I2C4`, `FDCAN2`, `TIM5`, ...) so a peripheral the device lacks is refus
   baud rate is computed by the HAL from its own clock getter. A kernel clock that reads 0 Hz (its source not
   started) is refused by `EnsureReady()` with `NotReady` (port code `kNoClock`): observed with an earlier
   implementation on STM32H7 hardware, a peripheral whose kernel clock was not started failed only partially.
-- **ADC clock.** The port selects the synchronous clock HCLK / 4 (PCLK2 / 4 on F4); on H7 it refuses HCLK / 4 above
-  36 MHz (`Unsupported`), the lower of the H7 revisions' limits.
+- **ADC clock.** The port selects the synchronous clock HCLK / 4 (PCLK2 / 4 on F4); on H7, above 36 MHz (the lower
+  of the H7 revisions' limits) it takes the asynchronous kernel clock with the smallest divider that meets it.
 - **Timer clocks.** Timers run at twice their APB clock when the APB prescaler is not 1 (the RM's rule), and at
   HCLK (up to an APB divider of 4, else 4 x PCLK) when TIMPRE is set (F42x/F43x/F446 DCKCFGR, H7 CFGR); the port
   applies both. `timer_clock_hz` overrides them.

@@ -85,6 +85,12 @@ typedef enum {
 } IRQn_Type;
 extern uint32_t SystemCoreClock;
 uint32_t HAL_GetTick(void);
+typedef enum {
+  HAL_TICK_FREQ_10HZ = 100U,
+  HAL_TICK_FREQ_100HZ = 10U,
+  HAL_TICK_FREQ_1KHZ = 1U
+} HAL_TickFreqTypeDef;
+HAL_TickFreqTypeDef HAL_GetTickFreq(void);
 uint32_t HAL_RCC_GetHCLKFreq(void);
 uint32_t HAL_RCC_GetPCLK1Freq(void);
 uint32_t HAL_RCC_GetPCLK2Freq(void);

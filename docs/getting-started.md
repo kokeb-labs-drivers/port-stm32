@@ -84,7 +84,10 @@ ADC enable, the CAN initialisation and start), so its time base must run, and `U
 | Bare metal | `SysTick_Handler` calling `HAL_IncTick()` (what `HAL_Init()` sets up) |
 | FreeRTOS | FreeRTOS owns `SysTick_Handler` (`xPortSysTickHandler`), so the application must **not** define one. Give the HAL a time base of its own: a TIMx whose update interrupt calls `HAL_IncTick()` (CubeMX's "Timebase Source" setting, `HAL_InitTick()` overridden), or `HAL_IncTick()` from `vApplicationTickHook()` as the example does |
 
-Either way, call `EnsureReady()` only from task context with interrupts enabled.
+Either way, call `EnsureReady()` only from task context with interrupts enabled. A HAL tick advanced at 100 Hz (a
+FreeRTOS tick hook at `configTICK_RATE_HZ` = 100) is accepted. Under FreeRTOS set `KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY`
+to `configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY`: the port then refuses an interrupt priority the kernel does not
+mask ([Integration](integration.md)).
 
 ## 4. Interrupts
 

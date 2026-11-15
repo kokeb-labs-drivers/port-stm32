@@ -52,7 +52,8 @@ bool Uart::configValid() const noexcept {
   return sdk::UartExists(config_.instance) && PinOk(config_.tx) && PinOk(config_.rx) &&
          (!config_.de.Used() || PinOk(config_.de)) && (config_.baud > 0U) &&
          (config_.baud <= kMaxBaud) && (config_.data_bits >= kMinDataBits) &&
-         (config_.data_bits <= kMaxDataBits) && ConfiguredTimeoutValid(config_.write_timeout);
+         (config_.data_bits <= kMaxDataBits) && ConfiguredTimeoutValid(config_.write_timeout) &&
+         RtosIrqPriorityValid(config_.irq_priority);
 }
 
 kb::Status Uart::EnsureReady() noexcept {
@@ -124,12 +125,14 @@ void Uart::onErrors(uint32_t flags) noexcept {
 }
 
 void Uart::onTxEmpty() noexcept {
+  const std::size_t size = tx_size_.load(std::memory_order_acquire);
+  const std::span<const uint8_t> data{tx_data_.load(std::memory_order_relaxed), size};
   const std::size_t next = tx_next_.load(std::memory_order_relaxed);
-  if (next < tx_data_.size()) {
-    sdk::UartWrite(config_.instance, tx_data_[next]);
+  if (next < size) {
+    sdk::UartWrite(config_.instance, data[next]);
     tx_next_.store(next + 1U, std::memory_order_relaxed);
   }
-  if ((next + 1U) >= tx_data_.size()) {
+  if ((next + 1U) >= size) {
     // The last byte is in the data register: end now, or when it has left the shift register.
     const bool wait_complete = tx_wait_complete_.load(std::memory_order_relaxed);
     sdk::UartTxInterrupts(config_.instance, false, wait_complete);
@@ -185,19 +188,23 @@ std::size_t Uart::drain(std::span<uint8_t> rx) noexcept {
   return n;
 }
 
-kb::Status Uart::sendLocked(bool wait_complete, kb::Milliseconds timeout) noexcept {
+kb::Status Uart::sendLocked(std::span<const uint8_t> tx, bool wait_complete,
+                            kb::Milliseconds timeout) noexcept {
   tx_wait_complete_.store(wait_complete, std::memory_order_relaxed);
   tx_next_.store(0U, std::memory_order_relaxed);
+  tx_data_.store(tx.data(), std::memory_order_relaxed);
+  tx_size_.store(tx.size(), std::memory_order_release); // everything above is seen by the interrupt
   tx_done_.Arm();
   // Data first, then the interrupt: transmit-empty fires at once and sends byte by byte. An empty
-  // tx_data_ with wait_complete only waits for transmit-complete (WaitTxDone()).
-  sdk::UartTxInterrupts(config_.instance, !tx_data_.empty(), tx_data_.empty() && wait_complete);
+  // frame with wait_complete only waits for transmit-complete (WaitTxDone()).
+  sdk::UartTxInterrupts(config_.instance, !tx.empty(), tx.empty() && wait_complete);
   Deadline deadline{timeout};
   const bool done = tx_done_.Wait(deadline);
   if (!done) {
     sdk::UartTxInterrupts(config_.instance, false, false); // stop: the rest is not sent
   }
-  tx_data_ = std::span<const uint8_t>{};
+  tx_size_.store(0U, std::memory_order_release);
+  tx_data_.store(nullptr, std::memory_order_relaxed);
   return done ? kb::Status::Ok : kb::Status::Timeout;
 }
 
@@ -206,8 +213,7 @@ kb::Status Uart::writeLocked(std::span<const uint8_t> tx) noexcept {
   if (de) {
     sdk::PinWrite(config_.de, true);
   }
-  tx_data_ = tx;
-  const kb::Status status = sendLocked(de, config_.write_timeout);
+  const kb::Status status = sendLocked(tx, de, config_.write_timeout);
   if (de) {
     sdk::PinWrite(config_.de, false);
   }
@@ -315,6 +321,8 @@ kb::Status Uart::SetBaud(uint32_t baud) noexcept {
     if (!tx_lock.OwnsLock() || !rx_lock.OwnsLock()) {
       count(&UartStats::lock_timeouts);
       status = error_.Set(kb::Status::Busy, port_code::kLockTimeout);
+    } else if (!HalTickRuns()) {
+      status = error_.Set(kb::Status::NotReady, port_code::kHalTickStopped); // HAL_UART_Init waits
     } else {
       const uint32_t code = sdk::UartSetBaud(config_.instance, baud);
       status = error_.Set(MapHalStatus(code & 0xFFU), code);
@@ -340,8 +348,7 @@ kb::Status Uart::WaitTxDone(kb::Milliseconds timeout) noexcept {
       count(&UartStats::lock_timeouts);
       status = error_.Set(kb::Status::Busy, port_code::kLockTimeout);
     } else {
-      tx_data_ = std::span<const uint8_t>{};
-      status = sendLocked(true, timeout); // the transmit-complete interrupt ends it
+      status = sendLocked(std::span<const uint8_t>{}, true, timeout); // transmit-complete ends it
       status = error_.Set(status, (status == kb::Status::Ok) ? hal::kOk : hal::kTimeout);
     }
   }

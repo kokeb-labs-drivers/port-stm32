@@ -26,6 +26,8 @@
 #ifndef KB_PORT_STM32_ADC_HPP
 #define KB_PORT_STM32_ADC_HPP
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 
 #include "kb/interfaces/adc.hpp"
@@ -35,6 +37,27 @@
 #include "kb/utils/time.hpp"
 
 namespace kb::port::stm32 {
+
+/** @brief The ADC clock limit the port keeps to on H7 (the lower of the H7 revisions' limits). */
+inline constexpr uint32_t kH7AdcMaxHz = 36000000U;
+/** @brief The H7 asynchronous ADC clock dividers (ADC_CLOCK_ASYNC_DIV1 to DIV256), in order. */
+inline constexpr std::array<uint16_t, 12> kAdcAsyncDividers{1U,  2U,  4U,  6U,  8U,   10U,
+                                                            12U, 16U, 32U, 64U, 128U, 256U};
+
+/**
+ * @brief The index in kAdcAsyncDividers of the smallest divider that brings `kernel_hz` to at most
+ * `max_hz`; `ok` is false when the kernel clock is 0 or even 256 is not enough.
+ */
+[[nodiscard]] constexpr std::size_t AdcAsyncDividerIndex(uint32_t kernel_hz, uint32_t max_hz,
+                                                         bool& ok) noexcept {
+  std::size_t index = 0U;
+  ok = false;
+  for (std::size_t i = 0U; (i < kAdcAsyncDividers.size()) && !ok; ++i) {
+    index = i;
+    ok = (kernel_hz != 0U) && ((kernel_hz / kAdcAsyncDividers[i]) <= max_hz);
+  }
+  return index;
+}
 
 /** @brief Sampling time class; the cycles per class are the family's nearest (adc.md). */
 enum class AdcSampling : uint8_t {
@@ -52,6 +75,7 @@ struct AdcConfig {
   uint32_t vref_mv{3300U};                   ///< The VREF+ voltage of the board, in millivolts.
   kb::Milliseconds conversion_timeout{kb::Milliseconds{5U}}; ///< End-of-conversion wait, to 2 s.
   kb::Milliseconds lock_timeout{kb::Milliseconds{10U}};      ///< Shared-instance wait, to 2 s.
+  uint8_t irq_priority{5U}; ///< NVIC priority of the instance's interrupt (its first channel's).
 };
 
 /** @brief One ADC input; satisfies kb::iface::AdcChannel. */

@@ -7,6 +7,21 @@ All notable changes of port-stm32. The format follows Keep a Changelog; versions
 
 ### Fixed
 
+- SPI interrupt transfers are limited to a per-family SCK ceiling (core / 64 on F4, core / 40 with a FIFO), so the
+  per-byte interrupt cannot overrun the receiver; `ActualClockHz()` reports the SCK used. An abort makes every
+  device's next frame re-initialise the bus.
+- A wait under FreeRTOS ends by the slept RTOS time even if the port's clock stops (the poll cap alone allowed hours).
+- A vector the port serves for an instance it does not own switches its NVIC line off instead of re-entering;
+  `KB_PORT_STM32_VECTORS_EXCLUDE` leaves named vectors to the application.
+- The HAL time-base check accepts a 100 Hz HAL tick; `SetBaud()` and the FDCAN restart check it too.
+- RTOS-calling interrupt priorities are checked against `KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY`; the ADC interrupt
+  priority is configurable (`AdcConfig::irq_priority`).
+- H7: the ADC uses the asynchronous kernel clock with a divider that meets 36 MHz when HCLK / 4 is above it.
+- I2C: a failed re-initialisation in recovery leaves the controller not ready (it dereferenced a null instance);
+  a recovery that finds SCL held low sends no clocks and is counted (`scl_held`).
+- The UART transmit frame and the interrupt slot pointers are atomics with release/acquire order.
+- CAN frames received before a `Release()` are not delivered after the reopen.
+
 - The interrupt vectors are linked for certain: the vector file is an object library added to every firmware that
   links the port. Before, it sat in the static archive, a weak reference from the startup file never pulled it in,
   and every USART, EXTI and TIM2/TIM5 interrupt ran `Default_Handler`. The example firmware checks with `nm` after

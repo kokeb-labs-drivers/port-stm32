@@ -54,3 +54,20 @@ KB_TEST("wait: a zero budget expires at once; Remaining rounds up") {
   const uint32_t left = some.Remaining().Count();
   KB_CHECK((left >= 1U) && (left <= 5U));
 }
+
+KB_TEST("wait: under a blocking RTOS a stopped clock still ends the wait by the slept time") {
+  Fresh();
+  fake::SetCycleStep(0U); // the DWT and the port's timer both stand still
+  fake::SetCounterStep(0U);
+  stm::Completion done{};
+  KB_REQUIRE(done.Create() == Status::Ok);
+  done.Arm();
+  stm::Deadline deadline{kb::Milliseconds{3U}, true}; // sleeps block: each timed-out slice counts
+  uint32_t pauses = 0U;
+  while (done.Pause(deadline)) {
+    ++pauses;
+    KB_REQUIRE(pauses < 100U); // the poll cap (60000) would allow far more
+  }
+  KB_CHECK_EQ(pauses, 5U); // 3 ms slices until 3 + 10 ms have been slept
+  KB_CHECK(deadline.Expired());
+}

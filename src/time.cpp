@@ -35,10 +35,17 @@
 namespace kb::port::stm32 {
 
 namespace {
+// True when kb::rtos takes and sleeps block (FreeRTOS, or the host's std::thread backend): set by
+// CMake from KB_RTOS. Under the `none` backend they return at once.
+#if defined(KB_PORT_STM32_RTOS_BLOCKS)
+constexpr bool kRtosSleeps = true;
+#else
+constexpr bool kRtosSleeps = false;
+#endif
 constexpr uint64_t kUsPerSecond = 1000000U;
 constexpr uint64_t kUsPerMs = 1000U;
-constexpr uint32_t kHalTickCheckMs = 2U;
-constexpr uint32_t kHalTickCheckPolls = 1000000U;
+constexpr uint32_t kHalTickCheckMs = 25U; // more than two periods of a 100 Hz tick
+constexpr uint32_t kHalTickCheckPolls = 10000000U;
 
 // The clock's registers and wrap count, read in the order of ClockSample.
 class TimerSource {
@@ -75,8 +82,13 @@ IrqGuard::~IrqGuard() noexcept {
 }
 
 bool HalTickRuns() noexcept {
+  // Two HAL tick periods (uwTickFreq: 1 ms by default, 10 or 100 ms with HAL_TICK_FREQ_100HZ or
+  // _10HZ), and at least kHalTickCheckMs, so a time base advanced from a 100 Hz RTOS tick hook is
+  // seen running too. The wait ends at the first change.
   const uint32_t first = sdk::TickMs();
-  const uint64_t budget = (uint64_t{sdk::CoreClockHz()} * kHalTickCheckMs) / kUsPerMs;
+  const uint32_t period_ms = sdk::TickPeriodMs();
+  const uint64_t window_ms = std::max<uint64_t>((2U * uint64_t{period_ms}) + 1U, kHalTickCheckMs);
+  const uint64_t budget = (uint64_t{sdk::CoreClockHz()} * window_ms) / kUsPerMs;
   uint64_t elapsed = 0U;
   uint32_t last = sdk::Cycles();
   bool runs = false;
@@ -170,11 +182,15 @@ void BusyWait::WaitUs(kb::Microseconds us) noexcept {
 
 // --- Deadline, Completion ------------------------------------------------------------------------
 
-Deadline::Deadline(kb::Milliseconds budget) noexcept
+Deadline::Deadline(kb::Milliseconds budget) noexcept : Deadline(budget, kRtosSleeps) {}
+
+Deadline::Deadline(kb::Milliseconds budget, bool sleeps_block) noexcept
     : budget_us_(uint64_t{budget.Count()} * kUsPerMs),
       max_polls_(static_cast<uint32_t>(
           std::min<uint64_t>((uint64_t{budget.Count()} + 1U) * kDeadlinePollsPerMs, UINT32_MAX))),
-      clock_timer_(sdk::State().clock_timer.load(std::memory_order_acquire)) {
+      max_slept_ms_(uint64_t{budget.Count()} + kWaitSliceMs),
+      clock_timer_(sdk::State().clock_timer.load(std::memory_order_acquire)),
+      sleeps_block_(sleeps_block) {
   if (clock_timer_ != 0U) {
     start_us_ = ClockNowUs(clock_timer_);
   } else {
@@ -196,10 +212,16 @@ uint64_t Deadline::ElapsedUs() noexcept {
   return us;
 }
 
+void Deadline::Slept(uint32_t ms) noexcept {
+  slept_ms_ += ms;
+}
+
 bool Deadline::Expired() noexcept {
   if (!expired_) {
     ++polls_;
-    expired_ = (polls_ >= max_polls_) || (ElapsedUs() >= budget_us_);
+    // The second bound: slept time on the RTOS tick when sleeps block, else the poll count.
+    const bool capped = sleeps_block_ ? (slept_ms_ >= max_slept_ms_) : (polls_ >= max_polls_);
+    expired_ = capped || (ElapsedUs() >= budget_us_);
   }
   return expired_;
 }
@@ -245,7 +267,10 @@ bool Completion::Pause(Deadline& deadline) noexcept {
   const bool more = left.Count() > 0U;
   if (more) {
     // Blocks under an RTOS until a give or the slice; returns at once under the `none` backend.
-    static_cast<void>(wake_.TakeFor(kb::Milliseconds{std::min(left.Count(), kWaitSliceMs)}));
+    const uint32_t slice = std::min(left.Count(), kWaitSliceMs);
+    if (!wake_.TakeFor(kb::Milliseconds{slice})) {
+      deadline.Slept(slice); // timed out: the slice passed on the RTOS tick
+    }
   }
   return more;
 }

@@ -5,6 +5,9 @@
 // below. Every decision is in the platform-free files. SPDX-License-Identifier: MIT Copyright (c)
 // 2026 The port-stm32 authors
 #include <array>
+// Slot pointers shared with the interrupts are std::atomic (release before the NVIC enable).
+// misra-lint: ignore KB-CPP-012
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -53,8 +56,8 @@ constexpr std::size_t kLpuartSlot = 11U;
 // --- I2C -----------------------------------------------------------------------------------------
 struct I2cSlot {
   I2C_HandleTypeDef handle{};
-  Completion* done{nullptr}; ///< The owner's completion while it is open.
-  uint8_t probe{0U};         ///< The (unsent) buffer of an address-only probe.
+  std::atomic<Completion*> done{nullptr}; ///< The owner's completion while it is open.
+  uint8_t probe{0U};                      ///< The (unsent) buffer of an address-only probe.
 };
 
 std::array<I2cSlot, kI2cs>& I2cs() noexcept {
@@ -162,7 +165,7 @@ void I2cClock(uint8_t instance) noexcept {
 // --- SPI -----------------------------------------------------------------------------------------
 struct SpiSlot {
   SPI_HandleTypeDef handle{};
-  Completion* done{nullptr}; ///< The bus's completion while it is open.
+  std::atomic<Completion*> done{nullptr}; ///< The bus's completion while it is open.
 };
 
 std::array<SpiSlot, kSpis>& Spis() noexcept {
@@ -304,7 +307,7 @@ void SpiInitFields(SPI_HandleTypeDef& h, uint8_t mode, uint8_t exponent) noexcep
 // --- UART ----------------------------------------------------------------------------------------
 struct UartSlot {
   UART_HandleTypeDef handle{};
-  Uart* owner{nullptr};
+  std::atomic<Uart*> owner{nullptr};
 };
 
 std::array<UartSlot, kUarts>& Uarts() noexcept {
@@ -625,7 +628,7 @@ uint32_t I2cOpen(const I2cConfig& config, uint32_t timing, Completion& done) noe
   if (slot.handle.Instance == nullptr) {
     code = I2cInitHandle(slot.handle, config, timing);
     if (code == hal::kOk) {
-      slot.done = &done;
+      slot.done.store(&done, std::memory_order_release);
       I2cPriorities()[config.instance] = config.irq_priority;
       I2cIrqsOn(config.instance, config.irq_priority, true);
     }
@@ -636,7 +639,7 @@ uint32_t I2cOpen(const I2cConfig& config, uint32_t timing, Completion& done) noe
 uint32_t I2cClose(uint8_t instance) noexcept {
   I2cSlot& slot = I2cs()[instance];
   I2cIrqsOn(instance, 0U, false);
-  slot.done = nullptr;
+  slot.done.store(nullptr, std::memory_order_release);
   const HAL_StatusTypeDef s = HAL_I2C_DeInit(&slot.handle);
   const uint32_t code = Code(s, slot.handle.ErrorCode);
   slot.handle.Instance = nullptr;
@@ -648,41 +651,46 @@ void I2cPrepare(uint8_t instance) noexcept {
   static_cast<void>(instance); // I2C v1 has no TXDR/RXDR or CR2 transfer fields
 #else
   I2C_TypeDef* const r = I2cs()[instance].handle.Instance;
-  if ((r->ISR & I2C_ISR_TXIS) != 0U) {
-    r->TXDR = 0x00U; // a latched TXIS: a dummy byte clears it, the flush below drops it
+  if (r != nullptr) { // not open after a failed re-initialisation: nothing to flush
+    if ((r->ISR & I2C_ISR_TXIS) != 0U) {
+      r->TXDR = 0x00U; // a latched TXIS: a dummy byte clears it, the flush below drops it
+    }
+    if ((r->ISR & I2C_ISR_TXE) == 0U) {
+      r->ISR |= I2C_ISR_TXE; // flush the transmit data register
+    }
+    if ((r->ISR & I2C_ISR_RXNE) != 0U) {
+      static_cast<void>(r->RXDR);
+    }
+    constexpr uint32_t kTransferFields = I2C_CR2_NBYTES | I2C_CR2_RELOAD | I2C_CR2_AUTOEND |
+                                         I2C_CR2_START | I2C_CR2_STOP | I2C_CR2_RD_WRN;
+    r->CR2 &= ~kTransferFields;
   }
-  if ((r->ISR & I2C_ISR_TXE) == 0U) {
-    r->ISR |= I2C_ISR_TXE; // flush the transmit data register
-  }
-  if ((r->ISR & I2C_ISR_RXNE) != 0U) {
-    static_cast<void>(r->RXDR);
-  }
-  constexpr uint32_t kTransferFields = I2C_CR2_NBYTES | I2C_CR2_RELOAD | I2C_CR2_AUTOEND |
-                                       I2C_CR2_START | I2C_CR2_STOP | I2C_CR2_RD_WRN;
-  r->CR2 &= ~kTransferFields;
 #endif
 }
 
 void I2cRestore(uint8_t instance) noexcept {
   I2C_HandleTypeDef& h = I2cs()[instance].handle;
+  if (h.Instance != nullptr) { // not open: nothing to restore
 #if defined(STM32F4)
-  __HAL_I2C_DISABLE_IT(&h, I2C_IT_EVT | I2C_IT_BUF | I2C_IT_ERR);
-  __HAL_I2C_CLEAR_FLAG(&h, I2C_FLAG_AF | I2C_FLAG_BERR | I2C_FLAG_ARLO | I2C_FLAG_OVR);
+    __HAL_I2C_DISABLE_IT(&h, I2C_IT_EVT | I2C_IT_BUF | I2C_IT_ERR);
+    __HAL_I2C_CLEAR_FLAG(&h, I2C_FLAG_AF | I2C_FLAG_BERR | I2C_FLAG_ARLO | I2C_FLAG_OVR);
 #else
-  __HAL_I2C_DISABLE_IT(&h, I2C_IT_ERRI | I2C_IT_TCI | I2C_IT_STOPI | I2C_IT_NACKI | I2C_IT_ADDRI |
-                               I2C_IT_RXI | I2C_IT_TXI);
-  __HAL_I2C_CLEAR_FLAG(&h,
-                       I2C_FLAG_AF | I2C_FLAG_STOPF | I2C_FLAG_BERR | I2C_FLAG_ARLO | I2C_FLAG_OVR);
+    __HAL_I2C_DISABLE_IT(&h, I2C_IT_ERRI | I2C_IT_TCI | I2C_IT_STOPI | I2C_IT_NACKI | I2C_IT_ADDRI |
+                                 I2C_IT_RXI | I2C_IT_TXI);
+    __HAL_I2C_CLEAR_FLAG(
+        &h, I2C_FLAG_AF | I2C_FLAG_STOPF | I2C_FLAG_BERR | I2C_FLAG_ARLO | I2C_FLAG_OVR);
 #endif
-  I2cPrepare(instance);
-  h.State = HAL_I2C_STATE_READY;
-  h.Mode = HAL_I2C_MODE_NONE;
-  h.PreviousState = 0U;
-  __HAL_UNLOCK(&h);
+    I2cPrepare(instance);
+    h.State = HAL_I2C_STATE_READY;
+    h.Mode = HAL_I2C_MODE_NONE;
+    h.PreviousState = 0U;
+    __HAL_UNLOCK(&h);
+  }
 }
 
 bool I2cBusy(uint8_t instance) noexcept {
-  return __HAL_I2C_GET_FLAG(&I2cs()[instance].handle, I2C_FLAG_BUSY) != RESET;
+  const I2C_HandleTypeDef& h = I2cs()[instance].handle;
+  return (h.Instance != nullptr) && (__HAL_I2C_GET_FLAG(&h, I2C_FLAG_BUSY) != RESET);
 }
 
 uint32_t I2cReset(uint8_t instance) noexcept {
@@ -748,6 +756,14 @@ uint32_t SpiKernelClockHz(uint8_t instance) noexcept {
 #endif
 }
 
+bool SpiHasFifo() noexcept {
+#if defined(STM32F4)
+  return false;
+#else
+  return true;
+#endif
+}
+
 uint32_t SpiOpen(const SpiBusConfig& config, Completion& done) noexcept {
   SpiSlot& slot = Spis()[config.instance];
   SPI_HandleTypeDef& h = slot.handle;
@@ -768,7 +784,7 @@ uint32_t SpiOpen(const SpiBusConfig& config, Completion& done) noexcept {
     if (s != HAL_OK) {
       h.Instance = nullptr;
     } else {
-      slot.done = &done;
+      slot.done.store(&done, std::memory_order_release);
       HAL_NVIC_SetPriority(SpiIrq(config.instance), config.irq_priority, 0U);
       HAL_NVIC_EnableIRQ(SpiIrq(config.instance));
     }
@@ -789,7 +805,7 @@ uint32_t SpiConfigure(uint8_t instance, uint8_t mode, uint8_t exponent) noexcept
 uint32_t SpiClose(uint8_t instance) noexcept {
   SpiSlot& slot = Spis()[instance];
   HAL_NVIC_DisableIRQ(SpiIrq(instance));
-  slot.done = nullptr;
+  slot.done.store(nullptr, std::memory_order_release);
   const HAL_StatusTypeDef s = HAL_SPI_DeInit(&slot.handle);
   const uint32_t code = Code(s, slot.handle.ErrorCode);
   slot.handle.Instance = nullptr;
@@ -835,7 +851,7 @@ bool UartHasSevenBitWords() noexcept {
 uint32_t UartOpen(const UartConfig& config, Uart& owner) noexcept {
   UartSlot& slot = Uarts()[UartSlotOf(config.instance)];
   uint32_t code = port_code::kOwned;
-  if (slot.owner == nullptr) {
+  if (slot.owner.load(std::memory_order_acquire) == nullptr) {
     static_cast<void>(PinAlternate(config.tx, false, Pull::None));
     static_cast<void>(PinAlternate(config.rx, false, Pull::Up));
     UartClock(config.instance);
@@ -844,7 +860,7 @@ uint32_t UartOpen(const UartConfig& config, Uart& owner) noexcept {
     const HAL_StatusTypeDef s = HAL_UART_Init(&slot.handle); // the FIFO stays off (HAL default)
     code = Code(s, slot.handle.ErrorCode);
     if (s == HAL_OK) {
-      slot.owner = &owner;
+      slot.owner.store(&owner, std::memory_order_release);
       UartRxOn(slot.handle);
       HAL_NVIC_SetPriority(UartIrq(config.instance), config.irq_priority, 0U);
       HAL_NVIC_EnableIRQ(UartIrq(config.instance));
@@ -856,7 +872,7 @@ uint32_t UartOpen(const UartConfig& config, Uart& owner) noexcept {
 uint32_t UartClose(uint8_t instance) noexcept {
   UartSlot& slot = Uarts()[UartSlotOf(instance)];
   HAL_NVIC_DisableIRQ(UartIrq(instance));
-  slot.owner = nullptr;
+  slot.owner.store(nullptr, std::memory_order_release);
   const HAL_StatusTypeDef s = HAL_UART_DeInit(&slot.handle);
   return Code(s, slot.handle.ErrorCode);
 }
@@ -908,7 +924,11 @@ void HandleUartIrq(uint8_t instance) noexcept {
   if (index < sdk::kUarts) {
     sdk::UartSlot& slot = sdk::Uarts()[index];
     USART_TypeDef* const u = slot.handle.Instance;
-    if ((slot.owner != nullptr) && (u != nullptr)) {
+    Uart* const owner = slot.owner.load(std::memory_order_acquire);
+    if (owner == nullptr) {
+      // Not the port's: its interrupt would re-enter forever with nothing to clear it.
+      HAL_NVIC_DisableIRQ(sdk::UartIrq(instance));
+    } else if (u != nullptr) {
       UartEvent event{};
 #if defined(STM32F4)
       // F4: reading SR then DR clears the error flags, so DR is read whenever either is set.
@@ -927,7 +947,9 @@ void HandleUartIrq(uint8_t instance) noexcept {
 #endif
       event.tx_empty = ((status & UART_FLAG_TXE) != 0U) && sdk::UartItOn(slot.handle, UART_IT_TXE);
       event.tx_complete = ((status & UART_FLAG_TC) != 0U) && sdk::UartItOn(slot.handle, UART_IT_TC);
-      slot.owner->OnInterrupt(event);
+      owner->OnInterrupt(event);
+    } else {
+      // an owner without a handle does not exist (UartOpen sets the handle first)
     }
   }
 }
@@ -935,7 +957,9 @@ void HandleUartIrq(uint8_t instance) noexcept {
 void HandleI2cIrq(uint8_t instance, bool error) noexcept {
   if (instance < sdk::kI2cs) {
     sdk::I2cSlot& slot = sdk::I2cs()[instance];
-    if (slot.done != nullptr) {
+    if (slot.done.load(std::memory_order_acquire) == nullptr) {
+      sdk::I2cIrqsOn(instance, 0U, false); // not the port's: no interrupt storm
+    } else {
       if (error) {
         HAL_I2C_ER_IRQHandler(&slot.handle);
       } else {
@@ -948,7 +972,9 @@ void HandleI2cIrq(uint8_t instance, bool error) noexcept {
 void HandleSpiIrq(uint8_t instance) noexcept {
   if (instance < sdk::kSpis) {
     sdk::SpiSlot& slot = sdk::Spis()[instance];
-    if (slot.done != nullptr) {
+    if (slot.done.load(std::memory_order_acquire) == nullptr) {
+      HAL_NVIC_DisableIRQ(sdk::SpiIrq(instance)); // not the port's: no interrupt storm
+    } else {
       HAL_SPI_IRQHandler(&slot.handle);
     }
   }
@@ -961,14 +987,18 @@ void HandleSpiIrq(uint8_t instance) noexcept {
 namespace {
 void I2cDone(const I2C_HandleTypeDef* h, uint32_t code) noexcept {
   kb::port::stm32::sdk::I2cSlot* const slot = kb::port::stm32::sdk::I2cSlotOf(h);
-  if ((slot != nullptr) && (slot->done != nullptr)) {
-    slot->done->Complete(code);
+  kb::port::stm32::Completion* const done =
+      (slot != nullptr) ? slot->done.load(std::memory_order_acquire) : nullptr;
+  if (done != nullptr) {
+    done->Complete(code);
   }
 }
 void SpiDone(const SPI_HandleTypeDef* h, uint32_t code) noexcept {
   kb::port::stm32::sdk::SpiSlot* const slot = kb::port::stm32::sdk::SpiSlotOf(h);
-  if ((slot != nullptr) && (slot->done != nullptr)) {
-    slot->done->Complete(code);
+  kb::port::stm32::Completion* const done =
+      (slot != nullptr) ? slot->done.load(std::memory_order_acquire) : nullptr;
+  if (done != nullptr) {
+    done->Complete(code);
   }
 }
 [[nodiscard]] uint32_t Failed(uint32_t error_code) noexcept {

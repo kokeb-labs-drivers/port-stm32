@@ -32,9 +32,35 @@ that needs one is not served yet.
 | --- | --- |
 | SCK, MOSI, MISO | `PinId` with the SPI alternate function (AF5 or AF6 on most pins). Push-pull, very high speed |
 | CS | Any GPIO, push-pull, active low; one per `SpiDevice` |
-| Clock | `clock_hz` is the highest SCK wanted; the prescaler (2, 4, ... 256) rounds down: the SCK is the fastest at or below it. `InvalidArgument` when even /256 is too fast |
+| Clock | `clock_hz` is the highest SCK wanted; the prescaler (2, 4, ... 256) rounds down: the SCK is the fastest at or below both `clock_hz` and the bus's interrupt ceiling (below). `ActualClockHz()` is the SCK used. `InvalidArgument` when even /256 is above either |
 | Kernel clock | `kernel_clock_hz`, or 0: the instance's APB clock (SPI2 and SPI3 on APB1, the others on APB2), and on H7 the SPI kernel clock from the RCC |
 | Modes | 0 to 3 (CPOL, CPHA) per device |
+
+## The interrupt ceiling
+
+Transfers run by the HAL's interrupt handler, which runs once for each transmit-empty and each receive-not-empty
+event: about 300 core cycles per byte with exception entry and exit. Without a receive FIFO (F4) a received byte
+must be read within one byte time, or the next one overruns it (`HAL_SPI_ERROR_OVR`, reported as `BusError`); with a
+FIFO (G4 and L4: 4 bytes, H7: 16) the handler has a few bytes of slack but must keep up on average. The SCK of every
+interrupt transfer is therefore limited to:
+
+| Family | Ceiling (`SpiInterruptCeilingHz`) | At a typical core clock |
+| --- | --- | --- |
+| F4 (no FIFO) | core clock / 64 (512 cycles per byte: the handler plus room for other interrupts) | 2.6 MHz at 168 MHz |
+| G4, L4 (4-byte FIFO) | core clock / 40 (320 cycles per byte) | 4.25 MHz at 170 MHz, 2 MHz at 80 MHz |
+| H7 (16-byte FIFO) | core clock / 40 | 12 MHz at 480 MHz |
+
+The bus computes the ceiling from `SystemCoreClock` at `EnsureReady()`; a device asking for more runs at the fastest
+prescaler at or below the ceiling (`ActualClockHz()` reports it), so no frame overruns. These are estimates from
+the pinned HAL's handler structure, not measurements; a bench measurement per family is due before a release
+candidate. At the ceiling the handler still takes most of the CPU for the frame's duration (at the SPI interrupt's
+priority): long frames are cheaper on a slower SCK, or with DMA.
+
+Not implemented: DMA, and a polled path above the ceiling. Observed with an earlier implementation on STM32H7
+hardware, SPI by circular DMA into non-cacheable SRAM ran at about 4.8 % of a 240 MHz core against about 28 % for the
+polled path, with zero errors; DMA is the way past the ceiling and comes with the H7 cache rules of
+[Integration](../integration.md). A polled register loop for short frames would busy-wait at the caller's priority,
+which the port's wait rule excludes under an RTOS ([How the port waits](../waits.md)), so it is not offered.
 
 ## Timing limits
 

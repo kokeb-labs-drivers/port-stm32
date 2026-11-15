@@ -61,6 +61,8 @@ struct State {
   uint32_t tick{0U};
   uint32_t tick_step{1U};
   uint32_t counter_step{1U};
+  uint32_t tick_every{1U};
+  uint32_t tick_calls{0U};
   std::set<std::string> stalled;
   bool uart_running{false};
   uint32_t i2c_options{0U};
@@ -244,6 +246,9 @@ bool ClockEnabled(const char* name) {
 }
 void SetTickStep(uint32_t step) {
   S().tick_step = step;
+}
+void SetTickEvery(uint32_t calls) {
+  S().tick_every = (calls == 0U) ? 1U : calls;
 }
 void SetCounterStep(uint32_t step) {
   S().counter_step = step;
@@ -443,8 +448,14 @@ extern "C" {
 uint32_t HAL_GetTick(void) {
   static_cast<void>(Injected("HAL_GetTick"));
   const uint32_t now = S().tick;
-  S().tick += S().tick_step;
+  ++S().tick_calls;
+  if ((S().tick_calls % S().tick_every) == 0U) {
+    S().tick += S().tick_step;
+  }
   return now;
+}
+HAL_TickFreqTypeDef HAL_GetTickFreq(void) {
+  return HAL_TICK_FREQ_1KHZ;
 }
 uint32_t HAL_RCC_GetHCLKFreq(void) {
   return 160000000U;

@@ -131,7 +131,7 @@ bool I2cController::configValid() const noexcept {
          config_.sda.Used() && config_.sda.Valid() && sdk::PortExists(config_.scl.port) &&
          sdk::PortExists(config_.sda.port) && (config_.clock_hz >= kMinClockHz) &&
          (config_.clock_hz <= (sdk::I2cHasTimingRegister() ? kMaxClockHz : kMaxClockV1Hz)) &&
-         ConfiguredTimeoutValid(config_.timeout);
+         ConfiguredTimeoutValid(config_.timeout) && RtosIrqPriorityValid(config_.irq_priority);
 }
 
 uint32_t I2cController::timingRegister(bool& ok) const noexcept {
@@ -364,7 +364,12 @@ kb::Status I2cController::recoverLocked() noexcept {
   // SCL and SDA as open-drain outputs, released (high): clock SCL until a slave lets SDA go.
   code = First(code, sdk::PinOutput(config_.scl, true, pull, Speed::Low, true));
   code = First(code, sdk::PinOutput(config_.sda, true, pull, Speed::Low, true));
-  for (uint32_t i = 0U; i < kRecoveryClocks; ++i) {
+  // A device holding SCL low cannot be clocked free: counted apart (scl_held), no clocks sent.
+  const bool scl_held = !sdk::PinRead(config_.scl);
+  if (scl_held) {
+    count(&I2cStats::scl_held);
+  }
+  for (uint32_t i = 0U; (i < kRecoveryClocks) && !scl_held; ++i) {
     if (!sdk::PinRead(config_.sda)) { // clocks only while a slave holds SDA
       sdk::PinWrite(config_.scl, false);
       wait.WaitUs(kb::Microseconds{kHalfPeriodUs});
@@ -380,7 +385,12 @@ kb::Status I2cController::recoverLocked() noexcept {
   const bool idle = linesIdle();
   bool timing_ok = false;
   const uint32_t timing = timingRegister(timing_ok);
-  code = First(code, sdk::I2cOpen(config_, timing, done_));
+  const uint32_t opened = sdk::I2cOpen(config_, timing, done_);
+  code = First(code, opened);
+  if (opened != hal::kOk) {
+    ready_.store(
+        false); // the peripheral is not open: the next call is NotReady, never a null handle
+  }
   kb::Status status = MapHalStatus(code & 0xFFU);
   if ((status == kb::Status::Ok) && !idle) {
     status = kb::Status::BusError; // a device still holds a line low (SCL or SDA)

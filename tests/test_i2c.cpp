@@ -393,3 +393,42 @@ KB_TEST("i2c: one controller per instance; free again after Release or a failed 
   KB_CHECK_EQ(fake::Calls("HAL_I2C_EV_IRQHandler"), 1U);
   KB_CHECK_EQ(fake::Calls("HAL_I2C_ER_IRQHandler"), 1U);
 }
+
+KB_TEST("i2c: a failed re-initialisation in recovery leaves the controller not ready") {
+  Fresh();
+  fake::I2cPresent(kDev, true);
+  stm::I2cController bus{Config()};
+  KB_REQUIRE(bus.EnsureReady() == Status::Ok);
+  fake::ForceLevel(kPortB, 8, 1);
+  fake::ForceLevel(kPortB, 9, 0);        // SDA held low: a failure starts the recovery
+  fake::Fail("HAL_I2C_Init", HAL_ERROR); // the re-initialisation after the nine clocks fails
+  const std::array<uint8_t, 1> tx{0U};
+  fake::Fail("HAL_I2C_Master_Seq_Transmit_IT", HAL_BUSY);
+  KB_CHECK_EQ(bus.Write(kDev, tx), Status::BusError);
+  KB_CHECK_EQ(bus.Write(kDev, tx), Status::NotReady); // never a transfer on a null handle
+  fake::ForceLevel(kPortB, 9, -1);
+  fake::ForceLevel(kPortB, 8, -1);
+  KB_CHECK_EQ(bus.EnsureReady(), Status::Ok); // started again by its owner
+  KB_CHECK_EQ(bus.Write(kDev, tx), Status::Ok);
+}
+
+KB_TEST("i2c: a recovery that finds SCL held low is counted apart and sends no clocks") {
+  Fresh();
+  stm::I2cConfig c = Config();
+  c.auto_recover = false;
+  stm::I2cController bus{c};
+  KB_REQUIRE(bus.EnsureReady() == Status::Ok);
+  fake::ForceLevel(kPortB, 8, 0); // SCL held low by a device
+  fake::ForceLevel(kPortB, 9, 1);
+  const uint32_t writes = fake::Calls("HAL_GPIO_WritePin");
+  KB_CHECK_EQ(bus.RecoverBus(), Status::BusError);
+  KB_CHECK_EQ(bus.Stats().scl_held, 1U);
+  KB_CHECK(fake::Calls("HAL_GPIO_WritePin") - writes <= 4U); // the pins set and a STOP, no clocks
+}
+
+KB_TEST("i2c: an interrupt of an instance the port does not own is switched off") {
+  Fresh();
+  HAL_NVIC_EnableIRQ(I2C2_EV_IRQn); // as an application that owns I2C2 would
+  stm::HandleI2cIrq(2U, false);
+  KB_CHECK(!fake::IrqEnabled(I2C2_EV_IRQn)); // no endless re-entry
+}

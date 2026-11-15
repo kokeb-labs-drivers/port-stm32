@@ -38,6 +38,8 @@ namespace kb::port::stm32::sdk {
 // --- system -----------------------------------------------------------------------------------
 /** @brief HAL_GetTick(): only to check that the HAL time base runs (HalTickRuns()). */
 [[nodiscard]] uint32_t TickMs() noexcept;
+/** @brief HAL_GetTickFreq(): the milliseconds each HAL tick adds (1, 10 or 100). */
+[[nodiscard]] uint32_t TickPeriodMs() noexcept;
 /** @brief SystemCoreClock. */
 [[nodiscard]] uint32_t CoreClockHz() noexcept;
 /** @brief The DWT cycle counter, enabled on first use. */
@@ -97,6 +99,8 @@ void I2cRestore(uint8_t instance) noexcept;
 // --- SPI ----------------------------------------------------------------------------------------
 [[nodiscard]] bool SpiExists(uint8_t instance) noexcept;
 [[nodiscard]] uint32_t SpiKernelClockHz(uint8_t instance) noexcept;
+/** @brief True when the family's SPI has a receive FIFO (G4, H7, L4); false on F4. */
+[[nodiscard]] bool SpiHasFifo() noexcept;
 /** @brief Pins, HAL_SPI_Init, the interrupt; `done` gets every transfer's end. */
 [[nodiscard]] uint32_t SpiOpen(const SpiBusConfig& config, Completion& done) noexcept;
 /** @brief HAL_SPI_Init again in `mode` with prescaler 2^(exponent + 1). */
@@ -134,7 +138,7 @@ void UartTxInterrupts(uint8_t instance, bool empty, bool complete) noexcept;
  * port_code::kUnsupported (above the family's limit). */
 [[nodiscard]] uint32_t AdcClockCheck() noexcept;
 /** @brief Clock, HAL_ADC_Init, calibration where the family has it, the interrupt. */
-[[nodiscard]] uint32_t AdcOpen(uint8_t instance, Completion& conversion) noexcept;
+[[nodiscard]] uint32_t AdcOpen(uint8_t instance, Completion& conversion, uint8_t priority) noexcept;
 [[nodiscard]] uint32_t AdcClose(uint8_t instance) noexcept;
 /** @brief Configures `channel` and starts one conversion by interrupt (HAL_ADC_Start_IT). */
 [[nodiscard]] uint32_t AdcStart(uint8_t instance, uint8_t channel, AdcSampling sampling) noexcept;

@@ -21,12 +21,20 @@ the handle's callbacks, so the port works either way.
 
 ## A CubeMX project
 
+- **The vectors.** With `KB_PORT_STM32_VECTORS=ON` (the default) the port's vector file defines **every**
+  USART/UART/LPUART, I2C event and error, SPI, ADC, FDCAN line 0 or bxCAN TX/RX0/SCE, EXTI and TIM2/TIM5 vector the
+  device has, whether or not a port object uses the instance. For a peripheral CubeMX (or other code) keeps, name its
+  vectors in `KB_PORT_STM32_VECTORS_EXCLUDE` (for example `-DKB_PORT_STM32_VECTORS_EXCLUDE="USART1_IRQHandler"`):
+  the port does not define them, and the generated handlers stay. A vector the port serves for an instance no port
+  object owns switches its NVIC line off at the first interrupt (UART, I2C, SPI, CAN, a shared ADC vector with no
+  open instance), so a peripheral left enabled by other code cannot make it re-enter forever; that peripheral then
+  gets no interrupts, so exclude its vectors. EXTI lines are grouped in vectors (`EXTI9_5`, `EXTI15_10`): a line no
+  `InputPin` owns is cleared and not served; to serve a line of the application, exclude the vector and call
+  `HandleExtiIrq()` from the application's handler for the port's lines. `KB_PORT_STM32_VECTORS=OFF` drops the whole
+  file. A vector defined twice is a link error, never a silent override; `tools/check_vectors.cmake` checks after
+  the link that every vector the port defines is its strong symbol (an excluded one is not checked).
 - **Leave the port's peripherals unconfigured in CubeMX** (no init code, no NVIC entry): the port initialises them in
-  `EnsureReady()`. Peripherals the port does not use stay CubeMX's.
-- **Drop the generated handlers of the port's vectors** from `stm32xx_it.c` (USART/UART/LPUART, EXTI, TIM2 or TIM5,
-  I2C event and error, SPI, ADC, FDCAN line 0 or bxCAN TX/RX0/SCE), and the generated callback functions listed above.
-  A duplicate is a link error, never a silent override. Or set `KB_PORT_STM32_VECTORS=OFF` and call the entry points
-  of `irq.hpp` from the generated handlers.
+  `EnsureReady()`. Drop the generated callback functions listed above.
 - **Drop the `HAL_*_MspInit` / `HAL_*_MspDeInit` bodies** of the port's peripherals: the port configures its pins
   itself, and an `MspDeInit` that resets pins would run on every SPI mode change (`SpiConfigure` re-initialises).
 - **The HAL time base**: with FreeRTOS, CubeMX moves the HAL time base off SysTick to a TIMx (often at the lowest
@@ -45,13 +53,17 @@ urgency) `configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY`:
 | UART (`UartConfig::irq_priority`) | 5 | Yes (a semaphore give) |
 | I2C event and error (`I2cConfig::irq_priority`) | 5 | Yes |
 | SPI (`SpiBusConfig::irq_priority`) | 5 | Yes |
-| ADC (fixed) | 5 | Yes |
+| ADC (`AdcConfig::irq_priority`, the instance's first channel's) | 5 | Yes |
 | CAN (`CanConfig::irq_priority`) | 5 | Yes |
 | EXTI (`InputConfig::irq_priority`) | 5 | Only if the application's callback does |
 | Clock wrap (`ClockConfig::irq_priority`) | 1 | No (it may stay above the syscall limit) |
 
 The defaults match `configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY` = 5, the value in the example's
-`FreeRTOSConfig.h` and a common one; with another value, set the priorities accordingly.
+`FreeRTOSConfig.h` and a common one. Set `KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY` (CMake) to that value: `EnsureReady()`
+of `Uart`, `I2cController`, `SpiBus`, `AdcChannel` and `CanController` then refuses an `irq_priority` below it, or
+above 15, with `InvalidArgument`, so no RTOS-calling interrupt can run above the syscall limit. It is 0 by default
+(bare metal: no limit); the FreeRTOS example sets 5. EXTI and the clock wrap are not checked (their handlers do not
+call the RTOS unless the application's EXTI callback does).
 
 ## RTOS objects and start-up order
 

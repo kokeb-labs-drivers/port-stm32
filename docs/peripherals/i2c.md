@@ -90,8 +90,11 @@ failed transfer the controller reads SDA and SCL; when one is low the failure is
 `auto_recover`, the recovery follows at once: the peripheral is released, the pins are taken as open-drain GPIO
 (with the internal pull-ups kept when `internal_pullups` is set),
 SCL is clocked until the slave lets SDA go (at most nine clocks), a STOP is made and the peripheral is initialised
-again. The transfer itself is not retried: the caller decides. A line still low after the recovery is reported as
-`BusError` with `LastFailure()` `BusStuck` (a short, a missing pull-up, a device in reset).
+again. The transfer itself is not retried: the caller decides. A device holding SCL low cannot be clocked free: the
+recovery then sends no clocks and counts it in `Stats().scl_held`. If the peripheral cannot be initialised again
+after a recovery, the controller is no longer ready: its calls return `NotReady` until `EnsureReady()` succeeds. A
+line still low after the recovery is reported as `BusError` with `LastFailure()` `BusStuck` (a short, a missing
+pull-up, a device in reset).
 
 ## Example
 

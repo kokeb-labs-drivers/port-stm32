@@ -49,6 +49,7 @@ KB_TEST("spi prescaler: the fastest SCK at or below the asked clock") {
 
 KB_TEST("spi: bad bus and device configurations are refused") {
   Fresh();
+  SystemCoreClock = 640000000U; // a ceiling of 16 MHz (FIFO) or 10 MHz (F4)
   stm::SpiBusConfig b = BusConfig();
   b.instance = 9U;
   stm::SpiBus none{b};
@@ -89,6 +90,7 @@ KB_TEST("spi: bad bus and device configurations are refused") {
 
 KB_TEST("spi: a frame drives chip select around it at the device's mode and clock") {
   Fresh();
+  SystemCoreClock = 640000000U; // a ceiling of 16 MHz (FIFO) or 10 MHz (F4)
   stm::SpiBus bus{BusConfig()};
   stm::SpiDevice dev{bus, DevConfig()};
   const std::array<uint8_t, 5> tx{0x80U, 1U, 2U, 3U, 4U};
@@ -122,6 +124,7 @@ KB_TEST("spi: a frame drives chip select around it at the device's mode and cloc
 KB_TEST("spi: two devices with different modes switch the peripheral; write-only and read-only "
         "frames") {
   Fresh();
+  SystemCoreClock = 640000000U; // a ceiling of 16 MHz (FIFO) or 10 MHz (F4)
   stm::SpiBus bus{BusConfig()};
   stm::SpiDevice a{bus, DevConfig()};
   stm::SpiDeviceConfig other = DevConfig();
@@ -148,6 +151,7 @@ KB_TEST("spi: two devices with different modes switch the peripheral; write-only
 
 KB_TEST("spi: frames above 65535 bytes are chunked; spans are checked") {
   Fresh();
+  SystemCoreClock = 640000000U; // a ceiling of 16 MHz (FIFO) or 10 MHz (F4)
   stm::SpiBus bus{BusConfig()};
   stm::SpiDevice dev{bus, DevConfig()};
   KB_REQUIRE(dev.EnsureReady() == Status::Ok);
@@ -163,6 +167,7 @@ KB_TEST("spi: frames above 65535 bytes are chunked; spans are checked") {
 
 KB_TEST("spi: a timeout aborts and re-initialises before the next frame; errors are BusError") {
   Fresh();
+  SystemCoreClock = 640000000U; // a ceiling of 16 MHz (FIFO) or 10 MHz (F4)
   stm::SpiBus bus{BusConfig()};
   stm::SpiDevice dev{bus, DevConfig()};
   KB_REQUIRE(dev.EnsureReady() == Status::Ok);
@@ -204,19 +209,20 @@ KB_TEST("spi: a timeout aborts and re-initialises before the next frame; errors 
 
 KB_TEST("spi: SetClockHz before and after EnsureReady; Release") {
   Fresh();
+  SystemCoreClock = 640000000U; // a ceiling of 16 MHz (FIFO) or 10 MHz (F4)
   stm::SpiBus bus{BusConfig()};
   stm::SpiDevice dev{bus, DevConfig()};
   KB_CHECK_EQ(dev.SetClockHz(0U), Status::InvalidArgument);
   KB_CHECK_EQ(dev.SetClockHz(1000000U), Status::Ok);
   KB_REQUIRE(dev.EnsureReady() == Status::Ok);
   KB_CHECK_EQ(dev.ActualClockHz(), 625000U);
-  KB_CHECK_EQ(dev.SetClockHz(20000000U), Status::Ok);
-  KB_CHECK_EQ(dev.ActualClockHz(), 20000000U);
-  KB_CHECK(dev.Config().clock_hz == 20000000U);
+  KB_CHECK_EQ(dev.SetClockHz(5000000U), Status::Ok);
+  KB_CHECK_EQ(dev.ActualClockHz(), 5000000U);
+  KB_CHECK(dev.Config().clock_hz == 5000000U);
   KB_CHECK_EQ(dev.SetClockHz(100U), Status::InvalidArgument);
   const std::array<uint8_t, 1> tx{1U};
   KB_CHECK_EQ(dev.Transfer(tx, std::span<uint8_t>{}), Status::Ok);
-  KB_CHECK_EQ(fake::SpiInit().BaudRatePrescaler, SPI_BAUDRATEPRESCALER_8);
+  KB_CHECK_EQ(fake::SpiInit().BaudRatePrescaler, SPI_BAUDRATEPRESCALER_32);
   KB_CHECK_EQ(dev.Release(), Status::Ok);
   KB_CHECK_EQ(fake::ModeOf(kPortB, 6), GPIO_MODE_ANALOG);
   fake::Fail("HAL_SPI_DeInit", HAL_ERROR);
@@ -225,6 +231,7 @@ KB_TEST("spi: SetClockHz before and after EnsureReady; Release") {
 
 KB_TEST("spi: a held bus makes a transfer Busy") {
   Fresh();
+  SystemCoreClock = 640000000U; // a ceiling of 16 MHz (FIFO) or 10 MHz (F4)
   stm::SpiBus bus{BusConfig()};
   stm::SpiDevice dev{bus, DevConfig()};
   KB_REQUIRE(dev.EnsureReady() == Status::Ok);
@@ -238,6 +245,7 @@ KB_TEST("spi: a held bus makes a transfer Busy") {
 
 KB_TEST("spi: one bus object per instance; free again after Release or a failed start") {
   Fresh();
+  SystemCoreClock = 640000000U; // a ceiling of 16 MHz (FIFO) or 10 MHz (F4)
   stm::SpiBus first{BusConfig()};
   stm::SpiBus second{BusConfig()};
   fake::Fail("HAL_SPI_Init", HAL_ERROR);
@@ -246,4 +254,51 @@ KB_TEST("spi: one bus object per instance; free again after Release or a failed 
   KB_CHECK_EQ(first.EnsureReady(), Status::Busy);
   KB_CHECK_EQ(second.Release(), Status::Ok);
   KB_CHECK_EQ(first.EnsureReady(), Status::Ok);
+}
+
+KB_TEST("spi: the SCK of interrupt transfers is limited to the family's ceiling") {
+  static_assert(stm::SpiInterruptCeilingHz(168000000U, false) == 2625000U); // F4: core / 64
+  static_assert(stm::SpiInterruptCeilingHz(170000000U, true) == 4250000U);  // G4: core / 40
+  static_assert(stm::SpiInterruptCeilingHz(480000000U, true) == 12000000U); // H7: core / 40
+  Fresh();
+  SystemCoreClock = 160000000U;
+  stm::SpiBus bus{BusConfig()};
+  stm::SpiDeviceConfig fast = DevConfig();
+  fast.clock_hz = 40000000U; // above the ceiling: the prescaler is chosen for the ceiling
+  stm::SpiDevice dev{bus, fast};
+  KB_REQUIRE(dev.EnsureReady() == Status::Ok);
+  const uint32_t ceiling = kF4 ? 2500000U : 4000000U;
+  KB_CHECK_EQ(bus.InterruptCeilingHz(), ceiling);
+  KB_CHECK(dev.ActualClockHz() <= ceiling);
+  KB_CHECK_EQ(dev.ActualClockHz(), 2500000U);   // 160 MHz / 64, at or below either ceiling
+  KB_CHECK(dev.Config().clock_hz == 40000000U); // what was asked is kept
+  KB_CHECK_EQ(dev.SetClockHz(80000000U), Status::Ok);
+  KB_CHECK(dev.ActualClockHz() <= ceiling);
+  KB_CHECK_EQ(dev.Release(), Status::Ok);
+  KB_CHECK_EQ(bus.Release(), Status::Ok);
+  // A core so slow that even the largest prescaler is above the ceiling: refused.
+  SystemCoreClock = 4000000U;
+  stm::SpiBus slow_bus{BusConfig()};
+  stm::SpiDevice slow{slow_bus, DevConfig()};
+  KB_CHECK_EQ(slow.EnsureReady(), Status::InvalidArgument);
+}
+
+KB_TEST("spi: an abort makes every device's next frame initialise the peripheral again") {
+  Fresh();
+  SystemCoreClock = 640000000U;
+  stm::SpiBus bus{BusConfig()};
+  stm::SpiDevice a{bus, DevConfig()};
+  stm::SpiDeviceConfig other = DevConfig();
+  other.cs = PinId{GpioPort::B, 7U, 0U}; // the same mode and clock as `a`
+  stm::SpiDevice b{bus, other};
+  KB_REQUIRE(a.EnsureReady() == Status::Ok);
+  KB_REQUIRE(b.EnsureReady() == Status::Ok);
+  const std::array<uint8_t, 1> tx{1U};
+  KB_CHECK_EQ(a.Transfer(tx, std::span<uint8_t>{}), Status::Ok);
+  fake::Stall("SPI", true);
+  KB_CHECK_EQ(a.Transfer(tx, std::span<uint8_t>{}), Status::Timeout);
+  fake::Stall("SPI", false);
+  const uint32_t inits = fake::Calls("HAL_SPI_Init");
+  KB_CHECK_EQ(b.Transfer(tx, std::span<uint8_t>{}), Status::Ok); // b, not a: still re-initialised
+  KB_CHECK_EQ(fake::Calls("HAL_SPI_Init"), inits + 1U);
 }

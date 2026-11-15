@@ -24,7 +24,8 @@ that start or release channels of one instance never initialise it twice or de-i
 | Pin | The pin of the channel (datasheet pinout), set analog; unused for internal channels (temperature, VREFINT) |
 | Resolution | 12 bit (`FullScale()` 4095) on G4, F4, L4; 16 bit (65535) on H7 |
 | Reference | `vref_mv`: the voltage on VREF+ (3300 mV default); the port does not measure VREFINT |
-| ADC clock | The HAL's synchronous clock HCLK / 4 on G4, H7, L4 and PCLK2 / 4 on F4; on H7 refused above 36 MHz (HCLK above 144 MHz: select another ADC clock in the application and give the port a lower HCLK, or wait for a configurable clock) |
+| ADC clock | The HAL's synchronous clock HCLK / 4 on G4, H7, L4 and PCLK2 / 4 on F4. On H7, when HCLK / 4 is above 36 MHz (the lower of the H7 revisions' limits), the asynchronous kernel clock (RCC ADCSEL, `HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_ADC)`) with the smallest of the HAL's dividers (1 to 256) that brings it to 36 MHz or less (`AdcAsyncDividerIndex()`); the HAL sets the BOOST mode from the chosen clock. The application starts the ADC kernel clock source; a kernel clock of 0 Hz is `NotReady` |
+| Interrupt | `irq_priority` (default 5; the instance's first channel sets it), at or above `KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY` |
 
 Sampling time per `AdcSampling` class, in ADC clock cycles:
 
@@ -50,6 +51,6 @@ Sampling time per `AdcSampling` class, in ADC clock cycles:
 | `Timeout` | No end of conversion within `conversion_timeout` |
 | `Busy` | The instance lock was not had in time |
 | `InvalidArgument` | An instance or channel the device does not have, `vref_mv` 0, a timeout above 2 s |
-| `Unsupported` | H7: the ADC clock above 36 MHz |
+| `Unsupported` | H7: no divider brings the ADC kernel clock to 36 MHz |
 | `Fault` | A HAL refusal (Detail: the vendor code with `HAL_ADC_ERROR_*`) |
 | `NotReady` | Before `EnsureReady()`; or the ADC clock reads 0 Hz, or the HAL time base does not run |

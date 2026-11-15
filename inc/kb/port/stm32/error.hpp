@@ -72,6 +72,24 @@ inline constexpr uint32_t kNoClock = 0xF9U;
  */
 inline constexpr kb::Milliseconds kMaxTimeout{2000U};
 
+/**
+ * @brief The lowest NVIC priority number an interrupt that calls the RTOS may have: under FreeRTOS
+ * configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY (unshifted). Set by CMake
+ * (KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY); 0 when nothing limits it (bare metal).
+ */
+#if defined(KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY)
+inline constexpr uint8_t kMinRtosIrqPriority = KB_PORT_STM32_MIN_RTOS_IRQ_PRIORITY;
+#else
+inline constexpr uint8_t kMinRtosIrqPriority = 0U;
+#endif
+/** @brief The largest NVIC priority number (4 priority bits on every supported family). */
+inline constexpr uint8_t kLowestIrqPriority = 15U;
+
+/** @brief True for an NVIC priority an interrupt that gives a kb::rtos semaphore may have. */
+[[nodiscard]] constexpr bool RtosIrqPriorityValid(uint8_t priority) noexcept {
+  return (priority >= kMinRtosIrqPriority) && (priority <= kLowestIrqPriority);
+}
+
 /** @brief True when `timeout` is at most kMaxTimeout (zero included). */
 [[nodiscard]] constexpr bool TimeoutValid(kb::Milliseconds timeout) noexcept {
   return timeout.Count() <= kMaxTimeout.Count();

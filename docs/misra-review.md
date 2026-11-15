@@ -3,7 +3,12 @@
 The MISRA scan (`ci-misra.yml`) marks a finding "to review" when its guideline's CodeQL query was found, in the
 tool validation of ci-tools, to report compliant code (the anomaly ids, `AN-*`, are in the scan's
 `misra-findings.csv`). They do not fail the level; each needs the reviewer's check (review checklist R-FP): a real
-one is fixed, a false one needs no record beyond the anomaly. This page is that review.
+one is fixed, a false one needs no record beyond the anomaly.
+
+**This page reviews the CI scan of `v0.1.0-rc.1`, not the current code.** No scan of the current code has been run
+yet; the CI MISRA job of the pull request produces it. Its "to review" list must be checked against the table below
+before the next release candidate: a finding whose pattern is here gets the verdict here, a new pattern is reviewed
+and added, and the scanned commit is written into this page.
 
 ## Scope
 
@@ -41,5 +46,6 @@ one is fixed, a false one needs no record beyond the anomaly. This page is that 
 | Rule 6.5.1 | The interrupt vectors and the HAL callbacks | Their names are fixed by the startup file and the HAL headers ([MISRA boundary and deviations](deviations.md)) |
 | Rule 10.1.1 | The HAL callbacks' handle parameters | The signatures are the HAL's |
 
-Reviewer: the maintainer of record (`.github/CODEOWNERS`), 2026-11-14, against the CI scan of `v0.1.0-rc.1` and the
-code of this change. The next release's scan output is reviewed against this table before the release.
+Reviewer: the maintainer of record (`.github/CODEOWNERS`), 2026-11-14, against the CI scan of `v0.1.0-rc.1`; the
+fixes named above were checked at their sites in the current code. Scan of the current code: pending (the pull
+request's CI MISRA job), to be reviewed against this table before the next release candidate.

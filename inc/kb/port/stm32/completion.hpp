@@ -5,9 +5,13 @@
  * on a kb::rtos semaphore).
  *
  * A Deadline measures elapsed time on the port's Clock (TIM2 or TIM5, time.hpp) once one has been
- * started, and on the Cortex-M DWT cycle counter before that. It also counts its polls and expires
- * after (budget in ms + 1) x kDeadlinePollsPerMs of them, so a wait ends even if both time sources
- * were wrong.
+ * started, and on the Cortex-M DWT cycle counter before that. It has a second, independent bound
+ * so a wait ends even if that time source stopped:
+ * - under a blocking RTOS backend (FreeRTOS), the RTOS sleeps it has seen: every slice that ended
+ *   by its timeout lasted at least the slice on the RTOS tick, so the deadline expires once
+ *   (budget + kWaitSliceMs) of slept time has passed;
+ * - under kb-core's `none` backend, where a take cannot sleep, its poll count: it expires after
+ *   (budget in ms + 1) x kDeadlinePollsPerMs polls.
  *
  * A Completion is armed by the task before it starts an interrupt-driven operation, completed
  * from the interrupt (or the HAL callback) with the vendor code, and waited for with Wait(): each
@@ -44,8 +48,12 @@ inline constexpr uint32_t kDeadlinePollsPerMs = 20000U;
 /** @brief A time budget started at construction, measured on the port's clock. */
 class Deadline {
 public:
-  /** @brief Starts a budget of `budget` now. */
+  /** @brief Starts a budget of `budget` now, with the bound of the build's RTOS backend. */
   explicit Deadline(kb::Milliseconds budget) noexcept;
+  /** @brief The same; `sleeps_block` chooses the slept-time bound (true) or the poll cap. */
+  Deadline(kb::Milliseconds budget, bool sleeps_block) noexcept;
+  /** @brief Counts `ms` the caller slept on the RTOS (a timed-out take, a SleepFor). */
+  void Slept(uint32_t ms) noexcept;
   /** @brief True once the budget (or the poll cap) is used up; counts one poll. */
   [[nodiscard]] bool Expired() noexcept;
   /** @brief The time left, rounded up to whole milliseconds; 0 once expired. */
@@ -61,7 +69,10 @@ private:
   uint32_t core_hz_{0U};
   uint32_t polls_{0U};
   uint32_t max_polls_;
+  uint64_t slept_ms_{0U};
+  uint64_t max_slept_ms_;
   uint8_t clock_timer_{0U};
+  bool sleeps_block_;
   bool expired_{false};
 };
 

@@ -25,9 +25,15 @@ and is short enough that a failing bus cannot hold callers for long. A caller th
 ## Deadline and Completion
 
 `Deadline` (`completion.hpp`) measures a budget on the port's `Clock` (TIM2 or TIM5) once one has been started, and
-on the DWT cycle counter (extended to 64 bits before any division, never written) before that. It also counts its
-polls and expires after (budget in ms + 1) x `kDeadlinePollsPerMs` of them, so a wait ends even if no clock
-advances.
+on the DWT cycle counter (extended to 64 bits before any division, never written) before that. A second,
+independent bound ends a wait even if that time source stops (an application that re-initialises or gates the
+clock's timer, for example):
+
+- under FreeRTOS (`KB_RTOS=FREERTOS`, CMake defines `KB_PORT_STM32_RTOS_BLOCKS`), the time slept on the RTOS tick:
+  each slice that ended by its timeout lasted at least the slice, so the deadline expires after budget +
+  `kWaitSliceMs` of slept slices (a 50 ms wait at most 60 ms of RTOS time);
+- under kb-core's `none` backend, where a take cannot sleep, the poll count: (budget in ms + 1) x
+  `kDeadlinePollsPerMs` polls.
 
 `Completion` is armed by the task, completed from the interrupt (or the HAL callback) with the vendor code, and
 waited for in slices of at most `kWaitSliceMs` (10 ms) on a `kb::rtos::Semaphore`:
@@ -52,14 +58,19 @@ take microseconds on healthy silicon: `HAL_UART_Init` (TEACK/REACK), `HAL_ADC_St
 replace the HAL there; instead:
 
 - `Uart`, `CanController` and `AdcChannel` refuse `EnsureReady()` with `NotReady` (port code `kHalTickStopped`)
-  when the HAL time base does not advance within 2 ms measured on the DWT;
+  when the HAL time base does not advance within two HAL tick periods (`HAL_GetTickFreq()`) and at least 25 ms,
+  measured on the DWT, so a HAL tick advanced at 100 Hz (from an RTOS tick hook) is accepted; `Uart::SetBaud()` and
+  the FDCAN restart in `CanController::Recover()` check it again before their HAL calls;
 - call `EnsureReady()`, `Release()` and `SetBaud()` from task context, never with interrupts masked, never inside
   a critical section, and never from an interrupt;
 - under an RTOS, give the HAL its time base from a source that runs whenever tasks run (see
   [Getting started](getting-started.md)).
 
-The I2C and SPI initialisations and every transfer do not use the HAL tick. The HAL's I2C v1 (F4) busy-flag wait
-at the start of a transfer is a counted loop (about 25 ms of iterations), not the tick.
+The I2C and SPI initialisations and every transfer do not use the HAL tick.
+
+Two waits spin the CPU at the caller's priority by design, both bounded and outside the transfers: the HAL's
+I2C v1 (F4) busy-flag wait at the start of a transfer (a counted loop, about 25 ms of iterations, only when BUSY is
+set), and the HAL time-base check of `EnsureReady()` (ends at the first tick, at most 25 ms or two tick periods).
 
 ## Later: kb-core's asynchronous Start/Poll contract
 

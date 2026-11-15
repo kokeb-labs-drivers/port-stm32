@@ -57,9 +57,11 @@ struct SpiBusConfig {
 
 /** @brief One device on an SpiBus. */
 struct SpiDeviceConfig {
-  PinId cs{};                  ///< Chip select, driven as a push-pull GPIO (active low).
-  uint8_t mode{0U};            ///< SPI mode 0 to 3 (CPOL, CPHA).
-  uint32_t clock_hz{1000000U}; ///< The highest SCK wanted; the prescaler rounds down from it.
+  PinId cs{};       ///< Chip select, driven as a push-pull GPIO (active low).
+  uint8_t mode{0U}; ///< SPI mode 0 to 3 (CPOL, CPHA).
+  /// The highest SCK wanted; the prescaler rounds down from it, and from the bus's interrupt
+  /// ceiling (SpiBus::InterruptCeilingHz) when that is lower: ActualClockHz() says what is used.
+  uint32_t clock_hz{1000000U};
   kb::Milliseconds timeout{
       kb::Milliseconds{20U}}; ///< Bus lock wait and per-chunk limit, to kMaxTimeout.
 };
@@ -77,6 +79,23 @@ struct SpiStats {
  * 2^(n+1), n from 0 (divide by 2) to 7 (divide by 256). `ok` is false when even 256 is too fast.
  */
 [[nodiscard]] uint8_t SpiPrescalerExponent(uint32_t kernel_hz, uint32_t hz, bool& ok) noexcept;
+
+/**
+ * @brief Core cycles per SCK bit an interrupt-driven transfer needs, without and with an SPI FIFO.
+ * The HAL's interrupt handler runs once for each transmit-empty and each receive-not-empty event:
+ * about 300 core cycles per byte with entry and exit. Without a FIFO (F4) a received byte must be
+ * read within one byte time, with room for other interrupts: 64 cycles per bit (512 per byte).
+ * With a FIFO (G4, L4: 4 bytes; H7: 16) the slack is several bytes, but the handler must still
+ * keep up on average: 40 cycles per bit (320 per byte). Estimates from the pinned HAL's handler
+ * structure, not bench measurements (docs/peripherals/spi.md).
+ */
+inline constexpr uint32_t kSpiItCyclesPerBitNoFifo = 64U;
+inline constexpr uint32_t kSpiItCyclesPerBitFifo = 40U; ///< See kSpiItCyclesPerBitNoFifo.
+
+/** @brief The highest SCK an interrupt-driven transfer is run at on a `core_hz` core. */
+[[nodiscard]] constexpr uint32_t SpiInterruptCeilingHz(uint32_t core_hz, bool fifo) noexcept {
+  return core_hz / (fifo ? kSpiItCyclesPerBitFifo : kSpiItCyclesPerBitNoFifo);
+}
 
 /** @brief One SPI peripheral as master: initialises it and serialises its devices. */
 class SpiBus {
@@ -118,8 +137,17 @@ public:
   void Unlock() noexcept {
     mutex_.Unlock();
   }
+  /** @brief The highest SCK of an interrupt-driven transfer (SpiInterruptCeilingHz, at start). */
+  [[nodiscard]] uint32_t InterruptCeilingHz() const noexcept {
+    return ceiling_hz_;
+  }
   /** @brief With the lock held: the peripheral in `mode` at prescaler exponent `prescaler`. */
-  [[nodiscard]] uint32_t SelectLocked(uint8_t mode, uint8_t prescaler, bool force) noexcept;
+  [[nodiscard]] uint32_t SelectLocked(uint8_t mode, uint8_t prescaler) noexcept;
+  /** @brief With the lock held: the next frame of any device initialises the peripheral again. */
+  void InvalidateLocked() noexcept {
+    mode_ = 0xFFU;
+    prescaler_ = 0xFFU;
+  }
   /** @brief With the lock held: one interrupt-driven chunk, waited for on `deadline`. */
   [[nodiscard]] uint32_t TransferLocked(std::span<const uint8_t> tx, std::span<uint8_t> rx,
                                         Deadline& deadline) noexcept;
@@ -130,6 +158,7 @@ private:
   Completion done_; ///< Completed by the HAL's transfer callbacks.
   LastErrorRecord error_;
   uint32_t kernel_hz_{0U};
+  uint32_t ceiling_hz_{0U};
   uint8_t mode_{0xFFU};
   uint8_t prescaler_{0xFFU};
   bool ready_{false};
@@ -173,6 +202,7 @@ private:
   [[nodiscard]] uint32_t claimCs() const noexcept;
   [[nodiscard]] kb::Status finish(uint32_t code) noexcept;
   [[nodiscard]] bool configValid() const noexcept;
+  [[nodiscard]] uint32_t limited(uint32_t hz) const noexcept;
   void count(uint32_t SpiStats::* field) noexcept;
 
   SpiBus& bus_;
@@ -181,7 +211,6 @@ private:
   SpiStats stats_;
   uint8_t prescaler_{0U};
   bool ready_{false};
-  bool rebuild_{false};
 };
 
 static_assert(kb::iface::SpiDevice<SpiDevice>, "SpiDevice satisfies kb::iface::SpiDevice");
