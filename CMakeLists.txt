@@ -27,8 +27,12 @@ set(KB_PORT_STM32_LOGIC_SOURCES
     src/adc.cpp src/can.cpp src/completion.cpp src/error.cpp src/gpio.cpp src/i2c.cpp src/log.cpp src/port.cpp
     src/pwm.cpp src/spi.cpp src/time.cpp src/uart.cpp)
 # The only files that include HAL or CMSIS headers (deviations/boundary-files.yml).
-set(KB_PORT_STM32_BOUNDARY_SOURCES src/stm32_bus_boundary.cpp src/stm32_can_boundary.cpp src/stm32_io_boundary.cpp)
-set(KB_PORT_STM32_VECTOR_SOURCE src/stm32_vectors_boundary.cpp)
+# One file per HAL component, in src/boundary/ (named after the header it serves); the vectors are a file of their own below.
+set(KB_PORT_STM32_BOUNDARY_SOURCES
+    src/boundary/adc.cpp src/boundary/can.cpp src/boundary/error.cpp src/boundary/gpio.cpp src/boundary/i2c.cpp
+    src/boundary/log.cpp src/boundary/spi.cpp src/boundary/state.cpp src/boundary/time.cpp src/boundary/timer.cpp
+    src/boundary/uart.cpp)
+set(KB_PORT_STM32_VECTOR_SOURCE src/boundary/vectors.cpp)
 
 include("${CMAKE_CURRENT_LIST_DIR}/cmake/kb_port_stm32_kb_core.cmake")
 

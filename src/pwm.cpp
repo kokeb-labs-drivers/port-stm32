@@ -1,7 +1,7 @@
 // PwmChannel: argument checks, timer ownership (the clock's timer refused, one period per shared
 // timer), the timer period and the compare rounding. Platform-free; every HAL call goes through
-// sdk.hpp (src/stm32_io_boundary.cpp). SPDX-License-Identifier: MIT Copyright (c) 2026 The
-// port-stm32 authors
+// sdk.hpp (src/boundary/timer.cpp). SPDX-License-Identifier: MIT Copyright (c) 2026 The port-stm32
+// authors
 #include <cstdint>
 
 #include "kb/interfaces/types.hpp"

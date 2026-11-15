@@ -3,7 +3,8 @@
  * @brief The port's shared state: pin claims, EXTI lines, timer ownership, the clock's wrap
  * counters and the shared ADC instances. The types and every rule over them are platform-free
  * (src/gpio.cpp, src/adc.cpp, src/pwm.cpp, src/time.cpp); the one instance lives in a boundary file
- * (sdk::State(), DEV-001), next to the HAL handles it goes with. Private to the port.
+ * (src/boundary/state.cpp, sdk::State(), DEV-001), next to the HAL handles it goes with. Private to
+ * the port.
  *
  * Entries shared with an interrupt (EXTI callbacks, wrap counters) are std::atomic and are changed
  * with interrupts masked (IrqGuard), so an interrupt sees either the old entry or the new one.

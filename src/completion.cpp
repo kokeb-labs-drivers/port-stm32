@@ -1,6 +1,6 @@
 // Deadline and Completion (completion.hpp): the waits of every port object, bounded on the port's
 // own clock. Platform-free; the clock and the cycle counter come through sdk.hpp
-// (src/stm32_io_boundary.cpp).
+// (src/boundary/time.cpp, src/boundary/timer.cpp).
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The port-stm32 authors
 #include <algorithm>

@@ -1,5 +1,5 @@
 // The log sinks (log.hpp): the line format, ItmLogSink on the ITM stimulus port and UartLogSink on
-// a port Uart. Platform-free; the ITM goes through sdk.hpp (src/stm32_io_boundary.cpp).
+// a port Uart. Platform-free; the ITM goes through sdk.hpp (src/boundary/log.cpp).
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The port-stm32 authors
 #include <algorithm>

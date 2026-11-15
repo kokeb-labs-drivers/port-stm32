@@ -1,6 +1,6 @@
 # Interrupts
 
-The port's vector file (`src/stm32_vectors_boundary.cpp`, built unless `KB_PORT_STM32_VECTORS=OFF`) defines these
+The port's vector file (`src/boundary/vectors.cpp`, built unless `KB_PORT_STM32_VECTORS=OFF`) defines these
 vectors, each only where the device header defines the instance, and calls the entry points of
 `kb/port/stm32/irq.hpp`:
 

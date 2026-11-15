@@ -1,7 +1,7 @@
 // I2cController: argument checks, the TIMINGR computation, the controller lock, the
 // interrupt-driven transfers and their bounded waits, failure classification, the handle restore
 // after a failure and the bit-banged bus recovery. Platform-free; every HAL call goes through
-// sdk.hpp (src/stm32_bus_boundary.cpp, src/stm32_io_boundary.cpp). SPDX-License-Identifier: MIT
+// sdk.hpp (src/boundary/i2c.cpp, src/boundary/gpio.cpp). SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The port-stm32 authors
 #include <cstddef>
 #include <cstdint>

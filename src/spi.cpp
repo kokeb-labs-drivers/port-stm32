@@ -1,7 +1,7 @@
 // SpiBus and SpiDevice: argument checks, the prescaler, the bus lock, per-device mode and clock,
 // chip select around every frame, interrupt-driven chunks of 65535 bytes waited for on the port's
 // clock, and abort and re-initialisation after a timeout.
-// Platform-free; every HAL call goes through sdk.hpp (src/stm32_bus_boundary.cpp).
+// Platform-free; every HAL call goes through sdk.hpp (src/boundary/spi.cpp).
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The port-stm32 authors
 #include <algorithm>

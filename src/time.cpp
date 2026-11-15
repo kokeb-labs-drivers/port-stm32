@@ -1,6 +1,6 @@
 // Clock (the 64-bit clock over its 32-bit timer and wrap interrupt, timer ownership), BusyWait
 // (the DWT spin), the interrupt mask guard and the HAL time-base check. Platform-free; every HAL
-// and CMSIS call goes through sdk.hpp (src/stm32_io_boundary.cpp).
+// and CMSIS call goes through sdk.hpp (src/boundary/time.cpp, src/boundary/timer.cpp).
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The port-stm32 authors
 #include <algorithm>

@@ -1,7 +1,7 @@
 /**
  * @file irq.hpp
  * @brief The interrupt entry points of the port. The port's own vector file
- * (src/stm32_vectors_boundary.cpp, on unless KB_PORT_STM32_VECTORS=OFF) defines the USART, UART,
+ * (src/boundary/vectors.cpp, on unless KB_PORT_STM32_VECTORS=OFF) defines the USART, UART,
  * LPUART, EXTI, TIM2/TIM5, I2C event and error, SPI, ADC and CAN handlers of the device and calls
  * these; it is linked into the firmware as objects, never from an archive, so its strong
  * definitions always replace the startup file's weak Default_Handler aliases. An application that

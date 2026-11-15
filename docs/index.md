@@ -58,7 +58,7 @@ What the port does **not** implement, and why:
 - **Bus recovery**: I2C stuck-bus detection and nine-clock recovery on the pins as GPIO; SPI aborted and
   initialised again after a HAL timeout; FDCAN restarted after bus-off, bxCAN by its automatic bus-off management.
 - **Thread safety**: a lock per peripheral, bounded; see [Thread safety](thread-safety.md).
-- **MISRA boundary**: only the boundary files `src/stm32_*_boundary.cpp` include HAL or CMSIS headers
+- **MISRA boundary**: only the boundary files in `src/boundary/` (one per HAL component) include HAL or CMSIS headers
   ([MISRA boundary](deviations.md)).
 
 ## Start

@@ -2,7 +2,8 @@
 
 ## Host tests over HAL fakes
 
-The port's logic (`src/*.cpp` outside the boundary list) and its boundary files are built unchanged on the host
+The port's logic (`src/*.cpp`, one per public header) and its boundary files (`src/boundary/*.cpp`, one per HAL
+component) are built unchanged on the host
 against `tests/fakes/stm32`: one-line headers with the HAL's names (`stm32g4xx_hal.h`, `stm32f4xx_hal.h`) over one
 declaration file with the register blocks, handle types and macros the boundary files use, and `fake_stm32_hal.cpp`,
 which defines every HAL function they call. That is a link seam per HAL call: the tests inject any

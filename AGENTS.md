@@ -9,10 +9,15 @@ handbook at level `high` (`.kokeb/handbook.yml`).
 
 - `inc/kb/port/stm32/`: public headers, one per peripheral, no HAL type in any signature; `port.hpp` includes them
   all and proves every `*Ref`; `irq.hpp` holds the interrupt entry points.
-- `src/`: the platform-free logic (`i2c.cpp`, `spi.cpp`, `uart.cpp`, `gpio.cpp`, `adc.cpp`, `pwm.cpp`,
-  `can.cpp`, `time.cpp`, `error.cpp`, `clock_read.hpp`, the shared state's type `state.hpp`), the private seam
-  `sdk.hpp`, and the boundary files `stm32_*_boundary.cpp`, the only files that include HAL or CMSIS headers
-  (`deviations/boundary-files.yml`).
+- `src/<stem>.cpp`: the platform-free logic, one file per public header (`adc`, `can`, `completion`, `error`, `gpio`,
+  `i2c`, `log`, `port`, `pwm`, `spi`, `time`, `uart`); `irq.hpp` and `version.hpp` are header-only
+ . Shared internals: `sdk.hpp` (the seam to the boundary), `state.hpp` (the shared state's
+  type) and `clock_read.hpp` (the clock's read rule), used by several of these files.
+- `src/boundary/<component>.cpp`: the HAL boundary, one file per HAL component (`i2c`, `spi`, `uart`, `gpio`, `adc`,
+  `can`, `time`, `log`, `error`; `timer` for the TIM handles that PWM and the clock share, `state` for the shared
+  state's one instance, `vectors` for the interrupt vectors), the only files that include HAL or CMSIS headers
+  (`deviations/boundary-files.yml`). A new peripheral adds `inc/.../<x>.hpp`, `src/<x>.cpp` and
+  `src/boundary/<x>.cpp`.
 - `cmake/`: the pinned HAL fetch (`kb_port_stm32_hal.cmake`), the pinned FreeRTOS-Kernel fetch for the example
   (`kb_port_stm32_freertos.cmake`), the kb-core copy check, an Arm toolchain file.
 - `tests/`: host tests; `tests/fakes/stm32/` fakes every HAL call the boundary files make.
@@ -24,7 +29,7 @@ handbook at level `high` (`.kokeb/handbook.yml`).
 
 ## Rules
 
-- Logic in the platform-free files, HAL calls in the boundary files; a boundary function converts, calls and
+- Logic in the platform-free files, HAL calls in `src/boundary/`; a boundary function converts, calls and
   returns the vendor code, nothing more. Family differences use the device header's macros in boundary files only.
 - Every wait bounded by a timeout of at most `kMaxTimeout`, measured on the port's clock (never `HAL_GetTick()`), and
   ended by an interrupt into a `Completion` (never a busy poll under an RTOS); every failure a `kb::Status` with the

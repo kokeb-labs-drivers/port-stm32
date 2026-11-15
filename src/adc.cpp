@@ -1,7 +1,7 @@
 // AdcChannel: argument checks, the shared ADC instance (its life, lock and interrupt-ended
 // conversion) and the scaling. Platform-free; every HAL call goes through sdk.hpp
-// (src/stm32_io_boundary.cpp). SPDX-License-Identifier: MIT Copyright (c) 2026 The port-stm32
-// authors State shared with interrupts needs lock-free std::atomic (as kb-core's SpscRing does).
+// (src/boundary/adc.cpp). SPDX-License-Identifier: MIT Copyright (c) 2026 The port-stm32 authors
+// State shared with interrupts needs lock-free std::atomic (as kb-core's SpscRing does).
 // misra-lint: ignore KB-CPP-012
 #include <atomic>
 #include <cstdint>

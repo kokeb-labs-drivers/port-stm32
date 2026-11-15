@@ -15,7 +15,7 @@
  * | HAL_BUSY | 2 | Busy |
  * | HAL_TIMEOUT | 3 | Timeout |
  *
- * The values are checked against the HAL by a static_assert in the boundary files.
+ * The values are checked against the HAL by a static_assert in src/boundary/error.cpp.
  *
  * Every timeout the port takes (configuration or per call) is at most kMaxTimeout; a longer one is
  * refused with InvalidArgument, so no wait can become the HAL's "forever" (HAL_MAX_DELAY).
