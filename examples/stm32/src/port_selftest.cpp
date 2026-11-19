@@ -1,5 +1,5 @@
-// STM32 example firmware: the port's self test (clock, busy wait, log, PWM, ADC, CAN in loopback, UART), then an
-// idle loop: bare metal (kb::rtos's none backend) by default, or one FreeRTOS task with EXAMPLE_RTOS=FREERTOS
+// STM32 example firmware: the port's self test (clock, busy wait, log, PWM, ADC, I2C and SPI buses, CAN in
+// loopback, UART), then an idle loop: bare metal (kb::rtos's none backend) by default, or one FreeRTOS task with EXAMPLE_RTOS=FREERTOS
 // (src/freertos_start.c). The HAL runs on the reset clock (HSI or MSI). Example code.
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The port-stm32 authors
@@ -70,6 +70,22 @@ void SelfTest(stm::Clock& clock) {
     kb::iface::CanFrame back{};
     static_cast<void>(can.Receive(back, kb::Milliseconds{10U}));
   }
+  stm::I2cConfig i{};
+  i.instance = board::kI2c;
+  i.scl = board::kI2cScl;
+  i.sda = board::kI2cSda;
+  static stm::I2cController i2c{i};
+  static_cast<void>(i2c.EnsureReady()); // no device is wired: only the bus comes up
+  stm::SpiBusConfig sb{};
+  sb.instance = board::kSpi;
+  sb.sck = board::kSpiSck;
+  sb.miso = board::kSpiMiso;
+  sb.mosi = board::kSpiMosi;
+  stm::SpiDeviceConfig sd{};
+  sd.cs = board::kSpiCs;
+  static stm::SpiBus spi_bus{sb};
+  static stm::SpiDevice spi{spi_bus, sd};
+  static_cast<void>(spi.EnsureReady());
   stm::UartConfig u{};
   u.instance = board::kUart;
   u.tx = board::kUartTx;
