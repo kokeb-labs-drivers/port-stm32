@@ -5,6 +5,7 @@
 // Copyright (c) 2026 The port-stm32 authors
 #include <array>
 #include <cstdint>
+#include <span>
 
 #include "board.hpp"
 #include "kb/port/stm32/port.hpp"
@@ -75,7 +76,14 @@ void SelfTest(stm::Clock& clock) {
   i.scl = board::kI2cScl;
   i.sda = board::kI2cSda;
   static stm::I2cController i2c{i};
-  static_cast<void>(i2c.EnsureReady()); // no device is wired: only the bus comes up
+  if (i2c.EnsureReady() == kb::Status::Ok) {
+    // No device is wired: the transfers end in a bus error. They start the HAL transfers, so the
+    // completion callbacks of the port are in the firmware.
+    const std::array<uint8_t, 1> reg{0x00U};
+    std::array<uint8_t, 1> in{};
+    static_cast<void>(i2c.Write(0x50U, reg));
+    static_cast<void>(i2c.Read(0x50U, in));
+  }
   stm::SpiBusConfig sb{};
   sb.instance = board::kSpi;
   sb.sck = board::kSpiSck;
@@ -85,7 +93,12 @@ void SelfTest(stm::Clock& clock) {
   sd.cs = board::kSpiCs;
   static stm::SpiBus spi_bus{sb};
   static stm::SpiDevice spi{spi_bus, sd};
-  static_cast<void>(spi.EnsureReady());
+  if (spi.EnsureReady() == kb::Status::Ok) {
+    const std::array<uint8_t, 2> cmd{0x80U, 0x00U};
+    std::array<uint8_t, 2> status{};
+    static_cast<void>(spi.Transfer(cmd, std::span<uint8_t>{})); // transmit only
+    static_cast<void>(spi.Transfer(cmd, status));               // full duplex
+  }
   stm::UartConfig u{};
   u.instance = board::kUart;
   u.tx = board::kUartTx;
