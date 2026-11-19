@@ -53,9 +53,8 @@ Every check is a caller of a `kokeb-labs/ci-tools` reusable workflow at `@v1`, j
 | `ci-misra.yml` | `ru-misra` | MISRA C++:2023 and the KB-CPP20 profile, host and Cortex-M traced builds, the boundary files' records |
 | `ci-cpp-lint.yml` | `ru-cpp-lint` | clang-format 20 and clang-tidy 20 |
 | `ci-cross-build.yml` | `ru-cross-build` | The platform-free logic for Cortex-M0+, M4F and M7F |
-| `ci-cmake-matrix.yml` | `ru-cmake-matrix` | `all_drivers.elf` compiled and linked against the pinned HAL for G4, H7, F4 and L4 (bare metal) and for G4 under FreeRTOS, each with the vector check |
+| `ci-cmake-matrix.yml` | `ru-cmake-matrix` | `port_selftest.elf` compiled and linked against the pinned HAL for G4, H7, F4 and L4 (bare metal) and for G4 under FreeRTOS, each with the vector check |
 | `ci-layering.yml` | `ru-layering` | HAL headers only in boundary files, the poison build of the platform-free code |
-| `ci-pins.yml` | `ru-pin-hygiene` | The driver submodules are tagged releases whose CI gate passed |
 | `ci-docs.yml` | `ru-mkdocs-publish` | The strict site build and its checks |
 | `ci-handbook.yml` | `ru-handbook-check` | The handbook's rules for a library at level high |
 | `ci-dco.yml` | `dco` | Every commit of a pull request is signed off |

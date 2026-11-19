@@ -5,6 +5,12 @@ All notable changes of port-stm32. The format follows Keep a Changelog; versions
 
 ## [Unreleased]
 
+### Removed
+
+- The `drivers/` submodules (pcal9555, tmc5160, bno08x), `drivers/drivers.lock.yml`, the pin-hygiene workflow and
+  `driver_adapters.hpp`. The example firmware is now `port_selftest` (the port's self test only); chip drivers are
+  bound through the port in kb-core's examples. A port stands alone and the repository root stays small.
+
 ### Changed
 
 - Source layout: every public header has a source file of the same name (`src/adc.cpp` for `adc.hpp`, and so

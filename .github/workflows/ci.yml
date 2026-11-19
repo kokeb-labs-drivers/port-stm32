@@ -46,10 +46,6 @@ jobs:
     name: Layering
     uses: ./.github/workflows/ci-layering.yml
 
-  pins:
-    name: Pin hygiene
-    uses: ./.github/workflows/ci-pins.yml
-
   docs:
     name: Docs
     uses: ./.github/workflows/ci-docs.yml
@@ -70,7 +66,7 @@ jobs:
 
   ci-gate:
     name: CI gate
-    needs: [host, quality, misra, lint, cross, targets, layering, pins, docs, handbook, dco]
+    needs: [host, quality, misra, lint, cross, targets, layering, docs, handbook, dco]
     if: always()
     uses: kokeb-labs/ci-tools/.github/workflows/ru-ci-gate.yml@v1
     permissions:

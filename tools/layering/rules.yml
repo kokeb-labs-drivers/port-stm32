@@ -13,15 +13,12 @@ zones:
   # Bare-metal applications: they may call the HAL in their own files (clock tree, SysTick).
   examples:
     paths: ["examples/**"]
-    may_include: [port, kb_utils, kb_rtos, kb_interfaces, drivers, examples, std_any, sdk_any]
-  # The pinned kb-core copy and the pinned drivers: checked by their own CI.
+    may_include: [port, kb_utils, kb_rtos, kb_interfaces, examples, std_any, sdk_any]
+  # The pinned kb-core copy: checked by its own CI.
   kb_core:
     paths: ["third_party/kb-core/**"]
     may_include: [kb_core, std_any, sdk_any]
-  drivers:
-    paths: ["drivers/**"]
-    may_include: [drivers, std_any, sdk_any]
-external_zones: [kb_core, drivers]
+external_zones: [kb_core]
 public_headers:
   kb_utils: "third_party/kb-core/components/lib/utils/inc/kb/utils/**"
   kb_rtos: "third_party/kb-core/components/lib/rtos/inc/kb/rtos/**"
