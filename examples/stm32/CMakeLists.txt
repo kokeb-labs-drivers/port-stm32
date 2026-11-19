@@ -32,34 +32,28 @@ elseif(NOT EXAMPLE_RTOS STREQUAL "NONE")
   message(FATAL_ERROR "EXAMPLE_RTOS must be NONE or FREERTOS, not '${EXAMPLE_RTOS}'")
 endif()
 add_subdirectory("${_root}" kb_port_stm32)
-foreach(_driver IN ITEMS pcal9555 tmc5160 bno08x)
-  if(NOT EXISTS "${_root}/drivers/driver-${_driver}/CMakeLists.txt")
-    message(FATAL_ERROR "drivers/driver-${_driver} is not checked out: git submodule update --init drivers")
-  endif()
-  add_subdirectory("${_root}/drivers/driver-${_driver}" "drivers/${_driver}" EXCLUDE_FROM_ALL SYSTEM)
-endforeach()
 
-add_executable(all_drivers src/all_drivers.cpp "${KB_PORT_STM32_STARTUP}")
-target_include_directories(all_drivers PRIVATE src "${_board}")
-target_link_libraries(all_drivers PRIVATE kb::port_stm32 pcal9555::pcal9555 tmc5160::tmc5160 bno08x::bno08x)
-target_compile_options(all_drivers PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions -fno-rtti -fno-threadsafe-statics
+add_executable(port_selftest src/port_selftest.cpp "${KB_PORT_STM32_STARTUP}")
+target_include_directories(port_selftest PRIVATE src "${_board}")
+target_link_libraries(port_selftest PRIVATE kb::port_stm32)
+target_compile_options(port_selftest PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions -fno-rtti -fno-threadsafe-statics
                        -Wall -Wextra -Werror>)
 # The newlib-nano C library without system calls, unused sections dropped; the core flags come from the toolchain
 # file (CMAKE_C_FLAGS), which the startup file is assembled with too (a toolchain file may set no ASM flags).
-target_link_options(all_drivers PRIVATE "-T${_board}/linker.ld" "-Wl,-Map=$<TARGET_FILE_DIR:all_drivers>/all_drivers.map"
+target_link_options(port_selftest PRIVATE "-T${_board}/linker.ld" "-Wl,-Map=$<TARGET_FILE_DIR:port_selftest>/port_selftest.map"
                     -specs=nano.specs -specs=nosys.specs -Wl,--gc-sections)
 separate_arguments(_core_flags UNIX_COMMAND "${CMAKE_C_FLAGS}")
 set_source_files_properties("${KB_PORT_STM32_STARTUP}" PROPERTIES COMPILE_OPTIONS "${_core_flags}")
-set_target_properties(all_drivers PROPERTIES SUFFIX ".elf")
+set_target_properties(port_selftest PROPERTIES SUFFIX ".elf")
 if(EXAMPLE_RTOS STREQUAL "FREERTOS")
-  target_sources(all_drivers PRIVATE src/freertos_start.c)
-  target_link_libraries(all_drivers PRIVATE kb_port_stm32_freertos_kernel)
-  target_compile_definitions(all_drivers PRIVATE EXAMPLE_RTOS_FREERTOS=1)
+  target_sources(port_selftest PRIVATE src/freertos_start.c)
+  target_link_libraries(port_selftest PRIVATE kb_port_stm32_freertos_kernel)
+  target_compile_definitions(port_selftest PRIVATE EXAMPLE_RTOS_FREERTOS=1)
 endif()
 # After the link: every vector and HAL callback the port defines is in the firmware as a strong symbol, not the
 # startup file's Default_Handler (tools/check_vectors.cmake). A failure fails the build, in CI and locally.
-add_custom_command(TARGET all_drivers POST_BUILD
-  COMMAND "${CMAKE_COMMAND}" "-DNM=${CMAKE_NM}" "-DELF=$<TARGET_FILE:all_drivers>"
+add_custom_command(TARGET port_selftest POST_BUILD
+  COMMAND "${CMAKE_COMMAND}" "-DNM=${CMAKE_NM}" "-DELF=$<TARGET_FILE:port_selftest>"
           "-DVECTORS=$<TARGET_OBJECTS:kb_port_stm32_vectors>" "-DLIBRARY=$<TARGET_FILE:kb_port_stm32>"
           -P "${_root}/tools/check_vectors.cmake"
   COMMAND_EXPAND_LISTS VERBATIM)

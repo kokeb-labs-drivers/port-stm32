@@ -1,5 +1,5 @@
 ---
-# The all_drivers firmware (the port, the pinned STM32Cube HAL and CMSIS, kb-core and three drivers) compiled and
+# The port_selftest firmware (the port, the pinned STM32Cube HAL and CMSIS, kb-core) compiled and
 # linked with the Arm GNU toolchain for one device of each family: STM32G474, STM32H743, STM32F446 and STM32L476,
 # bare metal (kb::rtos none backend), plus one FreeRTOS build (G4, the pinned FreeRTOS-Kernel) so the port's waits on
 # kb::rtos semaphores and kb-core's FreeRTOS backend are compiled and linked for a target. After each link the
@@ -16,12 +16,12 @@ permissions:
 
 jobs:
   targets:
-    name: all_drivers per family
+    name: port_selftest per family
     uses: kokeb-labs/ci-tools/.github/workflows/ru-cmake-matrix.yml@v1
     permissions:
       contents: read
     with:
-      submodules: "true"
+      submodules: "false"
       source_dir: examples/stm32
       build_type: Release
       max_parallel: "4"

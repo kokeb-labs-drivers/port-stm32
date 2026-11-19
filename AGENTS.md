@@ -21,8 +21,7 @@ handbook at level `high` (`.kokeb/handbook.yml`).
 - `cmake/`: the pinned HAL fetch (`kb_port_stm32_hal.cmake`), the pinned FreeRTOS-Kernel fetch for the example
   (`kb_port_stm32_freertos.cmake`), the kb-core copy check, an Arm toolchain file.
 - `tests/`: host tests; `tests/fakes/stm32/` fakes every HAL call the boundary files make.
-- `examples/stm32/`: one firmware project for the four families (`boards/<board>/`); `drivers/` holds the pinned
-  driver submodules it binds.
+- `examples/stm32/`: one firmware project for the four families (`boards/<board>/`): the port's self test.
 - `third_party/kb-core/`: the pinned, unchanged kb-core copy (`tools/kb_core_snapshot.py`, `third_party/kb-core.lock`).
 - `_config/`: tool configuration; `tools/`: pre-flight, layering rules, the layout check, the snapshot tool, the firmware vector check
   (`check_vectors.cmake`).
@@ -37,7 +36,7 @@ handbook at level `high` (`.kokeb/handbook.yml`).
 - C++20, no heap, no exceptions, no RTTI, no virtual functions; each type `static_assert`ed against its concepts.
 - The HAL is fetched at a pinned commit and never copied or changed; a new HAL version is a change of the pins in
   `cmake/kb_port_stm32_hal.cmake` and `docs/soup.md` together, with the firmware builds of every family.
-- Never edit `third_party/kb-core` by hand; never edit inside a submodule.
+- Never edit `third_party/kb-core` by hand.
 - Every change: tests, docs and `CHANGELOG.md` together; `tools/preflight.sh` before a push; commits signed off;
   no attribution lines.
 - Ask the maintainer before anything irreversible or public: releases, visibility, deleting branches or tags.

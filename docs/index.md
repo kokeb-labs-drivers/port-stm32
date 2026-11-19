@@ -64,4 +64,4 @@ What the port does **not** implement, and why:
 ## Start
 
 [Getting started](getting-started.md) adds the port to a CMake firmware project; the [examples](examples.md) bind
-the pcal9555, tmc5160 and bno08x drivers through it on one device of each family.
+the port's self test on one device of each family.

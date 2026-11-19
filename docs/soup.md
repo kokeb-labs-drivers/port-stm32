@@ -19,7 +19,6 @@ of the same commit may stand in (`FETCHCONTENT_SOURCE_DIR_KB_STM32_HAL`, `..._KB
 | `STMicroelectronics/cmsis-device-l4` | v1.7.5 | `dc04e41afbd7c204cd09f2fa5dd29658efbaff6c` | L4 device files |
 | `STMicroelectronics/cmsis-core` | v5.9.0_20250520 | `b7487de1303e2eb77c402432e368691e9dcfb5f0` | CMSIS-Core (core_cm4.h, core_cm7.h: NVIC, DWT, ITM) |
 | `FreeRTOS/FreeRTOS-Kernel` | V11.1.0 | `dbf70559b27d39c1fdb68dfb9a32140b6a6777a0` | The example under `EXAMPLE_RTOS=FREERTOS` (`cmake/kb_port_stm32_freertos.cmake`); an application brings its own kernel |
-| The pinned drivers | v0.1.0-rc.1 each | `drivers/drivers.lock.yml` | Examples only |
 
 The HAL sources are compiled as their own static library (`kb_port_stm32_hal`) with their own warnings off; their
 headers reach the port as system headers. Known anomalies the port handles:

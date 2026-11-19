@@ -53,14 +53,12 @@ if (bus.EnsureReady() == kb::Status::Ok) {
 
 ## Examples
 
-`examples/stm32` builds `all_drivers.elf` for STM32G474, STM32H743, STM32F446 and STM32L476: a self test of every
-contract, and the pcal9555 (I2C), tmc5160 (SPI) and bno08x (I2C) drivers bound through the port
-([Examples](docs/examples.md)).
+`examples/stm32` builds `port_selftest.elf` for STM32G474, STM32H743, STM32F446 and STM32L476: a self test of the
+port's contracts ([Examples](docs/examples.md)). Chip drivers are bound through the port in kb-core's examples, not here.
 
 ## Build and test
 
 ```bash
-git submodule update --init drivers                       # the example drivers
 cmake -S . -B build -G Ninja -DKB_PORT_STM32_BUILD_TESTS=ON
 cmake --build build && ctest --test-dir build             # host tests over HAL fakes, two family variants
 tools/preflight.sh                                        # what CI checks, locally

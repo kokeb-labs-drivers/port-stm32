@@ -98,9 +98,9 @@ CAN; a CubeMX project leaves those peripherals unconfigured and drops the genera
 
 ## 5. Bind a driver
 
-A driver's port is a thin adapter from its hooks to the kb contracts; `examples/stm32/src/driver_adapters.hpp` has
-the adapters for pcal9555, tmc5160 and bno08x. They are templates over the contracts, so the same adapter runs over
-this port, another MCU port, a host fake or a `*Ref` chosen at run time.
+A driver's port is a thin adapter from its hooks to the kb contracts. Write it as a template over the contracts, so
+the same adapter runs over this port, another MCU port, a host fake or a `*Ref` chosen at run time. Worked adapters
+for real drivers live in kb-core's examples, not in this repository.
 
 ## Building the host tests
 

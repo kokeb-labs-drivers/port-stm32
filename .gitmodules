@@ -1,9 +1,0 @@
-[submodule "drivers/driver-pcal9555"]
-	path = drivers/driver-pcal9555
-	url = https://github.com/kokeb-labs-drivers/driver-pcal9555.git
-[submodule "drivers/driver-tmc5160"]
-	path = drivers/driver-tmc5160
-	url = https://github.com/kokeb-labs-drivers/driver-tmc5160.git
-[submodule "drivers/driver-bno08x"]
-	path = drivers/driver-bno08x
-	url = https://github.com/kokeb-labs-drivers/driver-bno08x.git
