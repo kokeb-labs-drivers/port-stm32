@@ -1,5 +1,5 @@
-// STM32 example firmware: the port's self test (clock, busy wait, log, PWM, ADC, I2C and SPI buses, CAN in
-// loopback, UART), then an idle loop: bare metal (kb::rtos's none backend) by default, or one FreeRTOS task with EXAMPLE_RTOS=FREERTOS
+// STM32 example firmware: the port's self test (clock, busy wait, log, PWM, ADC, I2C and SPI buses,
+// CAN in loopback, UART), then an idle loop: bare metal (kb::rtos's none backend) by default, or one FreeRTOS task with EXAMPLE_RTOS=FREERTOS
 // (src/freertos_start.c). The HAL runs on the reset clock (HSI or MSI). Example code.
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The port-stm32 authors
