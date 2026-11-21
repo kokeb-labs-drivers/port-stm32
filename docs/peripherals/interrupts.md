@@ -12,6 +12,7 @@ vectors, each only where the device header defines the instance, and calls the e
 | `HandleI2cIrq(instance, error)` | `I2Cn_EV_IRQHandler`, `I2Cn_ER_IRQHandler` | `HAL_I2C_EV_IRQHandler` / `HAL_I2C_ER_IRQHandler` of the open instance |
 | `HandleSpiIrq(instance)` | `SPIn_IRQHandler` | `HAL_SPI_IRQHandler` of the open instance |
 | `HandleAdcIrq(first, last)` | `ADC_IRQHandler` (F4, H7), `ADC1_2_IRQHandler` (G4, L4), `ADC3_IRQHandler` ... `ADC5_IRQHandler` | `HAL_ADC_IRQHandler` of each open instance on the vector |
+| `HandleDmaIrq(engine, stream)` | `DMA1_Stream0_IRQHandler` ... `DMA2_Stream7_IRQHandler` (F4, H7), `DMA1_Channel1_IRQHandler` ... (G4, L4) | The started `DmaStream`'s service (or its owner's hook, an ADC stream); an unowned stream's line is disabled ([DMA](../dma.md)) |
 | `HandleCanIrq(controller)` | `FDCANn_IT0_IRQHandler` (G4, H7), `CANn_TX_IRQHandler`, `CANn_RX0_IRQHandler`, `CANn_SCE_IRQHandler` (F4, L4) | `HAL_FDCAN_IRQHandler` / `HAL_CAN_IRQHandler` of the open controller |
 
 The HAL handlers end in the HAL callbacks the port defines ([Integration](../integration.md)), which complete the

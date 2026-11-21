@@ -5,7 +5,16 @@ boundary_files:
   - path: src/boundary/adc.cpp
     sdk: stm32cube-hal
     status: present
+  - path: src/boundary/adc_stream.cpp
+    sdk: stm32cube-hal
+    status: present
+  - path: src/boundary/atomic64.c
+    sdk: cmsis-core
+    status: present
   - path: src/boundary/can.cpp
+    sdk: stm32cube-hal
+    status: present
+  - path: src/boundary/dma.cpp
     sdk: stm32cube-hal
     status: present
   - path: src/boundary/error.cpp
@@ -21,6 +30,9 @@ boundary_files:
     sdk: stm32cube-hal
     status: present
   - path: src/boundary/spi.cpp
+    sdk: stm32cube-hal
+    status: present
+  - path: src/boundary/spi_dma.cpp
     sdk: stm32cube-hal
     status: present
   - path: src/boundary/state.cpp

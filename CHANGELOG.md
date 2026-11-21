@@ -12,6 +12,24 @@ All notable changes of port-stm32. The format follows Keep a Changelog; versions
   models in `docs/model/` (light and dark SVG, readable on a phone).
 - CI path filter: a pull request that changes only documentation runs only the docs, handbook and DCO checks; the
   gate allows the code jobs to be skipped only then. The docs publish only from main and `v*` tags.
+- DMA ([docs/dma.md](docs/dma.md)), on kb-core's `kb::dma` vocabulary: `dma.hpp` (masters and region tags of each
+  family, `RequireStream` / `RequireStreamReaches`, `DmaStream` over DMA1/DMA2 streams and channels with the NVIC
+  priority written from the board's assignment and read back, every flag serviced by its own clear bit on every
+  interrupt entry, a stop bounded in core cycles that proves EN reads 0, quarantine and `Recover()`; `DmaTransfer`
+  over a leased `kb::dma::Buffer`; the cache hooks and the start-time placement and MPU check), `spi_dma.hpp`
+  (`SpiDmaLink`: SPI by DMA through a staging pair per bus, H7 order with TSIZE, frames from `min_bytes` at the full
+  SCK, `Capabilities()`, `Health()`, `Limits()` and `Recover()` on `SpiBus`, `SpiLimitsOf`) and `adc_stream.hpp`
+  (`AdcDmaStream`: a timer-triggered scan into a `kb::dma::Stream` of two frames, OVRMOD 0 with the overrun counted in
+  the drain, the interrupt the only drainer, seqlock publication, supervision, idempotent start, the kernel clock
+  read and never selected, DMA only when the conversion count read back equals the frame, else the one-shot fallback,
+  reported). The DMA vectors of each family dispatch to the started stream.
+- kb-core's DMA conformance suite T1 to T18 runs on the port (its DMA boundary linked against kb-core's host
+  DMA-and-cache model, `tests/dma_model/`), in the AXI (`Maintained`) and D2 (`NonCacheable`) regions; unit and
+  compile-fail tests of the DMA layer.
+- The DMA bench kit: `tests/target/dma/dma_bench.cpp` (built for the four families by the example project), the
+  procedure for an STM32H7 board with its wiring figures, the evidence form (`docs/assurance/bench/`).
+- `src/boundary/atomic64.c` (targets only): the 64-bit atomic load and store the Arm GNU toolchain calls for
+  `std::atomic<uint64_t>` on a Cortex-M, which `kb::dma::Stream` uses.
 
 ### Removed
 
@@ -21,6 +39,13 @@ All notable changes of port-stm32. The format follows Keep a Changelog; versions
 
 ### Changed
 
+- kb-core moves to its republished main with the `kb::dma` part; `tools/kb_core_snapshot.py` copies the paths
+  kb-core's `tools/layout/layout.py vendor` names instead of a list of its own.
+- Port codes 0xFA to 0xFE (DMA error, quarantined, placement, frame too large, priority read-back); `MapHalStatus`
+  maps placement and priority to `NotReady` and a frame too large to `OutOfRange`.
+- An `AdcChannel` on an instance an ADC stream owns is refused (`Busy`).
+- The interrupt vectors include the DMA streams or channels of the device (`KB_PORT_STM32_VECTORS_EXCLUDE` keeps one
+  for the application).
 - Source layout: every public header has a source file of the same name (`src/adc.cpp` for `adc.hpp`, and so
   on; `irq.hpp` and `version.hpp` are header-only), and the HAL boundary is one file per HAL component in
   `src/boundary/` (`i2c.cpp`, `spi.cpp`, `uart.cpp`, `gpio.cpp`, `adc.cpp`, `timer.cpp`, `can.cpp`, `time.cpp`,

@@ -93,6 +93,11 @@ public:
     return value;
   }
 
+  /** @brief True after a successful Create(). */
+  [[nodiscard]] bool IsCreated() const noexcept {
+    return created_;
+  }
+
 private:
   detail::SemaphoreStorage storage_{};
   bool created_{false};

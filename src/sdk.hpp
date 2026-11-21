@@ -20,10 +20,12 @@
 #include <cstdint>
 #include <span>
 
+#include "kb/dma/assignment.hpp"
 #include "kb/interfaces/types.hpp"
 #include "kb/port/stm32/adc.hpp"
 #include "kb/port/stm32/can.hpp"
 #include "kb/port/stm32/completion.hpp"
+#include "kb/port/stm32/dma.hpp"
 #include "kb/port/stm32/error.hpp"
 #include "kb/port/stm32/gpio.hpp"
 #include "kb/port/stm32/i2c.hpp"
@@ -144,6 +146,8 @@ void UartTxInterrupts(uint8_t instance, bool empty, bool complete) noexcept;
 [[nodiscard]] uint32_t AdcStart(uint8_t instance, uint8_t channel, AdcSampling sampling) noexcept;
 /** @brief After a timeout: HAL_ADC_Stop_IT. */
 [[nodiscard]] uint32_t AdcStop(uint8_t instance) noexcept;
+/** @brief The ADC clock prescaler (HAL value) the port selects (see AdcClockCheck()). */
+[[nodiscard]] uint32_t AdcClockPrescaler() noexcept;
 
 // --- timers (PWM) -------------------------------------------------------------------------------
 [[nodiscard]] bool TimerExists(uint8_t timer) noexcept;
@@ -173,6 +177,99 @@ void PwmSetCompare(uint8_t timer, uint8_t channel, uint32_t compare) noexcept;
 [[nodiscard]] uint32_t CanReadStatus(uint8_t controller, CanStatus& status) noexcept;
 /** @brief FDCAN: stop and start (leaves bus-off). bxCAN: nothing (automatic bus-off recovery). */
 [[nodiscard]] uint32_t CanRestart(uint8_t controller) noexcept;
+
+// --- DMA (src/boundary/dma.cpp) -----------------------------------------------------------------
+/** @brief The register set-up of one stream (everything but the memory address and the count). */
+struct DmaProgram {
+  kb::dma::StreamAssignment assignment{};
+  DmaPeripheral peripheral{};
+};
+/** @brief The dispatch index (0 to 15) of a stream, or kDmaNoIndex when the family has no such. */
+inline constexpr uint8_t kDmaNoIndex = 0xFFU;
+[[nodiscard]] uint8_t DmaIndex(uint8_t engine, uint8_t stream) noexcept;
+/** @brief True when the request number fits the family's routing (DMAMUX line, CHSEL, CSELR). */
+[[nodiscard]] bool DmaRequestValid(uint16_t request) noexcept;
+/** @brief The engine clock, the request routing and the stream's control register with EN 0. */
+[[nodiscard]] uint32_t DmaConfigure(const DmaProgram& program) noexcept;
+/** @brief The memory address, the item count and the interrupt enables (`irq`: kDmaFlag* bits),
+ * then EN set. */
+void DmaArm(uint8_t engine, uint8_t stream, std::uintptr_t memory, uint32_t items,
+            uint32_t irq) noexcept;
+/** @brief The EN bit. */
+[[nodiscard]] bool DmaEnabled(uint8_t engine, uint8_t stream) noexcept;
+/** @brief Clears EN (the stream stops after the data item in flight). */
+void DmaDisable(uint8_t engine, uint8_t stream) noexcept;
+/** @brief The transfer counter (items left). */
+[[nodiscard]] uint32_t DmaRemaining(uint8_t engine, uint8_t stream) noexcept;
+/** @brief The pending flags of the stream as kDmaFlag* bits. */
+[[nodiscard]] uint32_t DmaFlags(uint8_t engine, uint8_t stream) noexcept;
+/** @brief Clears exactly one kDmaFlag* bit of the stream with its own clear bit (never a global
+ * clear). */
+void DmaClearFlag(uint8_t engine, uint8_t stream, uint32_t flag) noexcept;
+/** @brief Writes the stream's NVIC priority (preemption `priority`, sub-priority 0). */
+void DmaIrqPriority(uint8_t engine, uint8_t stream, uint8_t priority) noexcept;
+/** @brief Reads the stream's NVIC preemption priority back. */
+[[nodiscard]] uint8_t DmaIrqPriorityRead(uint8_t engine, uint8_t stream) noexcept;
+/** @brief Enables or disables the stream's NVIC line. */
+void DmaIrqEnable(uint8_t engine, uint8_t stream, bool on) noexcept;
+/** @brief A stream re-initialised: its control register cleared (EN 0), its flags cleared one by
+ * one. */
+void DmaReset(uint8_t engine, uint8_t stream) noexcept;
+/** @brief The core clock cycles a stop may wait for EN to read 0. */
+[[nodiscard]] uint32_t DmaStopBoundCycles() noexcept;
+/** @brief Cleans the data-cache lines of [address, address + bytes) (nothing without a D-cache). */
+void CacheClean(std::uintptr_t address, std::size_t bytes) noexcept;
+/** @brief Invalidates the data-cache lines of [address, address + bytes). */
+void CacheInvalidate(std::uintptr_t address, std::size_t bytes) noexcept;
+/** @brief DSB. */
+void DataBarrier() noexcept;
+/** @brief True when the core has a data cache and it is on. */
+[[nodiscard]] bool DataCacheOn() noexcept;
+/** @brief True when an enabled MPU region makes the whole of [base, base + size) uncached. */
+[[nodiscard]] bool MpuUncached(std::uintptr_t base, std::size_t size) noexcept;
+
+// --- SPI by DMA (src/boundary/spi_dma.cpp) -------------------------------------------------------
+/** @brief The transmit data register of SPI `instance` (DR; TXDR on H7). */
+[[nodiscard]] std::uintptr_t SpiDmaTxRegister(uint8_t instance) noexcept;
+/** @brief The receive data register (DR; RXDR on H7). */
+[[nodiscard]] std::uintptr_t SpiDmaRxRegister(uint8_t instance) noexcept;
+/** @brief Before the streams: the peripheral disabled (H7: TSIZE written with SPE clear), stale
+ * errors cleared, the receive DMA request on. */
+[[nodiscard]] uint32_t SpiDmaPrepare(uint8_t instance, uint32_t bytes) noexcept;
+/** @brief After the streams are enabled: the transmit DMA request, SPE (and CSTART on H7). */
+void SpiDmaGo(uint8_t instance) noexcept;
+/** @brief The error flags of the peripheral (kSpiDmaOverrun, ...). */
+inline constexpr uint32_t kSpiDmaOverrun = 1U;   ///< OVR.
+inline constexpr uint32_t kSpiDmaModeFault = 2U; ///< MODF.
+inline constexpr uint32_t kSpiDmaUnderrun = 4U;  ///< UDR (H7).
+inline constexpr uint32_t kSpiDmaCrc = 8U;       ///< CRCERR.
+[[nodiscard]] uint32_t SpiDmaErrors(uint8_t instance) noexcept;
+/** @brief True when the last frame left the shift register (H7 EOT; else not BSY). */
+[[nodiscard]] bool SpiDmaIdle(uint8_t instance) noexcept;
+/** @brief After the frame (or a stop): the DMA requests off, the errors cleared, SPE cleared on H7.
+ */
+void SpiDmaFinish(uint8_t instance) noexcept;
+
+// --- ADC stream (src/boundary/adc_stream.cpp) ----------------------------------------------------
+/**
+ * @brief The instance in scan mode on `channels` (rank order), started by the external trigger
+ * `trigger` (the family's ADC_EXTERNALTRIG_* value) on its rising edge, circular DMA requests, the
+ * overrun mode data-preserved (OVRMOD 0), its own interrupts off; the calibration of the family.
+ */
+[[nodiscard]] uint32_t AdcStreamOpen(uint8_t instance, std::span<const uint8_t> channels,
+                                     AdcSampling sampling, uint32_t trigger) noexcept;
+/** @brief The conversions the peripheral is configured for (the sequence length read back). */
+[[nodiscard]] uint32_t AdcStreamConversions(uint8_t instance) noexcept;
+/** @brief The data register. */
+[[nodiscard]] std::uintptr_t AdcStreamDataRegister(uint8_t instance) noexcept;
+/** @brief The DMA requests on, the ADC enabled, conversions armed for the trigger. */
+[[nodiscard]] uint32_t AdcStreamStart(uint8_t instance) noexcept;
+/** @brief The overrun flag (OVR); clears it. */
+[[nodiscard]] bool AdcStreamTakeOverrun(uint8_t instance) noexcept;
+/** @brief Conversions stopped, the DMA requests off. */
+[[nodiscard]] uint32_t AdcStreamStop(uint8_t instance) noexcept;
+/** @brief HAL_ADC_DeInit. */
+[[nodiscard]] uint32_t AdcStreamClose(uint8_t instance) noexcept;
 
 // --- clock, ITM ---------------------------------------------------------------------------------
 [[nodiscard]] bool ClockTimerExists(uint8_t timer) noexcept;

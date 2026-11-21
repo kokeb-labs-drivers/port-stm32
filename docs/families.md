@@ -37,8 +37,11 @@ macros (`I2C4`, `FDCAN2`, `TIM5`, ...) so a peripheral the device lacks is refus
 - **Timer clocks.** Timers run at twice their APB clock when the APB prescaler is not 1 (the RM's rule), and at
   HCLK (up to an APB divider of 4, else 4 x PCLK) when TIMPRE is set (F42x/F43x/F446 DCKCFGR, H7 CFGR); the port
   applies both. `timer_clock_hz` overrides them.
-- **H7 caches.** The port's transfers are CPU copies (interrupt driven, no DMA), so the D-cache needs no
-  maintenance for them; the rules for DMA are in [Integration](integration.md).
+- **H7 caches.** Interrupt-driven transfers are CPU copies and need no cache maintenance. DMA transfers use
+  port-owned buffers in the D2 window (MPU non-cacheable, the default) or in AXI SRAM (cleaned and invalidated by
+  line): [DMA](dma.md).
+- **DMA engines.** DMA1 and DMA2: streams 0 to 7 with DMAMUX1 on H7, streams 0 to 7 with `CHSEL` on F4, channels 1
+  to 8 with DMAMUX1 on G4, channels 1 to 7 with `CSELR` on L4 ([DMA](dma.md)).
 - **Dual-core H7** (`STM32H745xx`, `STM32H747xx`, `STM32H755xx`, `STM32H757xx`) is refused at configure time, and
   `CORE_CM4` at compile time ([Integration](integration.md)).
 

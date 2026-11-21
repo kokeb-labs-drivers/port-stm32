@@ -7,8 +7,8 @@
 header_only:
   irq: >-
     declarations only: the interrupt entry points it names are defined next to the handles they read, in
-    src/boundary/<component>.cpp (uart, i2c, spi, adc, can), src/gpio.cpp (EXTI) and src/time.cpp (the clock's
-    timer), and called by src/boundary/vectors.cpp
+    src/boundary/<component>.cpp (uart, i2c, spi, adc, can), src/gpio.cpp (EXTI), src/time.cpp (the clock's
+    timer) and src/dma.cpp (the DMA streams' dispatch), and called by src/boundary/vectors.cpp
   version: >-
     constants only; the version is checked against CMakeLists.txt and CHANGELOG.md by the static_assert in
     src/port.cpp (the translation unit of port.hpp)
@@ -25,6 +25,9 @@ internal:
 
 # Files of src/boundary/ whose stem is not a public header.
 boundary_extra:
+  atomic64: >-
+    targets only: the 64-bit atomic load and store the GNU toolchain calls for std::atomic<uint64_t> on a 32-bit
+    Cortex-M (kb::dma::Stream's time stamp, adc_stream.hpp), which arm-none-eabi ships no libatomic for; C, weak
   state: the one instance of the port's shared state (state.hpp); includes no HAL header
   timer: the TIM handles, one table shared by the PWM channels (pwm.hpp) and the clock's counter (time.hpp)
   vectors: the interrupt vectors of the device, built as an object library (KB_PORT_STM32_VECTORS); calls irq.hpp

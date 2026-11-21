@@ -31,6 +31,7 @@ constexpr std::size_t kMaxTimers = 16U;
 struct NoneMutex {
   bool locked{false};
 };
+
 struct NoneSemaphore {
   uint32_t count{0U};
   uint32_t max{1U};
@@ -197,6 +198,23 @@ void MutexUnlock(const detail::MutexStorage& storage) noexcept {
   As<NoneMutex>(storage).locked = false;
 }
 
+kb::Status RecursiveMutexCreate(detail::MutexStorage& storage) noexcept {
+  static_cast<void>(Construct<NoneMutex>(storage));
+  return kb::Status::Ok;
+}
+
+// The only context is always the holder of a recursive mutex: every take succeeds, and the depth it
+// would count is never observable.
+bool RecursiveMutexLock(const detail::MutexStorage& storage, uint32_t timeout_ticks) noexcept {
+  static_cast<void>(storage);
+  static_cast<void>(timeout_ticks);
+  return true;
+}
+
+void RecursiveMutexUnlock(const detail::MutexStorage& storage) noexcept {
+  static_cast<void>(storage);
+}
+
 kb::Status SemaphoreCreate(detail::SemaphoreStorage& storage, uint32_t max_count,
                            uint32_t initial) noexcept {
   auto* s = Construct<NoneSemaphore>(storage);
@@ -359,6 +377,12 @@ void ThreadExit(const detail::ThreadStorage& storage) noexcept {
 
 void ThreadRelease(detail::ThreadStorage& storage) noexcept {
   storage.handle = nullptr;
+}
+
+kb::Status ThreadStackFree(const detail::ThreadStorage& storage, std::size_t& free_bytes) noexcept {
+  static_cast<void>(storage);
+  free_bytes = 0U;
+  return kb::Status::Unsupported; // no thread to measure
 }
 
 } // namespace backend

@@ -6,7 +6,7 @@
 Rules (the allow-lists are in tools/layout.yml, every entry with its reason):
   1. every inc/kb/port/stm32/<stem>.hpp has src/<stem>.cpp, or <stem> is listed under header_only;
   2. every file of src/ (.cpp or .hpp) has the stem of a public header, or is listed under internal;
-  3. every file of src/boundary/ has the stem of a public header (the SDK component it wraps), or is listed
+  3. every file of src/boundary/ (.c, .cpp, .hpp) has the stem of a public header (the SDK component it wraps), or is listed
      under boundary_extra;
   4. every allow-list entry names a file that exists, and a header_only entry has no source (so it is removed
      when the source is added);
@@ -40,7 +40,7 @@ def check(root: pathlib.Path) -> list:
     src = root / "src"
     logic = {p.stem for p in src.glob("*.cpp")}
     logic_all = logic | {p.stem for p in src.glob("*.hpp")}
-    boundary = {p.stem for p in (src / "boundary").glob("*") if p.suffix in (".cpp", ".hpp")}
+    boundary = {p.stem for p in (src / "boundary").glob("*") if p.suffix in (".c", ".cpp", ".hpp")}
 
     for stem in sorted(headers):
         if stem not in logic and stem not in header_only:
@@ -67,7 +67,7 @@ def check(root: pathlib.Path) -> list:
             errors.append(f"tools/layout.yml: boundary_extra.{stem} names no file of src/boundary/")
     entries = (yaml.safe_load((root / "deviations" / "boundary-files.yml").read_text()) or {}).get("boundary_files", [])
     listed = {e["path"] for e in entries if str(e["path"]).startswith("src/boundary/")}
-    on_disk = {p.relative_to(root).as_posix() for p in (src / "boundary").glob("*") if p.suffix in (".cpp", ".hpp")}
+    on_disk = {p.relative_to(root).as_posix() for p in (src / "boundary").glob("*") if p.suffix in (".c", ".cpp", ".hpp")}
     if listed != on_disk:
         errors.append("deviations/boundary-files.yml and the files of src/boundary/ differ: "
                       f"only listed {sorted(listed - on_disk)}, only on disk {sorted(on_disk - listed)}")

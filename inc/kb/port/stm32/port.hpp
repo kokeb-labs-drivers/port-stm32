@@ -27,7 +27,9 @@
 
 #include "kb/interfaces/interfaces.hpp"
 #include "kb/port/stm32/adc.hpp"
+#include "kb/port/stm32/adc_stream.hpp"
 #include "kb/port/stm32/can.hpp"
+#include "kb/port/stm32/dma.hpp"
 #include "kb/port/stm32/error.hpp"
 #include "kb/port/stm32/gpio.hpp"
 #include "kb/port/stm32/i2c.hpp"
@@ -35,6 +37,7 @@
 #include "kb/port/stm32/log.hpp"
 #include "kb/port/stm32/pwm.hpp"
 #include "kb/port/stm32/spi.hpp"
+#include "kb/port/stm32/spi_dma.hpp"
 #include "kb/port/stm32/time.hpp"
 #include "kb/port/stm32/uart.hpp"
 #include "kb/port/stm32/version.hpp"
@@ -54,6 +57,8 @@ static_assert(std::is_constructible_v<kb::iface::MonotonicClockRef, const Clock&
 static_assert(std::is_constructible_v<kb::iface::BusyWaitRef, BusyWait&>);
 static_assert(std::is_constructible_v<kb::iface::LogSinkRef, ItmLogSink&>);
 static_assert(std::is_constructible_v<kb::iface::LogSinkRef, UartLogSink&>);
+static_assert(kb::dma::ReportsCapabilities<SpiBus>, "SpiBus reports its DMA capabilities");
+static_assert(kb::dma::ReportsCapabilities<DmaStream>, "DmaStream reports its capabilities");
 
 } // namespace kb::port::stm32
 

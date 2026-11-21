@@ -1,6 +1,7 @@
 // SpiBus and SpiDevice: argument checks, the prescaler, the bus lock, per-device mode and clock,
 // chip select around every frame, interrupt-driven chunks of 65535 bytes waited for on the port's
-// clock, and abort and re-initialisation after a timeout.
+// clock, and abort and re-initialisation after a timeout; the choice of the DMA path for frames of
+// its minimum size (src/spi_dma.cpp), its capabilities and its recovery.
 // Platform-free; every HAL call goes through sdk.hpp (src/boundary/spi.cpp).
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The port-stm32 authors
@@ -9,10 +10,13 @@
 #include <cstdint>
 #include <span>
 
+#include "kb/dma/assignment.hpp"
+#include "kb/dma/capabilities.hpp"
 #include "kb/interfaces/spi.hpp"
 #include "kb/port/stm32/completion.hpp"
 #include "kb/port/stm32/error.hpp"
 #include "kb/port/stm32/spi.hpp"
+#include "kb/port/stm32/spi_dma.hpp"
 #include "kb/utils/status.hpp"
 #include "sdk.hpp"
 #include "state.hpp"
@@ -71,6 +75,14 @@ kb::Status SpiBus::EnsureReady() noexcept {
       code = port_code::kRtosObject;
     } else {
       code = sdk::SpiOpen(config_, done_);
+      if ((code == hal::kOk) && (dma_ != nullptr)) {
+        // A declared DMA path that cannot start (placement, MPU, priorities) fails the start
+        // closed.
+        code = dma_->Ready(config_.instance, config_.irq_priority);
+        if (code != hal::kOk) {
+          static_cast<void>(sdk::SpiClose(config_.instance));
+        }
+      }
     }
     status = error_.Set(MapHalStatus(code & 0xFFU), code);
     ready_ = status == kb::Status::Ok;
@@ -84,6 +96,9 @@ kb::Status SpiBus::EnsureReady() noexcept {
 kb::Status SpiBus::Release() noexcept {
   kb::Status status = kb::Status::Ok;
   if (ready_) {
+    if (dma_ != nullptr) {
+      dma_->Close();
+    }
     const uint32_t code = sdk::SpiClose(config_.instance);
     status = error_.Set(MapHalStatus(code & 0xFFU), code);
     ready_ = false;
@@ -117,6 +132,74 @@ uint32_t SpiBus::TransferLocked(std::span<const uint8_t> tx, std::span<uint8_t> 
   return code;
 }
 
+kb::Status SpiBus::AttachDma(SpiDmaPath& path) noexcept {
+  kb::Status status = kb::Status::InvalidArgument;
+  if (!ready_ && (dma_ == nullptr)) {
+    dma_ = &path;
+    status = kb::Status::Ok;
+  }
+  return status;
+}
+
+bool SpiBus::DmaFrame(std::size_t bytes) const noexcept {
+  return (dma_ != nullptr) && (bytes >= dma_->MinBytes());
+}
+
+uint32_t SpiBus::DmaTransferLocked(std::span<const uint8_t> tx, std::span<uint8_t> rx,
+                                   Deadline& deadline) noexcept {
+  return (dma_ != nullptr) ? dma_->Frame(config_.instance, tx, rx, deadline, done_)
+                           : port_code::kUnsupported;
+}
+
+kb::dma::Capabilities SpiBus::Capabilities() const noexcept {
+  kb::dma::Capabilities c{};
+  if (dma_ != nullptr) {
+    c.mode = kb::dma::TransferMode::Dma;
+    c.confirmed_abort = true;
+    c.max_frame_bytes = dma_->MaxBytes();
+    c.staging_bytes = dma_->MaxBytes();
+    c.align_bytes = dma_->AlignBytes();
+  } else {
+    c.mode = kb::dma::TransferMode::Interrupt;
+    c.confirmed_abort = false;
+    c.max_frame_bytes = kSpiNoDmaMaxFrame;
+    c.staging_bytes = 0U;
+    c.align_bytes = 1U;
+  }
+  c.zero_copy = false;
+  return c;
+}
+
+kb::dma::DmaHealth SpiBus::Health() const noexcept {
+  kb::dma::DmaHealth h{};
+  if (dma_ != nullptr) {
+    h = dma_->Health();
+  } else {
+    h.mode = kb::dma::TransferMode::Interrupt;
+  }
+  return h;
+}
+
+kb::dma::BusLimits SpiBus::Limits() const noexcept {
+  kb::dma::BusLimits b{};
+  b.dma = dma_ != nullptr;
+  b.max_frame_dma = (dma_ != nullptr) ? dma_->MaxBytes() : 0U;
+  b.max_frame_no_dma = kSpiNoDmaMaxFrame;
+  b.rx_length_multiple = 1U;
+  b.align_bytes = (dma_ != nullptr) ? dma_->AlignBytes() : 1U;
+  return b;
+}
+
+kb::Status SpiBus::Recover() noexcept {
+  kb::Status status = kb::Status::Ok;
+  if (dma_ != nullptr) {
+    status = dma_->Recover();
+  }
+  mode_ = 0xFFU; // the next frame initialises the peripheral again
+  prescaler_ = 0xFFU;
+  return error_.Set(status, (status == kb::Status::Ok) ? hal::kOk : port_code::kQuarantined);
+}
+
 // --- SpiDevice -----------------------------------------------------------------------------------
 
 SpiDevice::~SpiDevice() noexcept {
@@ -145,6 +228,10 @@ uint32_t SpiDevice::ActualClockHz() const noexcept {
   return bus_.KernelClockHz() >> (prescaler_ + 1U);
 }
 
+uint32_t SpiDevice::ActualDmaClockHz() const noexcept {
+  return bus_.KernelClockHz() >> (dma_prescaler_ + 1U);
+}
+
 uint32_t SpiDevice::claimCs() const noexcept {
   const uint32_t claim = ClaimPin(config_.cs);
   uint32_t code = claim;
@@ -167,7 +254,11 @@ kb::Status SpiDevice::EnsureReady() noexcept {
       status = error_.Set(kb::Status::NotReady, port_code::kNotReady);
     } else {
       prescaler_ = SpiPrescalerExponent(bus_.KernelClockHz(), limited(config_.clock_hz), ok);
-      const uint32_t code = ok ? claimCs() : port_code::kInvalidArgument;
+      bool dma_ok = true;
+      dma_prescaler_ = bus_.HasDma()
+                           ? SpiPrescalerExponent(bus_.KernelClockHz(), config_.clock_hz, dma_ok)
+                           : prescaler_;
+      const uint32_t code = (ok && dma_ok) ? claimCs() : port_code::kInvalidArgument;
       status = error_.Set(MapHalStatus(code & 0xFFU), code);
       ready_ = status == kb::Status::Ok;
       if (ready_) {
@@ -189,9 +280,23 @@ kb::Status SpiDevice::Release() noexcept {
 
 uint32_t SpiDevice::frame(std::span<const uint8_t> tx, std::span<uint8_t> rx) noexcept {
   const std::size_t total = std::max(tx.size(), rx.size());
-  uint32_t code = bus_.SelectLocked(config_.mode, prescaler_);
+  const bool dma = bus_.DmaFrame(total);
+  uint32_t code = bus_.SelectLocked(config_.mode, dma ? dma_prescaler_ : prescaler_);
   std::size_t done = 0U;
-  if (code == hal::kOk) {
+  if ((code == hal::kOk) && dma) {
+    // A frame above the staging buffers is refused by the path before anything moves: no chip
+    // select.
+    const bool fits = total <= bus_.Limits().max_frame_dma;
+    Deadline deadline{config_.timeout};
+    if (fits) {
+      count(&SpiStats::dma_frames);
+      sdk::PinWrite(config_.cs, false);
+    }
+    code = bus_.DmaTransferLocked(tx, rx, deadline);
+    if (fits) {
+      sdk::PinWrite(config_.cs, true);
+    }
+  } else if (code == hal::kOk) {
     sdk::PinWrite(config_.cs, false);
     while ((code == hal::kOk) && (done < total)) {
       const std::size_t n = std::min(kChunk, total - done);
@@ -202,6 +307,8 @@ uint32_t SpiDevice::frame(std::span<const uint8_t> tx, std::span<uint8_t> rx) no
       done += n;
     }
     sdk::PinWrite(config_.cs, true);
+  } else {
+    // The peripheral could not be set to the device's mode and clock: nothing was clocked.
   }
   return code;
 }
@@ -215,7 +322,8 @@ kb::Status SpiDevice::finish(uint32_t code) noexcept {
   if (status != kb::Status::Ok) {
     count(&SpiStats::failures);
   }
-  if (status == kb::Status::Timeout) {
+  if ((status == kb::Status::Timeout) || (hal_status == port_code::kDma) ||
+      (hal_status == port_code::kQuarantined)) {
     bus_.InvalidateLocked(); // aborted: every device's next frame initialises the peripheral again
     count(&SpiStats::rebuilds);
   }
@@ -262,6 +370,13 @@ kb::Status SpiDevice::SetClockHz(uint32_t hz) noexcept {
   } else {
     config_.clock_hz = hz; // the next frame selects the new prescaler
     prescaler_ = exponent;
+    if (ready_ && bus_.HasDma()) {
+      bool dma_ok = true;
+      const uint8_t dma_exponent = SpiPrescalerExponent(bus_.KernelClockHz(), hz, dma_ok);
+      dma_prescaler_ = dma_ok ? dma_exponent : exponent;
+    } else {
+      dma_prescaler_ = exponent;
+    }
     if (ready_) {
       noteClock(hz);
     }

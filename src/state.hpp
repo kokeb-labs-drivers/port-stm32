@@ -30,10 +30,13 @@
 
 namespace kb::port::stm32 {
 
-inline constexpr std::size_t kGpioPorts = 11U; ///< A to K.
-inline constexpr std::size_t kExtiLines = 16U; ///< EXTI0 to EXTI15.
-inline constexpr std::size_t kTimers = 21U;    ///< TIM0 (unused) to TIM20.
-inline constexpr std::size_t kAdcs = 6U;       ///< ADC0 (unused) to ADC5.
+inline constexpr std::size_t kGpioPorts = 11U;  ///< A to K.
+inline constexpr std::size_t kExtiLines = 16U;  ///< EXTI0 to EXTI15.
+inline constexpr std::size_t kTimers = 21U;     ///< TIM0 (unused) to TIM20.
+inline constexpr std::size_t kAdcs = 6U;        ///< ADC0 (unused) to ADC5.
+inline constexpr std::size_t kDmaStreams = 16U; ///< DMA1 and DMA2, 8 streams or channels each.
+
+class DmaStream;
 
 /** @brief One EXTI line: the callback, its context and the port of the pin that owns it. */
 struct ExtiLine {
@@ -59,9 +62,10 @@ struct TimerEntry {
 
 /** @brief Where a shared ADC instance is in its life. */
 enum class AdcPhase : uint8_t {
-  Closed = 0,  ///< Not initialised.
-  Opening = 1, ///< One channel is initialising it; others wait.
-  Open = 2,    ///< Initialised; `users` channels share it.
+  Closed = 0,    ///< Not initialised.
+  Opening = 1,   ///< One channel is initialising it; others wait.
+  Open = 2,      ///< Initialised; `users` channels share it.
+  Streaming = 3, ///< An ADC scan stream owns it alone (adc_stream.hpp); channels are refused.
 };
 
 /** @brief One ADC instance shared by its channels. */
@@ -81,6 +85,7 @@ struct PortState {
   std::array<std::atomic<bool>, kTimers> clock_on{}; ///< The timer runs a started Clock.
   std::atomic<uint8_t> clock_timer{0U};              ///< The first started clock's timer; 0 before.
   std::array<AdcEntry, kAdcs> adcs{};
+  std::array<std::atomic<DmaStream*>, kDmaStreams> dma{}; ///< The started stream of each index.
 };
 
 /** @brief Interrupts masked for the guard's life (PRIMASK saved and restored; nests). */

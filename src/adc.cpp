@@ -28,6 +28,41 @@ namespace {
   return r.IsOk() || (r.Error() == kb::Status::AlreadyStarted);
 }
 
+// One look at the instance's phase with interrupts masked: join it, open it, or find it streamed.
+void AdcJoin(AdcEntry& entry, bool& opener, bool& joined, bool& owned) noexcept {
+  const IrqGuard guard{};
+  const auto phase = static_cast<AdcPhase>(entry.phase.load(std::memory_order_relaxed));
+  if (phase == AdcPhase::Open) {
+    ++entry.users;
+    joined = true;
+  } else if (phase == AdcPhase::Closed) {
+    entry.phase.store(static_cast<uint8_t>(AdcPhase::Opening), std::memory_order_relaxed);
+    opener = true;
+  } else if (phase == AdcPhase::Streaming) {
+    owned = true; // a scan stream has the instance
+  } else {
+    // another channel is opening or closing the instance
+  }
+}
+
+// The first channel of the instance initialises it and publishes the phase.
+[[nodiscard]] uint32_t AdcOpenFirst(AdcEntry& entry, uint8_t instance, uint8_t priority) noexcept {
+  uint32_t code = hal::kOk;
+  if (!Created(entry.lock.Create()) || (entry.conversion.Create() != kb::Status::Ok)) {
+    code = port_code::kRtosObject;
+  } else if (!HalTickRuns()) {
+    code = port_code::kHalTickStopped; // the HAL's enable and calibration waits use it
+  } else {
+    code = sdk::AdcOpen(instance, entry.conversion, priority);
+  }
+  const IrqGuard guard{};
+  const bool ok = code == hal::kOk;
+  entry.users = ok ? 1U : 0U;
+  entry.phase.store(static_cast<uint8_t>(ok ? AdcPhase::Open : AdcPhase::Closed),
+                    std::memory_order_relaxed);
+  return code;
+}
+
 // The instance's first channel initialises it; others wait (bounded) while it does.
 [[nodiscard]] uint32_t AdcShare(uint8_t instance, kb::Milliseconds wait,
                                 uint8_t priority) noexcept {
@@ -35,41 +70,21 @@ namespace {
   Deadline deadline{wait};
   bool opener = false;
   bool joined = false;
+  bool owned = false;
   uint32_t code = port_code::kLockTimeout;
-  while (!opener && !joined && !deadline.Expired()) {
-    {
-      const IrqGuard guard{};
-      const auto phase = static_cast<AdcPhase>(entry.phase.load(std::memory_order_relaxed));
-      if (phase == AdcPhase::Open) {
-        ++entry.users;
-        joined = true;
-      } else if (phase == AdcPhase::Closed) {
-        entry.phase.store(static_cast<uint8_t>(AdcPhase::Opening), std::memory_order_relaxed);
-        opener = true;
-      } else {
-        // another channel is opening or closing the instance
-      }
-    }
-    if (!opener && !joined) {
+  while (!opener && !joined && !owned && !deadline.Expired()) {
+    AdcJoin(entry, opener, joined, owned);
+    if (!opener && !joined && !owned) {
       kb::rtos::SleepFor(kb::Milliseconds{1U});
       deadline.Slept(1U);
     }
   }
   if (joined) {
     code = hal::kOk;
+  } else if (owned) {
+    code = port_code::kOwned;
   } else if (opener) {
-    if (!Created(entry.lock.Create()) || (entry.conversion.Create() != kb::Status::Ok)) {
-      code = port_code::kRtosObject;
-    } else if (!HalTickRuns()) {
-      code = port_code::kHalTickStopped; // the HAL's enable and calibration waits use it
-    } else {
-      code = sdk::AdcOpen(instance, entry.conversion, priority);
-    }
-    const IrqGuard guard{};
-    const bool ok = code == hal::kOk;
-    entry.users = ok ? 1U : 0U;
-    entry.phase.store(static_cast<uint8_t>(ok ? AdcPhase::Open : AdcPhase::Closed),
-                      std::memory_order_relaxed);
+    code = AdcOpenFirst(entry, instance, priority);
   } else {
     // the other channel did not finish in time
   }

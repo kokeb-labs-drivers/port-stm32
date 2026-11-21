@@ -9,8 +9,9 @@ handbook at level `high` (`.kokeb/handbook.yml`).
 
 - `inc/kb/port/stm32/`: public headers, one per peripheral, no HAL type in any signature; `port.hpp` includes them
   all and proves every `*Ref`; `irq.hpp` holds the interrupt entry points.
-- `src/<stem>.cpp`: the platform-free logic, one file per public header (`adc`, `can`, `completion`, `error`, `gpio`,
-  `i2c`, `log`, `port`, `pwm`, `spi`, `time`, `uart`); `irq.hpp` and `version.hpp` are header-only
+- `src/<stem>.cpp`: the platform-free logic, one file per public header (`adc`, `adc_stream`, `can`, `completion`,
+  `dma`, `error`, `gpio`, `i2c`, `log`, `port`, `pwm`, `spi`, `spi_dma`, `time`, `uart`); `irq.hpp` and `version.hpp`
+  are header-only
   (`tools/layout.yml`). Shared internals: `sdk.hpp` (the seam to the boundary), `state.hpp` (the shared state's
   type) and `clock_read.hpp` (the clock's read rule), used by several of these files.
 - `src/boundary/<component>.cpp`: the HAL boundary, one file per HAL component (`i2c`, `spi`, `uart`, `gpio`, `adc`,
@@ -20,7 +21,10 @@ handbook at level `high` (`.kokeb/handbook.yml`).
   file in step: a new peripheral adds `inc/.../<x>.hpp`, `src/<x>.cpp` and `src/boundary/<x>.cpp`.
 - `cmake/`: the pinned HAL fetch (`kb_port_stm32_hal.cmake`), the pinned FreeRTOS-Kernel fetch for the example
   (`kb_port_stm32_freertos.cmake`), the kb-core copy check, an Arm toolchain file.
-- `tests/`: host tests; `tests/fakes/stm32/` fakes every HAL call the boundary files make.
+- `tests/`: host tests; `tests/fakes/stm32/` fakes every HAL call the boundary files make; `tests/dma_model/` is the
+  host form of the DMA boundary (`dma`, `spi_dma`, `adc_stream`, `atomic64`: compiled for targets only) over kb-core's
+  DMA-and-cache model, and the adapter rigs that run kb-core's DMA conformance suite on the port ([DMA](docs/dma.md));
+  `tests/target/dma/` is the DMA bench app (built by the example project, run by hand: `docs/assurance/bench/`).
 - `examples/stm32/`: one firmware project for the four families (`boards/<board>/`): the port's self test.
 - `third_party/kb-core/`: the pinned, unchanged kb-core copy (`tools/kb_core_snapshot.py`, `third_party/kb-core.lock`).
 - `_config/`: tool configuration; `tools/`: pre-flight, layering rules, the layout check, the snapshot tool, the firmware vector check

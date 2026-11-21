@@ -42,6 +42,8 @@ void SetTickFreq(HAL_TickFreqTypeDef freq);
 /** @brief Microseconds a timer counter advances per read (default 1). */
 void SetCounterStep(uint32_t step);
 void SetCycleStep(uint32_t step);
+/** @brief What HAL_RCC_GetHCLKFreq and HAL_RCC_GetPCLK2Freq return (0: a stopped clock). */
+void SetHclk(uint32_t hz);
 [[nodiscard]] uint32_t Ticks();
 [[nodiscard]] uint64_t CyclesRead();
 

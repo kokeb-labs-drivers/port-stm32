@@ -33,29 +33,11 @@ LOCK = ROOT / "third_party" / "kb-core.lock"
 REPO = "https://github.com/kokeb-labs/kb-core"
 # The branch the copied commit must be on: the port never builds against an unmerged kb-core state.
 BRANCH = "main"
-# What the port builds against: the CMake entry and modules, the three parts it uses, the RTOS-free and FreeRTOS
-# backends, the host test port and the test harness. Documentation, drivers and the other parts are not copied.
-PATHS = (
-    "LICENSE",
-    "CMakeLists.txt",
-    # The whole cmake/ folder: the root CMakeLists.txt includes modules from it by name, and a hand-kept list of
-    # them broke when kb-core added one (cmake/kb_tool_tests.cmake).
-    "cmake",
-    # cmake/kb_layout.cmake reads it; a copy that vendors cmake/ must vendor it too.
-    "tools/layout/paths.yml",
-    "components/lib/utils/CMakeLists.txt",
-    "components/lib/utils/inc",
-    "components/lib/rtos/CMakeLists.txt",
-    "components/lib/rtos/inc",
-    "components/lib/rtos/backends/none",
-    "components/lib/rtos/backends/freertos",
-    "components/lib/interfaces/CMakeLists.txt",
-    "components/lib/interfaces/inc",
-    "components/lib/interfaces/host",
-    "components/ports/host/CMakeLists.txt",
-    "components/ports/host/src",
-    "tests/harness",
-)
+# What the port builds against: the paths kb-core's own layout tool names for a consumer copy
+# (`tools/layout/layout.py vendor` in the checkout: the CMake entry and modules, the parts utils, rtos, dma and
+# interfaces with the dma and interfaces host models, the RTOS backends, the host test port and the test harness).
+# Reading the list from the checkout keeps the copy in step when kb-core adds a vendored path.
+LAYOUT_TOOL = "tools/layout/layout.py"
 SKIP_NAMES = {"README.md"}
 
 
@@ -63,9 +45,20 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def files_under(base: Path) -> list[str]:
+def vendor_paths(base: Path) -> list[str]:
+    tool = base / LAYOUT_TOOL
+    if not tool.is_file():
+        raise SystemExit(f"kb_core_snapshot: {LAYOUT_TOOL} is missing in {base}")
+    out = subprocess.run([sys.executable, "-I", str(tool), "vendor"], cwd=base, check=True, capture_output=True,
+                         text=True).stdout.split()
+    if not out:
+        raise SystemExit(f"kb_core_snapshot: {LAYOUT_TOOL} vendor printed no paths")
+    return out
+
+
+def files_under(base: Path, paths: list[str]) -> list[str]:
     out: list[str] = []
-    for rel in PATHS:
+    for rel in paths:
         p = base / rel
         if p.is_file():
             out.append(rel)
@@ -112,11 +105,12 @@ def update(src: Path) -> int:
     if on_main.returncode != 0:
         raise SystemExit(f"kb_core_snapshot: {commit[:12]} is not on kb-core origin/{BRANCH} (fetch, then check out a "
                          f"commit of {BRANCH})")
-    dirty = subprocess.run(["git", "-C", str(src), "status", "--porcelain", "--", *PATHS], check=True,
+    paths = vendor_paths(src)
+    dirty = subprocess.run(["git", "-C", str(src), "status", "--porcelain", "--", *paths], check=True,
                            capture_output=True, text=True).stdout.strip()
     if dirty:
         raise SystemExit("kb_core_snapshot: the checkout has local changes in the copied paths")
-    rels = files_under(src)
+    rels = files_under(src, paths)
     if DEST.exists():
         shutil.rmtree(DEST)
     lines = ["# The kb-core files in third_party/kb-core, written by tools/kb_core_snapshot.py --update. Never edit.",

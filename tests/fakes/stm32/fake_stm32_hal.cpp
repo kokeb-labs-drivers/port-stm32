@@ -77,6 +77,7 @@ struct State {
   void* can_handle{nullptr};
   uint64_t cycles{0U};
   uint32_t cycle_step{100U};
+  uint32_t hclk{160000000U};
   uint32_t primask{0U};
   std::array<std::array<Pin, 16>, 11> pins{};
   uint32_t toggles{0U};
@@ -264,6 +265,9 @@ void Stall(const char* area, bool on) {
   } else {
     S().stalled.erase(area);
   }
+}
+void SetHclk(uint32_t hz) {
+  S().hclk = hz;
 }
 void SetCycleStep(uint32_t step) {
   S().cycle_step = step;
@@ -470,13 +474,13 @@ HAL_TickFreqTypeDef HAL_GetTickFreq(void) {
   return S().tick_freq;
 }
 uint32_t HAL_RCC_GetHCLKFreq(void) {
-  return 160000000U;
+  return S().hclk;
 }
 uint32_t HAL_RCC_GetPCLK1Freq(void) {
   return 80000000U;
 }
 uint32_t HAL_RCC_GetPCLK2Freq(void) {
-  return 160000000U;
+  return S().hclk;
 }
 uint32_t HAL_RCCEx_GetPeriphCLKFreq(uint32_t) {
   return 40000000U;

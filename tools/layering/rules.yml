@@ -5,15 +5,17 @@ zones:
   # The port: public headers and sources. It sees kb-core only through the public kb/<part>/ headers.
   port:
     paths: ["inc/**", "src/**"]
-    may_include: [port, kb_utils, kb_rtos, kb_interfaces, std_subset, sdk]
-  # Host tests: the port, kb-core's host port and harness, and the HAL fakes (named like the HAL headers).
+    may_include: [port, kb_utils, kb_rtos, kb_interfaces, kb_dma, std_subset, sdk]
+  # Host tests: the port, kb-core's host port, harness and DMA-and-cache model, and the HAL fakes (named like the HAL
+  # headers). The DMA bench app (tests/target/**) is built by the example project and excluded like the examples.
   tests:
     paths: ["tests/**"]
-    may_include: [port, kb_utils, kb_rtos, kb_interfaces, kb_host, kb_harness, sdk_fakes, tests, std_any, sdk_any]
+    may_include: [port, kb_utils, kb_rtos, kb_interfaces, kb_dma, kb_host, kb_dma_host, kb_harness, sdk_fakes, tests, std_any,
+                  sdk_any]
   # Bare-metal applications: they may call the HAL in their own files (clock tree, SysTick).
   examples:
     paths: ["examples/**"]
-    may_include: [port, kb_utils, kb_rtos, kb_interfaces, examples, std_any, sdk_any]
+    may_include: [port, kb_utils, kb_rtos, kb_interfaces, kb_dma, examples, std_any, sdk_any]
   # The pinned kb-core copy: checked by its own CI.
   kb_core:
     paths: ["third_party/kb-core/**"]
@@ -24,6 +26,8 @@ public_headers:
   kb_rtos: "third_party/kb-core/components/lib/rtos/inc/kb/rtos/**"
   kb_interfaces: "third_party/kb-core/components/lib/interfaces/inc/kb/interfaces/**"
   kb_host: "third_party/kb-core/components/lib/interfaces/host/inc/kb/interfaces/host/**"
+  kb_dma: "third_party/kb-core/components/lib/dma/inc/kb/dma/**"
+  kb_dma_host: "third_party/kb-core/components/lib/dma/host/inc/kb/dma/host/**"
   kb_harness: "third_party/kb-core/tests/harness/**"
 # The HAL fakes (tests/fakes/stm32) carry the HAL's header names; the check excludes that folder (ci-layering.yml)
 # so a HAL name always means the HAL, and the tests reach the fakes' own control headers through this group.

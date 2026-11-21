@@ -78,11 +78,18 @@ this.
 
 ## Caches and DMA (H7)
 
-The port moves data by interrupt (the CPU copies every byte); it uses no DMA. CPU-path transfers need no cache
-maintenance, and caller buffers may be anywhere the CPU can reach, D-cache on or off.
+Interrupt-driven transfers are CPU copies: they need no cache maintenance, and caller buffers may be anywhere the CPU
+can reach, D-cache on or off. DMA transfers ([DMA](dma.md)) never use a caller buffer: they go through port-owned
+`kb::dma::Buffer`s the board places in a DMA region. The board's start-up owns the MPU (the D2 window: one region,
+non-cacheable, shareable) and the caches; the port reads the MPU back at start and refuses a mismatch. A board's DMA
+buffer sections are loaded like `.data` (a `kb::dma::Buffer` holds its data address), not NOLOAD.
 
-When DMA is added to the port, these rules apply on STM32H7 (observed with an earlier implementation on STM32H7
-hardware):
+The port's DMA vectors (`DMA1_Stream0_IRQHandler` ... or `DMA1_Channel1_IRQHandler` ...) dispatch to the started
+`DmaStream` and disable the line of a stream the port does not own. An application that keeps a DMA vector for
+itself names it in `KB_PORT_STM32_VECTORS_EXCLUDE` and calls `kb::port::stm32::HandleDmaIrq(engine, stream)` for the
+port's streams.
+
+The rules behind the DMA layer on STM32H7 (observed with an earlier implementation on STM32H7 hardware):
 
 - DMA buffers are 32-byte aligned and sized to whole cache lines; the D-cache is cleaned before a transmit and
   invalidated before the CPU reads received data, or the buffers are in an MPU region marked non-cacheable;

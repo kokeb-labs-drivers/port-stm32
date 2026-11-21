@@ -21,6 +21,7 @@
 #include <thread>
 
 #include "kb/rtos/backend.hpp"
+#include "kb/rtos/backend_rules.hpp"
 
 namespace kb::rtos {
 namespace {
@@ -48,6 +49,9 @@ std::recursive_mutex& CriticalMutex() noexcept {
 
 struct HostMutex {
   std::timed_mutex m;
+};
+struct HostRecursiveMutex {
+  std::recursive_timed_mutex m;
 };
 struct HostSemaphore {
   std::mutex m;
@@ -175,13 +179,13 @@ void SleepTicks(uint32_t ticks) noexcept {
 }
 
 bool SleepUntilTick(uint32_t& previous_wake, uint32_t period_ticks) noexcept {
-  const uint32_t elapsed = TickCount() - previous_wake;
-  const bool on_time = elapsed < period_ticks;
-  if (on_time) {
-    std::this_thread::sleep_for(Ticks(period_ticks - elapsed));
+  const detail::DelayUntilPlan plan =
+      detail::PlanDelayUntil(TickCount(), previous_wake, period_ticks);
+  if (plan.on_time) {
+    std::this_thread::sleep_for(Ticks(plan.sleep_ticks));
   }
   previous_wake += period_ticks;
-  return on_time;
+  return plan.on_time;
 }
 
 void Yield() noexcept {
@@ -221,6 +225,29 @@ bool MutexLock(const detail::MutexStorage& storage, uint32_t timeout_ticks) noex
 
 void MutexUnlock(const detail::MutexStorage& storage) noexcept {
   As<HostMutex>(storage).m.unlock();
+}
+
+kb::Status RecursiveMutexCreate(detail::MutexStorage& storage) noexcept {
+  static_cast<void>(Construct<HostRecursiveMutex>(storage));
+  return kb::Status::Ok;
+}
+
+bool RecursiveMutexLock(const detail::MutexStorage& storage, uint32_t timeout_ticks) noexcept {
+  auto& m = As<HostRecursiveMutex>(storage);
+  bool ok = false;
+  if (timeout_ticks == kForever) {
+    m.m.lock();
+    ok = true;
+  } else if (timeout_ticks == 0U) {
+    ok = m.m.try_lock();
+  } else {
+    ok = m.m.try_lock_for(Ticks(timeout_ticks));
+  }
+  return ok;
+}
+
+void RecursiveMutexUnlock(const detail::MutexStorage& storage) noexcept {
+  As<HostRecursiveMutex>(storage).m.unlock();
 }
 
 kb::Status SemaphoreCreate(detail::SemaphoreStorage& storage, uint32_t max_count,
@@ -427,6 +454,12 @@ void ThreadRelease(detail::ThreadStorage& storage) noexcept {
     t.~HostThread();
     storage.handle = nullptr;
   }
+}
+
+kb::Status ThreadStackFree(const detail::ThreadStorage& storage, std::size_t& free_bytes) noexcept {
+  static_cast<void>(storage);
+  free_bytes = 0U;
+  return kb::Status::Unsupported; // the standard library owns a host thread's stack
 }
 
 } // namespace backend

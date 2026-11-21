@@ -9,6 +9,7 @@
 #define KB_INTERFACES_INTERFACES_HPP
 
 #include "kb/interfaces/adc.hpp"
+#include "kb/interfaces/async.hpp"
 #include "kb/interfaces/can.hpp"
 #include "kb/interfaces/gpio.hpp"
 #include "kb/interfaces/i2c.hpp"

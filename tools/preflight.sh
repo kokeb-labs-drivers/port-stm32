@@ -61,6 +61,8 @@ tidy_run() {
     bad=1
   fi
   for f in src/*.cpp src/boundary/*.cpp; do
+    # The DMA boundary files are compiled for the targets only (the host links tests/dma_model in their place).
+    grep -q "\"file\": \".*/$f\"" "$out/clang/compile_commands.json" || continue
     # stderr kept: a configuration error is an error, not silence. Compiler warnings echoed by clang-tidy are
     # not findings; "N warnings generated" lines are dropped.
     clang-tidy -p "$out/clang" --config-file=_config/.clang-tidy "${sdk[@]}" --quiet "$f" 2>&1 |
@@ -76,7 +78,7 @@ misra_lint() {
 handbook() { python3 "${CI_TOOLS_DIR:?set CI_TOOLS_DIR}/tools/handbook_check/handbook_check.py" --repo .; }
 layering() {
   python3 "${CI_TOOLS_DIR:?set CI_TOOLS_DIR}/tools/layering/layering.py" check --rules tools/layering/rules.yml \
-    --root . --compile-db "$out/clang/compile_commands.json" --exclude "build*/** tests/fakes/** examples/**"
+    --root . --compile-db "$out/clang/compile_commands.json" --exclude "build*/** tests/fakes/** tests/target/** examples/**"
 }
 
 step snapshot snapshot

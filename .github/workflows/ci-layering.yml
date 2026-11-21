@@ -21,5 +21,6 @@ jobs:
       boundary_files: deviations/boundary-files.yml
       poison_cmake_args: "-DKB_PORT_STM32_BUILD_TESTS=ON"
       build_target: kb_port_stm32_platform_free
-      # The fakes carry the HAL's header names on purpose; the examples are built by ci-cmake-matrix.yml.
-      exclude: "tests/fakes/** examples/**"
+      # The fakes carry the HAL's header names on purpose; the examples and the DMA bench app (tests/target) are
+      # built by ci-cmake-matrix.yml.
+      exclude: "tests/fakes/** tests/target/** examples/**"

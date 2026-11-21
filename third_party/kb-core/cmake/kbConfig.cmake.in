@@ -1,12 +1,13 @@
-# find_package(kb CONFIG REQUIRED COMPONENTS utils rtos interfaces handlers)
+# find_package(kb CONFIG REQUIRED COMPONENTS utils rtos dma interfaces handlers)
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 The kb-core authors
 @PACKAGE_INIT@
 
 # Dependencies are listed bottom-up: a targets file may only be included after the targets it references.
 
-set(_kb_all utils rtos interfaces handlers)
+set(_kb_all utils rtos dma interfaces handlers)
 set(_kb_deps_rtos utils)
+set(_kb_deps_dma utils)
 set(_kb_deps_interfaces utils rtos)
 set(_kb_deps_handlers utils rtos interfaces)
 if(NOT kb_FIND_COMPONENTS)
