@@ -5,31 +5,40 @@
  * restored) for the two word accesses, which makes them atomic against every interrupt. Weak, so a
  * toolchain libatomic or the application's own definition wins. SPDX-License-Identifier: MIT
  * Copyright (c) 2026 The port-stm32 authors */
+#if defined(__arm__) || defined(__thumb__)
 /* The fixed-width types of the Arm EABI, spelled out: this file includes no header. */
-typedef unsigned int uint32_t;
-typedef unsigned long long uint64_t;
+typedef unsigned int KbU32;
+typedef unsigned long long KbU64;
 
-static inline uint32_t KbMask(void) {
-  uint32_t primask;
+static inline KbU32 KbMask(void) {
+  KbU32 primask = 0U;
   __asm volatile("mrs %0, primask\n cpsid i" : "=r"(primask)::"memory");
   return primask;
 }
 
-static inline void KbRestore(uint32_t primask) {
+static inline void KbRestore(KbU32 primask) {
   __asm volatile("msr primask, %0" ::"r"(primask) : "memory");
 }
 
-__attribute__((weak)) uint64_t __atomic_load_8(const volatile void* ptr, int order) {
+/* The names and signatures are the GNU toolchain's libatomic ABI (reserved names by definition). */
+// NOLINTBEGIN(bugprone-reserved-identifier,cert-dcl37-c,cert-dcl51-cpp,readability-identifier-naming,cppcoreguidelines-pro-type-cstyle-cast)
+__attribute__((weak)) KbU64 __atomic_load_8(const volatile void* ptr, int order) {
   (void)order;
-  const uint32_t saved = KbMask();
-  const uint64_t value = *(const volatile uint64_t*)ptr;
+  const KbU32 saved = KbMask();
+  const KbU64 value = *(const volatile KbU64*)ptr;
   KbRestore(saved);
   return value;
 }
 
-__attribute__((weak)) void __atomic_store_8(volatile void* ptr, uint64_t value, int order) {
+__attribute__((weak)) void __atomic_store_8(volatile void* ptr, KbU64 value, int order) {
   (void)order;
-  const uint32_t saved = KbMask();
-  *(volatile uint64_t*)ptr = value;
+  const KbU32 saved = KbMask();
+  *(volatile KbU64*)ptr = value;
   KbRestore(saved);
 }
+// NOLINTEND(bugprone-reserved-identifier,cert-dcl37-c,cert-dcl51-cpp,readability-identifier-naming,cppcoreguidelines-pro-type-cstyle-cast)
+#else
+/* A host compile (the MISRA scan and clang-tidy over the HAL fakes): the host's compiler has these
+ * built in. */
+typedef int KbAtomic64HostUnit;
+#endif

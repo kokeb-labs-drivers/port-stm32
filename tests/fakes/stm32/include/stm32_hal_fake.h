@@ -81,7 +81,39 @@ typedef enum {
   CAN1_SCE_IRQn = 22,
   CAN2_TX_IRQn = 63,
   CAN2_RX0_IRQn = 64,
-  CAN2_SCE_IRQn = 66
+  CAN2_SCE_IRQn = 66,
+  DMA1_Stream0_IRQn = 11,
+  DMA1_Stream1_IRQn = 12,
+  DMA1_Stream2_IRQn = 13,
+  DMA1_Stream3_IRQn = 14,
+  DMA1_Stream4_IRQn = 15,
+  DMA1_Stream5_IRQn = 16,
+  DMA1_Stream6_IRQn = 17,
+  DMA1_Stream7_IRQn = 47,
+  DMA2_Stream0_IRQn = 56,
+  DMA2_Stream1_IRQn = 57,
+  DMA2_Stream2_IRQn = 58,
+  DMA2_Stream3_IRQn = 59,
+  DMA2_Stream4_IRQn = 60,
+  DMA2_Stream5_IRQn = 68,
+  DMA2_Stream6_IRQn = 69,
+  DMA2_Stream7_IRQn = 70,
+  DMA1_Channel1_IRQn = 11,
+  DMA1_Channel2_IRQn = 12,
+  DMA1_Channel3_IRQn = 13,
+  DMA1_Channel4_IRQn = 14,
+  DMA1_Channel5_IRQn = 15,
+  DMA1_Channel6_IRQn = 16,
+  DMA1_Channel7_IRQn = 17,
+  DMA1_Channel8_IRQn = 96,
+  DMA2_Channel1_IRQn = 56,
+  DMA2_Channel2_IRQn = 57,
+  DMA2_Channel3_IRQn = 58,
+  DMA2_Channel4_IRQn = 59,
+  DMA2_Channel5_IRQn = 60,
+  DMA2_Channel6_IRQn = 97,
+  DMA2_Channel7_IRQn = 98,
+  DMA2_Channel8_IRQn = 99
 } IRQn_Type;
 extern uint32_t SystemCoreClock;
 uint32_t HAL_GetTick(void);
@@ -311,6 +343,11 @@ HAL_StatusTypeDef HAL_TIM_GenerateEvent(TIM_HandleTypeDef* h, uint32_t source);
  */
 typedef struct {
   volatile uint32_t DR;
+  volatile uint32_t SR;   /* F4 */
+  volatile uint32_t CR2;  /* F4 */
+  volatile uint32_t ISR;  /* G4 */
+  volatile uint32_t CFGR; /* G4 */
+  volatile uint32_t SQR1;
 } ADC_TypeDef;
 extern ADC_TypeDef kb_fake_adc[6];
 #define ADC1 (&kb_fake_adc[1])
@@ -499,6 +536,9 @@ HAL_StatusTypeDef HAL_I2CEx_ConfigAnalogFilter(I2C_HandleTypeDef* h, uint32_t fi
  */
 typedef struct {
   volatile uint32_t CR1;
+  volatile uint32_t CR2;
+  volatile uint32_t SR;
+  volatile uint32_t DR;
 } SPI_TypeDef;
 extern SPI_TypeDef kb_fake_spi[7];
 #define SPI1 (&kb_fake_spi[1])
@@ -897,6 +937,166 @@ HAL_StatusTypeDef HAL_CAN_AddTxMessage(CAN_HandleTypeDef* h, const CAN_TxHeaderT
                                        const uint8_t* data, uint32_t* mailbox);
 HAL_StatusTypeDef HAL_CAN_GetRxMessage(CAN_HandleTypeDef* h, uint32_t fifo,
                                        CAN_RxHeaderTypeDef* header, uint8_t* data);
+#endif
+
+/* --- DMA (declarations only: src/boundary/dma.cpp, spi_dma.cpp and adc_stream.cpp are compiled
+ * over these for the MISRA scan and clang-tidy, never linked into a test; the tests link
+ * tests/dma_model instead) ------ */
+#define __DSB() ((void)0)
+#define __HAL_RCC_DMA1_CLK_ENABLE() KB_FAKE_CLK("DMA1")
+#define __HAL_RCC_DMA2_CLK_ENABLE() KB_FAKE_CLK("DMA2")
+void HAL_NVIC_GetPriority(IRQn_Type irq, uint32_t group, uint32_t* preempt, uint32_t* sub);
+uint32_t HAL_NVIC_GetPriorityGrouping(void);
+HAL_StatusTypeDef HAL_ADC_Stop(ADC_HandleTypeDef* h);
+#define ADC_EXTERNALTRIGCONVEDGE_RISING 0x00000400U
+#define ADC_EOC_SEQ_CONV 0x00000008U
+#define SPI_CR1_SPE 0x00000040U
+#define SPI_CR2_RXDMAEN 0x00000001U
+#define SPI_CR2_TXDMAEN 0x00000002U
+#define SPI_SR_CRCERR 0x00000010U
+#define SPI_SR_MODF 0x00000020U
+#define SPI_SR_OVR 0x00000040U
+#define SPI_SR_BSY 0x00000080U
+#if defined(KB_FAKE_STM32F4)
+typedef struct {
+  volatile uint32_t CR;
+  volatile uint32_t NDTR;
+  volatile uint32_t PAR;
+  volatile uint32_t M0AR;
+  volatile uint32_t M1AR;
+  volatile uint32_t FCR;
+} DMA_Stream_TypeDef;
+typedef struct {
+  volatile uint32_t LISR;
+  volatile uint32_t HISR;
+  volatile uint32_t LIFCR;
+  volatile uint32_t HIFCR;
+} DMA_TypeDef;
+extern DMA_TypeDef kb_fake_dma[3];
+extern DMA_Stream_TypeDef kb_fake_dma_stream[16];
+#define DMA1 (&kb_fake_dma[1])
+#define DMA2 (&kb_fake_dma[2])
+#define DMA1_Stream0 (&kb_fake_dma_stream[0])
+#define DMA1_Stream1 (&kb_fake_dma_stream[1])
+#define DMA1_Stream2 (&kb_fake_dma_stream[2])
+#define DMA1_Stream3 (&kb_fake_dma_stream[3])
+#define DMA1_Stream4 (&kb_fake_dma_stream[4])
+#define DMA1_Stream5 (&kb_fake_dma_stream[5])
+#define DMA1_Stream6 (&kb_fake_dma_stream[6])
+#define DMA1_Stream7 (&kb_fake_dma_stream[7])
+#define DMA2_Stream0 (&kb_fake_dma_stream[8])
+#define DMA2_Stream1 (&kb_fake_dma_stream[9])
+#define DMA2_Stream2 (&kb_fake_dma_stream[10])
+#define DMA2_Stream3 (&kb_fake_dma_stream[11])
+#define DMA2_Stream4 (&kb_fake_dma_stream[12])
+#define DMA2_Stream5 (&kb_fake_dma_stream[13])
+#define DMA2_Stream6 (&kb_fake_dma_stream[14])
+#define DMA2_Stream7 (&kb_fake_dma_stream[15])
+#define DMA_SxCR_EN 0x00000001U
+#define DMA_SxCR_DMEIE 0x00000002U
+#define DMA_SxCR_TEIE 0x00000004U
+#define DMA_SxCR_HTIE 0x00000008U
+#define DMA_SxCR_TCIE 0x00000010U
+#define DMA_SxCR_DIR_0 0x00000040U
+#define DMA_SxCR_CIRC 0x00000100U
+#define DMA_SxCR_MINC 0x00000400U
+#define DMA_SxCR_PSIZE_Pos 11U
+#define DMA_SxCR_MSIZE_Pos 13U
+#define DMA_SxCR_PL_Pos 16U
+#define DMA_SxCR_CHSEL_Pos 25U
+#define DMA_SxCR_CHSEL 0x0E000000U
+#define ADC_SR_OVR 0x00000020U
+#define ADC_CR2_DMA 0x00000100U
+#define ADC_CR2_DDS 0x00000200U
+#define ADC_SQR1_L_Pos 20U
+#define ADC_SQR1_L 0x00F00000U
+#else
+typedef struct {
+  volatile uint32_t CCR;
+  volatile uint32_t CNDTR;
+  volatile uint32_t CPAR;
+  volatile uint32_t CMAR;
+} DMA_Channel_TypeDef;
+typedef struct {
+  volatile uint32_t ISR;
+  volatile uint32_t IFCR;
+} DMA_TypeDef;
+typedef struct {
+  volatile uint32_t CCR;
+} DMAMUX_Channel_TypeDef;
+extern DMA_TypeDef kb_fake_dma[3];
+extern DMA_Channel_TypeDef kb_fake_dma_channel[16];
+extern DMAMUX_Channel_TypeDef kb_fake_dmamux[16];
+#define DMA1 (&kb_fake_dma[1])
+#define DMA2 (&kb_fake_dma[2])
+#define DMA1_Channel1 (&kb_fake_dma_channel[0])
+#define DMA1_Channel2 (&kb_fake_dma_channel[1])
+#define DMA1_Channel3 (&kb_fake_dma_channel[2])
+#define DMA1_Channel4 (&kb_fake_dma_channel[3])
+#define DMA1_Channel5 (&kb_fake_dma_channel[4])
+#define DMA1_Channel6 (&kb_fake_dma_channel[5])
+#define DMA1_Channel7 (&kb_fake_dma_channel[6])
+#define DMA1_Channel8 (&kb_fake_dma_channel[7])
+#define DMA2_Channel1 (&kb_fake_dma_channel[8])
+#define DMA2_Channel2 (&kb_fake_dma_channel[9])
+#define DMA2_Channel3 (&kb_fake_dma_channel[10])
+#define DMA2_Channel4 (&kb_fake_dma_channel[11])
+#define DMA2_Channel5 (&kb_fake_dma_channel[12])
+#define DMA2_Channel6 (&kb_fake_dma_channel[13])
+#define DMA2_Channel7 (&kb_fake_dma_channel[14])
+#define DMA2_Channel8 (&kb_fake_dma_channel[15])
+#define DMAMUX1 (&kb_fake_dmamux[0])
+#define DMAMUX1_Channel0 (&kb_fake_dmamux[0])
+#define DMAMUX1_Channel1 (&kb_fake_dmamux[1])
+#define DMAMUX1_Channel2 (&kb_fake_dmamux[2])
+#define DMAMUX1_Channel3 (&kb_fake_dmamux[3])
+#define DMAMUX1_Channel4 (&kb_fake_dmamux[4])
+#define DMAMUX1_Channel5 (&kb_fake_dmamux[5])
+#define DMAMUX1_Channel6 (&kb_fake_dmamux[6])
+#define DMAMUX1_Channel7 (&kb_fake_dmamux[7])
+#define DMAMUX1_Channel8 (&kb_fake_dmamux[8])
+#define DMAMUX1_Channel9 (&kb_fake_dmamux[9])
+#define DMAMUX1_Channel10 (&kb_fake_dmamux[10])
+#define DMAMUX1_Channel11 (&kb_fake_dmamux[11])
+#define DMAMUX1_Channel12 (&kb_fake_dmamux[12])
+#define DMAMUX1_Channel13 (&kb_fake_dmamux[13])
+#define DMAMUX1_Channel14 (&kb_fake_dmamux[14])
+#define DMAMUX1_Channel15 (&kb_fake_dmamux[15])
+#define DMAMUX_CxCR_DMAREQ_ID_Pos 0U
+#define DMAMUX_CxCR_DMAREQ_ID 0x0000007FU
+#define __HAL_RCC_DMAMUX1_CLK_ENABLE() KB_FAKE_CLK("DMAMUX1")
+#define DMA_CCR_EN 0x00000001U
+#define DMA_CCR_TCIE 0x00000002U
+#define DMA_CCR_HTIE 0x00000004U
+#define DMA_CCR_TEIE 0x00000008U
+#define DMA_CCR_DIR 0x00000010U
+#define DMA_CCR_CIRC 0x00000020U
+#define DMA_CCR_MINC 0x00000080U
+#define DMA_CCR_PSIZE_Pos 8U
+#define DMA_CCR_MSIZE_Pos 10U
+#define DMA_CCR_PL_Pos 12U
+#define ADC_ISR_OVR 0x00000010U
+#define ADC_CFGR_DMAEN 0x00000001U
+#define ADC_CFGR_DMACFG 0x00000002U
+#define ADC_SQR1_L_Pos 0U
+#define ADC_SQR1_L 0x0000000FU
+#define ADC_SCAN_ENABLE 0x00000001U
+#define ADC_OVR_DATA_PRESERVED 0x00000000U
+#define ADC_REGULAR_RANK_2 0x0000000CU
+#define ADC_REGULAR_RANK_3 0x00000012U
+#define ADC_REGULAR_RANK_4 0x00000018U
+#define ADC_REGULAR_RANK_5 0x00000106U
+#define ADC_REGULAR_RANK_6 0x0000010CU
+#define ADC_REGULAR_RANK_7 0x00000112U
+#define ADC_REGULAR_RANK_8 0x00000118U
+#define ADC_REGULAR_RANK_9 0x0000011EU
+#define ADC_REGULAR_RANK_10 0x00000206U
+#define ADC_REGULAR_RANK_11 0x0000020CU
+#define ADC_REGULAR_RANK_12 0x00000212U
+#define ADC_REGULAR_RANK_13 0x00000218U
+#define ADC_REGULAR_RANK_14 0x0000021EU
+#define ADC_REGULAR_RANK_15 0x00000306U
+#define ADC_REGULAR_RANK_16 0x0000030CU
 #endif
 
 #ifdef __cplusplus

@@ -39,10 +39,24 @@ function(kb_port_stm32_variant name)
 endfunction()
 
 kb_port_stm32_variant(kb_port_stm32_g4 DEFINES KB_PORT_STM32_G4)
+# The target-only DMA boundary compiled over the fakes too (not linked: the tests link dma_model/ in its place), so the
+# MISRA scan and clang-tidy see it in both family variants (channels and DMAMUX on G4, streams on F4).
+list(TRANSFORM KB_PORT_STM32_DMA_BOUNDARY_SOURCES PREPEND "${PROJECT_SOURCE_DIR}/" OUTPUT_VARIABLE _dma_boundary)
+function(kb_port_stm32_dma_boundary name variant)
+  add_library(${name} OBJECT EXCLUDE_FROM_ALL ${_dma_boundary})
+  target_compile_options(${name} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${KB_PORT_STM32_STRICT_FLAGS}>
+                         $<$<COMPILE_LANGUAGE:C>:-Wall -Wextra -Wpedantic -Werror>)
+  target_include_directories(${name} PRIVATE "${PROJECT_SOURCE_DIR}/src")
+  target_include_directories(${name} SYSTEM PRIVATE "${_fakes}/include")
+  target_link_libraries(${name} PRIVATE kb_port_stm32_api ${variant}_hal)
+endfunction()
 kb_port_stm32_variant(kb_port_stm32_f4 DEFINES KB_PORT_STM32_F4 KB_FAKE_STM32F4)
 # What the MISRA scans build (ci-misra.yml): the port in both family variants.
+kb_port_stm32_dma_boundary(kb_port_stm32_dma_boundary_g4 kb_port_stm32_g4)
+kb_port_stm32_dma_boundary(kb_port_stm32_dma_boundary_f4 kb_port_stm32_f4)
 add_custom_target(kb_port_stm32_scan)
-add_dependencies(kb_port_stm32_scan kb_port_stm32_g4 kb_port_stm32_f4)
+add_dependencies(kb_port_stm32_scan kb_port_stm32_g4 kb_port_stm32_f4 kb_port_stm32_dma_boundary_g4
+                 kb_port_stm32_dma_boundary_f4)
 
 set(_tests test_error.cpp test_i2c.cpp test_spi.cpp test_uart.cpp test_gpio.cpp test_adc.cpp test_pwm.cpp test_can.cpp
     test_time.cpp test_log.cpp test_clock_read.cpp test_completion.cpp test_contracts.cpp test_dma.cpp test_spi_dma.cpp

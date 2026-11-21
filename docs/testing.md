@@ -17,8 +17,9 @@ timeout and its stop-and-restore. Each variant has only the macros its family's 
 UART word).
 
 The DMA boundary files (`src/boundary/dma.cpp`, `spi_dma.cpp`, `adc_stream.cpp`, `atomic64.c`) are the exception:
-the host build links `tests/dma_model/dma_model.cpp` in their place, the same `sdk::` calls over kb-core's host
-DMA-and-cache model (`kb::dma::host::Machine`, `DmaEngine`, `HwRing`). kb-core's conformance suite T1 to T18 runs
+the tests link `tests/dma_model/dma_model.cpp` in their place, the same `sdk::` calls over kb-core's host
+DMA-and-cache model (the files themselves are compiled over the fakes' register declarations, not linked, so the MISRA
+scan and clang-tidy see them) (`kb::dma::host::Machine`, `DmaEngine`, `HwRing`). kb-core's conformance suite T1 to T18 runs
 against the port's real classes through the adapter rigs of `tests/dma_model/port_rig.hpp`; the result per case is in
 [DMA](dma.md).
 

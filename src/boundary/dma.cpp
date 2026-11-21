@@ -25,8 +25,11 @@
 #endif
 
 #if defined(DMA1_Stream0)
+// The device's DMA kind selects preprocessor branches below: a macro by necessity.
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define KB_PORT_STM32_DMA_STREAMS 1 // F4, H7: DMA_Stream_TypeDef, streams 0 to 7
 #elif defined(DMA1_Channel1)
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define KB_PORT_STM32_DMA_STREAMS 0 // G4, L4: DMA_Channel_TypeDef, channels 1 to 8
 #else
 #error "the device has no DMA1"
@@ -41,10 +44,10 @@ constexpr uint8_t kPerEngine = 8U;
 // --- F4, H7: streams
 // -------------------------------------------------------------------------------
 [[nodiscard]] DMA_Stream_TypeDef* StreamOf(uint8_t engine, uint8_t stream) noexcept {
-  DMA_Stream_TypeDef* const streams[16] = {DMA1_Stream0, DMA1_Stream1, DMA1_Stream2, DMA1_Stream3,
-                                           DMA1_Stream4, DMA1_Stream5, DMA1_Stream6, DMA1_Stream7,
-                                           DMA2_Stream0, DMA2_Stream1, DMA2_Stream2, DMA2_Stream3,
-                                           DMA2_Stream4, DMA2_Stream5, DMA2_Stream6, DMA2_Stream7};
+  const std::array<DMA_Stream_TypeDef*, 16> streams{
+      DMA1_Stream0, DMA1_Stream1, DMA1_Stream2, DMA1_Stream3, DMA1_Stream4, DMA1_Stream5,
+      DMA1_Stream6, DMA1_Stream7, DMA2_Stream0, DMA2_Stream1, DMA2_Stream2, DMA2_Stream3,
+      DMA2_Stream4, DMA2_Stream5, DMA2_Stream6, DMA2_Stream7};
   const uint8_t index = DmaIndex(engine, stream);
   return (index < 16U) ? streams[index] : nullptr;
 }
@@ -65,11 +68,11 @@ struct FlagBit {
   uint32_t flag;
   uint32_t bit;
 };
-constexpr std::array<FlagBit, 5> kFlagBits{{{kDmaFlagFifoError, 0U},
-                                            {kDmaFlagDirectError, 2U},
-                                            {kDmaFlagTransferError, 3U},
-                                            {kDmaFlagHalf, 4U},
-                                            {kDmaFlagComplete, 5U}}};
+constexpr std::array<FlagBit, 5> kFlagBits{{{.flag = kDmaFlagFifoError, .bit = 0U},
+                                            {.flag = kDmaFlagDirectError, .bit = 2U},
+                                            {.flag = kDmaFlagTransferError, .bit = 3U},
+                                            {.flag = kDmaFlagHalf, .bit = 4U},
+                                            {.flag = kDmaFlagComplete, .bit = 5U}}};
 
 [[nodiscard]] IRQn_Type IrqOf(uint8_t engine, uint8_t stream) noexcept {
   constexpr std::array<IRQn_Type, 16> kIrqs{
@@ -89,7 +92,7 @@ constexpr uint8_t kChannels = 7U;
 #endif
 
 [[nodiscard]] DMA_Channel_TypeDef* StreamOf(uint8_t engine, uint8_t stream) noexcept {
-  DMA_Channel_TypeDef* const channels[16] = {
+  const std::array<DMA_Channel_TypeDef*, 16> channels{
       DMA1_Channel1, DMA1_Channel2, DMA1_Channel3, DMA1_Channel4, DMA1_Channel5,
       DMA1_Channel6, DMA1_Channel7,
 #if defined(DMA1_Channel8)
@@ -130,8 +133,9 @@ struct FlagBit {
   uint32_t flag;
   uint32_t bit;
 };
-constexpr std::array<FlagBit, 3> kFlagBits{
-    {{kDmaFlagComplete, 1U}, {kDmaFlagHalf, 2U}, {kDmaFlagTransferError, 3U}}};
+constexpr std::array<FlagBit, 3> kFlagBits{{{.flag = kDmaFlagComplete, .bit = 1U},
+                                            {.flag = kDmaFlagHalf, .bit = 2U},
+                                            {.flag = kDmaFlagTransferError, .bit = 3U}}};
 
 [[nodiscard]] IRQn_Type IrqOf(uint8_t engine, uint8_t stream) noexcept {
   constexpr std::array<IRQn_Type, 16> kIrqs{
@@ -187,7 +191,7 @@ void Route(uint8_t engine, uint8_t stream, uint16_t request) noexcept {
 #else
   const uint32_t channel = (engine == kEngineDma2) ? (kChannels + stream - 1U) : (stream - 1U);
 #endif
-  DMAMUX_Channel_TypeDef* const muxes[16] = {
+  const std::array<DMAMUX_Channel_TypeDef*, 16> muxes{
       DMAMUX1_Channel0,  DMAMUX1_Channel1,  DMAMUX1_Channel2,  DMAMUX1_Channel3,
       DMAMUX1_Channel4,  DMAMUX1_Channel5,  DMAMUX1_Channel6,  DMAMUX1_Channel7,
       DMAMUX1_Channel8,  DMAMUX1_Channel9,  DMAMUX1_Channel10, DMAMUX1_Channel11,
@@ -209,8 +213,7 @@ void Route(uint8_t engine, uint8_t stream, uint16_t request) noexcept {
   // L4: four CSELR bits per channel.
   DMA_Request_TypeDef* const sel = (engine == kEngineDma2) ? DMA2_CSELR : DMA1_CSELR;
   const uint32_t shift = 4U * (static_cast<uint32_t>(stream) - 1U);
-  sel->CSELR =
-      (sel->CSELR & ~(0xFUL << shift)) | ((static_cast<uint32_t>(request) & 0xFU) << shift);
+  sel->CSELR = (sel->CSELR & ~(0xFU << shift)) | ((static_cast<uint32_t>(request) & 0xFU) << shift);
 #endif
 }
 } // namespace
@@ -250,7 +253,7 @@ uint32_t DmaConfigure(const DmaProgram& program) noexcept {
     const uint32_t size = SizeBits(program.peripheral.width);
     const bool to_device = program.peripheral.dir == kb::dma::Direction::ToDevice;
     const bool circular = a.mode == kb::dma::ChannelMode::Circular;
-    const uint32_t level = static_cast<uint32_t>(a.priority);
+    const auto level = static_cast<uint32_t>(a.priority);
 #if KB_PORT_STM32_DMA_STREAMS
     s->CR = 0U; // EN 0 (checked free by the caller)
     s->PAR = static_cast<uint32_t>(program.peripheral.address);
@@ -360,7 +363,7 @@ uint32_t DmaFlags(uint8_t engine, uint8_t stream) noexcept {
 #endif
     const uint32_t group = reg >> FlagShift(stream);
     for (const FlagBit& f : kFlagBits) {
-      flags |= ((group & (1UL << f.bit)) != 0U) ? f.flag : 0U;
+      flags |= ((group & (1U << f.bit)) != 0U) ? f.flag : 0U;
     }
   }
   return flags;
@@ -371,7 +374,7 @@ void DmaClearFlag(uint8_t engine, uint8_t stream, uint32_t flag) noexcept {
     DMA_TypeDef* const d = EngineOf(engine);
     for (const FlagBit& f : kFlagBits) {
       if (f.flag == flag) {
-        const uint32_t bit = 1UL << (FlagShift(stream) + f.bit);
+        const uint32_t bit = 1U << (FlagShift(stream) + f.bit);
 #if KB_PORT_STM32_DMA_STREAMS
         if (stream < 4U) {
           d->LIFCR = bit;

@@ -81,7 +81,6 @@ public:
   SpiDmaPath& operator=(const SpiDmaPath&) = delete;
   SpiDmaPath(SpiDmaPath&&) = delete;
   SpiDmaPath& operator=(SpiDmaPath&&) = delete;
-  ~SpiDmaPath() = default;
 
   /**
    * @brief At SpiBus::EnsureReady(): the staging placement and region checks, the streams bound to
@@ -134,6 +133,8 @@ public:
   }
 
 protected:
+  /** @brief A base of SpiDmaLink only: never destroyed through a pointer to the base. */
+  ~SpiDmaPath() = default;
   /** @brief What the staging buffers' owner does (SpiDmaLink): placement, lend, settle, recover. */
   struct Hooks {
     uint32_t (*place)(SpiDmaPath& self) noexcept;

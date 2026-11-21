@@ -174,6 +174,6 @@ count check.
 
 - Zero-copy `SpiDevice::Transfer(Lease&&, ...)`: `DmaTransfer` lends typed buffers, the SPI bus does not yet.
 - `Frames > 2` (double-buffer mode), BDMA, MDMA, UART and I2C DMA (later phases of the DMA design).
-- The DMA boundary files are compiled by the four family firmware builds only; the host tests link the model in their
-  place, so the CodeQL MISRA scan (host and Cortex-M builds of the port over the HAL fakes) does not cover them. They
-  carry no deviation marker.
+- The DMA boundary files are exercised only by the four family firmware builds and the bench: the host tests link the
+  model in their place. They are compiled over the HAL fakes (register declarations only) for the MISRA scan and
+  clang-tidy, but their register sequences are not unit tested on host.
