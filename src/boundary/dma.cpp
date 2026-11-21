@@ -24,21 +24,15 @@
 #error "define one of KB_PORT_STM32_G4, KB_PORT_STM32_H7, KB_PORT_STM32_F4, KB_PORT_STM32_L4"
 #endif
 
-#if defined(DMA1_Stream0)
-// The device's DMA kind selects preprocessor branches below: a macro by necessity.
-// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
-#define KB_PORT_STM32_DMA_STREAMS 1 // F4, H7: DMA_Stream_TypeDef, streams 0 to 7
-#else
-// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
-#define KB_PORT_STM32_DMA_STREAMS 0 // G4, L4: DMA_Channel_TypeDef, channels 1 to 8
-#endif
+// The device's DMA kind: streams (F4, H7: DMA_Stream_TypeDef, 0 to 7) where it defines
+// DMA1_Stream0, else channels (G4, L4: DMA_Channel_TypeDef, 1 to 8).
 
 namespace kb::port::stm32::sdk {
 
 namespace {
 constexpr uint8_t kPerEngine = 8U;
 
-#if KB_PORT_STM32_DMA_STREAMS
+#if defined(DMA1_Stream0)
 // --- F4, H7: streams
 // -------------------------------------------------------------------------------
 [[nodiscard]] DMA_Stream_TypeDef* StreamOf(uint8_t engine, uint8_t stream) noexcept {
@@ -184,7 +178,7 @@ void EngineClock(uint8_t engine) noexcept {
 void Route(uint8_t engine, uint8_t stream, uint16_t request) noexcept {
 #if defined(DMAMUX1)
   // DMAMUX1 channel n serves DMA1 stream/channel n (n from 0), then DMA2 after DMA1's last one.
-#if KB_PORT_STM32_DMA_STREAMS
+#if defined(DMA1_Stream0)
   const uint32_t channel = DmaIndex(engine, stream);
 #else
   const uint32_t channel = (engine == kEngineDma2) ? (kChannels + stream - 1U) : (stream - 1U);
@@ -202,7 +196,7 @@ void Route(uint8_t engine, uint8_t stream, uint16_t request) noexcept {
   if (ch != nullptr) {
     ch->CCR = (static_cast<uint32_t>(request) << DMAMUX_CxCR_DMAREQ_ID_Pos) & DMAMUX_CxCR_DMAREQ_ID;
   }
-#elif KB_PORT_STM32_DMA_STREAMS
+#elif defined(DMA1_Stream0)
   // F4: the channel selection in the stream's CR (written by DmaConfigure).
   static_cast<void>(engine);
   static_cast<void>(stream);
@@ -219,7 +213,7 @@ void Route(uint8_t engine, uint8_t stream, uint16_t request) noexcept {
 uint8_t DmaIndex(uint8_t engine, uint8_t stream) noexcept {
   uint8_t index = kDmaNoIndex;
   const bool engine_ok = (engine == kEngineDma1) || (engine == kEngineDma2);
-#if KB_PORT_STM32_DMA_STREAMS
+#if defined(DMA1_Stream0)
   if (engine_ok && (stream < kPerEngine)) {
     index = static_cast<uint8_t>(((engine - 1U) * kPerEngine) + stream);
   }
@@ -234,7 +228,7 @@ uint8_t DmaIndex(uint8_t engine, uint8_t stream) noexcept {
 bool DmaRequestValid(uint16_t request) noexcept {
 #if defined(DMAMUX1)
   return request <= (DMAMUX_CxCR_DMAREQ_ID >> DMAMUX_CxCR_DMAREQ_ID_Pos);
-#elif KB_PORT_STM32_DMA_STREAMS
+#elif defined(DMA1_Stream0)
   return request <= 7U; // CHSEL
 #else
   return request <= 15U; // CSELR
@@ -252,7 +246,7 @@ uint32_t DmaConfigure(const DmaProgram& program) noexcept {
     const bool to_device = program.peripheral.dir == kb::dma::Direction::ToDevice;
     const bool circular = a.mode == kb::dma::ChannelMode::Circular;
     const auto level = static_cast<uint32_t>(a.priority);
-#if KB_PORT_STM32_DMA_STREAMS
+#if defined(DMA1_Stream0)
     s->CR = 0U; // EN 0 (checked free by the caller)
     s->PAR = static_cast<uint32_t>(program.peripheral.address);
     s->FCR = 0U; // direct mode: FIFO off, no FIFO error interrupt
@@ -282,7 +276,7 @@ void DmaArm(uint8_t engine, uint8_t stream, std::uintptr_t memory, uint32_t item
             uint32_t irq) noexcept {
   auto* const s = StreamOf(engine, stream);
   if (s != nullptr) {
-#if KB_PORT_STM32_DMA_STREAMS
+#if defined(DMA1_Stream0)
     s->M0AR = static_cast<uint32_t>(memory);
     s->NDTR = items;
     uint32_t cr = s->CR & ~(DMA_SxCR_TCIE | DMA_SxCR_HTIE | DMA_SxCR_TEIE | DMA_SxCR_DMEIE);
@@ -307,7 +301,7 @@ void DmaArm(uint8_t engine, uint8_t stream, std::uintptr_t memory, uint32_t item
 
 bool DmaEnabled(uint8_t engine, uint8_t stream) noexcept {
   const auto* const s = StreamOf(engine, stream);
-#if KB_PORT_STM32_DMA_STREAMS
+#if defined(DMA1_Stream0)
   return (s != nullptr) && ((s->CR & DMA_SxCR_EN) != 0U);
 #else
   return (s != nullptr) && ((s->CCR & DMA_CCR_EN) != 0U);
@@ -317,7 +311,7 @@ bool DmaEnabled(uint8_t engine, uint8_t stream) noexcept {
 void DmaDisable(uint8_t engine, uint8_t stream) noexcept {
   auto* const s = StreamOf(engine, stream);
   if (s != nullptr) {
-#if KB_PORT_STM32_DMA_STREAMS
+#if defined(DMA1_Stream0)
     s->CR &= ~DMA_SxCR_EN;
 #else
     s->CCR &= ~DMA_CCR_EN;
@@ -328,7 +322,7 @@ void DmaDisable(uint8_t engine, uint8_t stream) noexcept {
 void DmaReset(uint8_t engine, uint8_t stream) noexcept {
   auto* const s = StreamOf(engine, stream);
   if (s != nullptr) {
-#if KB_PORT_STM32_DMA_STREAMS
+#if defined(DMA1_Stream0)
     s->CR = 0U;
     s->NDTR = 0U;
 #else
@@ -343,7 +337,7 @@ void DmaReset(uint8_t engine, uint8_t stream) noexcept {
 
 uint32_t DmaRemaining(uint8_t engine, uint8_t stream) noexcept {
   const auto* const s = StreamOf(engine, stream);
-#if KB_PORT_STM32_DMA_STREAMS
+#if defined(DMA1_Stream0)
   return (s != nullptr) ? (s->NDTR & 0xFFFFU) : 0U;
 #else
   return (s != nullptr) ? (s->CNDTR & 0xFFFFU) : 0U;
@@ -354,7 +348,7 @@ uint32_t DmaFlags(uint8_t engine, uint8_t stream) noexcept {
   uint32_t flags = 0U;
   if (StreamOf(engine, stream) != nullptr) {
     const DMA_TypeDef* const d = EngineOf(engine);
-#if KB_PORT_STM32_DMA_STREAMS
+#if defined(DMA1_Stream0)
     const uint32_t reg = (stream < 4U) ? d->LISR : d->HISR;
 #else
     const uint32_t reg = d->ISR;
@@ -373,7 +367,7 @@ void DmaClearFlag(uint8_t engine, uint8_t stream, uint32_t flag) noexcept {
     for (const FlagBit& f : kFlagBits) {
       if (f.flag == flag) {
         const uint32_t bit = 1U << (FlagShift(stream) + f.bit);
-#if KB_PORT_STM32_DMA_STREAMS
+#if defined(DMA1_Stream0)
         if (stream < 4U) {
           d->LIFCR = bit;
         } else {
