@@ -8,6 +8,7 @@
 #ifndef KB_INTERFACES_HOST_HOST_HPP
 #define KB_INTERFACES_HOST_HOST_HPP
 
+#include "kb/interfaces/host/fake_async.hpp"
 #include "kb/interfaces/host/fake_i2c.hpp"
 #include "kb/interfaces/host/fake_pins.hpp"
 #include "kb/interfaces/host/fake_spi.hpp"

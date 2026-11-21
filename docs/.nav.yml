@@ -16,6 +16,12 @@ nav:
       - CAN (FDCAN, bxCAN): peripherals/can.md
       - Clock, delay and log: peripherals/time-log.md
       - Interrupts: peripherals/interrupts.md
+  - DMA: dma.md
+  - Bench verification:
+      - Overview: assurance/bench/README.md
+      - "Procedure: STM32H7": assurance/bench/procedure-stm32h7.md
+      - Evidence form: assurance/bench/evidence-form.md
+      - Runs: assurance/bench/runs/README.md
   - Error mapping: error-mapping.md
   - Thread safety: thread-safety.md
   - Examples: examples.md

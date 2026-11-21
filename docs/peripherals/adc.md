@@ -16,6 +16,9 @@
 The instance's channel count and phase (closed, opening, open) change only with interrupts masked, so two tasks
 that start or release channels of one instance never initialise it twice or de-initialise it under the other.
 
+A timer-triggered scan of several ranks streamed by circular DMA is `AdcDmaStream` ([DMA](../dma.md)): it owns its
+instance alone (an `AdcChannel` on the same instance is refused with `Busy`, and the other way round).
+
 ## Inputs and clock
 
 | Item | Note |

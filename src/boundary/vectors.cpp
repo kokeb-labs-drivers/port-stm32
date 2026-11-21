@@ -5,8 +5,9 @@
 // tools/check_vectors.cmake checks every family's firmware for them. An application that defines
 // these vectors itself turns the file off, or names the vectors it keeps in
 // KB_PORT_STM32_VECTORS_EXCLUDE (each becomes KB_PORT_STM32_NO_<vector>), and calls the entry
-// points of irq.hpp from its own handlers for the port's instances.
-// SPDX-License-Identifier: MIT Copyright (c) 2026 The port-stm32 authors
+// points of irq.hpp from its own handlers for the port's instances. The DMA vectors dispatch to the
+// started DmaStream of the stream (src/dma.cpp); a stream the port does not own has its line
+// disabled. SPDX-License-Identifier: MIT Copyright (c) 2026 The port-stm32 authors
 #include <cstdint>
 
 #include "kb/port/stm32/irq.hpp"
@@ -343,6 +344,204 @@ void CAN2_RX0_IRQHandler(void) {
 void CAN2_SCE_IRQHandler(void) {
   port::HandleCanIrq(2U);
 }
+#endif
+#endif
+
+// DMA interrupts (dma.hpp): F4 and H7 streams 0 to 7, G4 and L4 channels 1 to 8, as the device has
+// them.
+#if defined(DMA1_Stream0)
+#if !defined(KB_PORT_STM32_NO_DMA1_Stream0_IRQHandler)
+void DMA1_Stream0_IRQHandler(void) {
+  port::HandleDmaIrq(1U, 0U);
+}
+#endif
+#if !defined(KB_PORT_STM32_NO_DMA1_Stream1_IRQHandler)
+void DMA1_Stream1_IRQHandler(void) {
+  port::HandleDmaIrq(1U, 1U);
+}
+#endif
+#if !defined(KB_PORT_STM32_NO_DMA1_Stream2_IRQHandler)
+void DMA1_Stream2_IRQHandler(void) {
+  port::HandleDmaIrq(1U, 2U);
+}
+#endif
+#if !defined(KB_PORT_STM32_NO_DMA1_Stream3_IRQHandler)
+void DMA1_Stream3_IRQHandler(void) {
+  port::HandleDmaIrq(1U, 3U);
+}
+#endif
+#if !defined(KB_PORT_STM32_NO_DMA1_Stream4_IRQHandler)
+void DMA1_Stream4_IRQHandler(void) {
+  port::HandleDmaIrq(1U, 4U);
+}
+#endif
+#if !defined(KB_PORT_STM32_NO_DMA1_Stream5_IRQHandler)
+void DMA1_Stream5_IRQHandler(void) {
+  port::HandleDmaIrq(1U, 5U);
+}
+#endif
+#if !defined(KB_PORT_STM32_NO_DMA1_Stream6_IRQHandler)
+void DMA1_Stream6_IRQHandler(void) {
+  port::HandleDmaIrq(1U, 6U);
+}
+#endif
+#if !defined(KB_PORT_STM32_NO_DMA1_Stream7_IRQHandler)
+void DMA1_Stream7_IRQHandler(void) {
+  port::HandleDmaIrq(1U, 7U);
+}
+#endif
+#if !defined(KB_PORT_STM32_NO_DMA2_Stream0_IRQHandler)
+void DMA2_Stream0_IRQHandler(void) {
+  port::HandleDmaIrq(2U, 0U);
+}
+#endif
+#if !defined(KB_PORT_STM32_NO_DMA2_Stream1_IRQHandler)
+void DMA2_Stream1_IRQHandler(void) {
+  port::HandleDmaIrq(2U, 1U);
+}
+#endif
+#if !defined(KB_PORT_STM32_NO_DMA2_Stream2_IRQHandler)
+void DMA2_Stream2_IRQHandler(void) {
+  port::HandleDmaIrq(2U, 2U);
+}
+#endif
+#if !defined(KB_PORT_STM32_NO_DMA2_Stream3_IRQHandler)
+void DMA2_Stream3_IRQHandler(void) {
+  port::HandleDmaIrq(2U, 3U);
+}
+#endif
+#if !defined(KB_PORT_STM32_NO_DMA2_Stream4_IRQHandler)
+void DMA2_Stream4_IRQHandler(void) {
+  port::HandleDmaIrq(2U, 4U);
+}
+#endif
+#if !defined(KB_PORT_STM32_NO_DMA2_Stream5_IRQHandler)
+void DMA2_Stream5_IRQHandler(void) {
+  port::HandleDmaIrq(2U, 5U);
+}
+#endif
+#if !defined(KB_PORT_STM32_NO_DMA2_Stream6_IRQHandler)
+void DMA2_Stream6_IRQHandler(void) {
+  port::HandleDmaIrq(2U, 6U);
+}
+#endif
+#if !defined(KB_PORT_STM32_NO_DMA2_Stream7_IRQHandler)
+void DMA2_Stream7_IRQHandler(void) {
+  port::HandleDmaIrq(2U, 7U);
+}
+#endif
+#elif defined(DMA1_Channel1)
+#if defined(DMA1_Channel1)
+#if !defined(KB_PORT_STM32_NO_DMA1_Channel1_IRQHandler)
+void DMA1_Channel1_IRQHandler(void) {
+  port::HandleDmaIrq(1U, 1U);
+}
+#endif
+#endif
+#if defined(DMA1_Channel2)
+#if !defined(KB_PORT_STM32_NO_DMA1_Channel2_IRQHandler)
+void DMA1_Channel2_IRQHandler(void) {
+  port::HandleDmaIrq(1U, 2U);
+}
+#endif
+#endif
+#if defined(DMA1_Channel3)
+#if !defined(KB_PORT_STM32_NO_DMA1_Channel3_IRQHandler)
+void DMA1_Channel3_IRQHandler(void) {
+  port::HandleDmaIrq(1U, 3U);
+}
+#endif
+#endif
+#if defined(DMA1_Channel4)
+#if !defined(KB_PORT_STM32_NO_DMA1_Channel4_IRQHandler)
+void DMA1_Channel4_IRQHandler(void) {
+  port::HandleDmaIrq(1U, 4U);
+}
+#endif
+#endif
+#if defined(DMA1_Channel5)
+#if !defined(KB_PORT_STM32_NO_DMA1_Channel5_IRQHandler)
+void DMA1_Channel5_IRQHandler(void) {
+  port::HandleDmaIrq(1U, 5U);
+}
+#endif
+#endif
+#if defined(DMA1_Channel6)
+#if !defined(KB_PORT_STM32_NO_DMA1_Channel6_IRQHandler)
+void DMA1_Channel6_IRQHandler(void) {
+  port::HandleDmaIrq(1U, 6U);
+}
+#endif
+#endif
+#if defined(DMA1_Channel7)
+#if !defined(KB_PORT_STM32_NO_DMA1_Channel7_IRQHandler)
+void DMA1_Channel7_IRQHandler(void) {
+  port::HandleDmaIrq(1U, 7U);
+}
+#endif
+#endif
+#if defined(DMA1_Channel8)
+#if !defined(KB_PORT_STM32_NO_DMA1_Channel8_IRQHandler)
+void DMA1_Channel8_IRQHandler(void) {
+  port::HandleDmaIrq(1U, 8U);
+}
+#endif
+#endif
+#if defined(DMA2_Channel1)
+#if !defined(KB_PORT_STM32_NO_DMA2_Channel1_IRQHandler)
+void DMA2_Channel1_IRQHandler(void) {
+  port::HandleDmaIrq(2U, 1U);
+}
+#endif
+#endif
+#if defined(DMA2_Channel2)
+#if !defined(KB_PORT_STM32_NO_DMA2_Channel2_IRQHandler)
+void DMA2_Channel2_IRQHandler(void) {
+  port::HandleDmaIrq(2U, 2U);
+}
+#endif
+#endif
+#if defined(DMA2_Channel3)
+#if !defined(KB_PORT_STM32_NO_DMA2_Channel3_IRQHandler)
+void DMA2_Channel3_IRQHandler(void) {
+  port::HandleDmaIrq(2U, 3U);
+}
+#endif
+#endif
+#if defined(DMA2_Channel4)
+#if !defined(KB_PORT_STM32_NO_DMA2_Channel4_IRQHandler)
+void DMA2_Channel4_IRQHandler(void) {
+  port::HandleDmaIrq(2U, 4U);
+}
+#endif
+#endif
+#if defined(DMA2_Channel5)
+#if !defined(KB_PORT_STM32_NO_DMA2_Channel5_IRQHandler)
+void DMA2_Channel5_IRQHandler(void) {
+  port::HandleDmaIrq(2U, 5U);
+}
+#endif
+#endif
+#if defined(DMA2_Channel6)
+#if !defined(KB_PORT_STM32_NO_DMA2_Channel6_IRQHandler)
+void DMA2_Channel6_IRQHandler(void) {
+  port::HandleDmaIrq(2U, 6U);
+}
+#endif
+#endif
+#if defined(DMA2_Channel7)
+#if !defined(KB_PORT_STM32_NO_DMA2_Channel7_IRQHandler)
+void DMA2_Channel7_IRQHandler(void) {
+  port::HandleDmaIrq(2U, 7U);
+}
+#endif
+#endif
+#if defined(DMA2_Channel8)
+#if !defined(KB_PORT_STM32_NO_DMA2_Channel8_IRQHandler)
+void DMA2_Channel8_IRQHandler(void) {
+  port::HandleDmaIrq(2U, 8U);
+}
+#endif
 #endif
 #endif
 

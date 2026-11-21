@@ -4,8 +4,9 @@
 #   KB_MCU               HOST (default off target) | ESP32 (default under ESP-IDF) | STM32 (later); selects the MCU
 #                        gate and the default RTOS. No MCU source is compiled here: ports are own projects (ADR-0007)
 #   KB_RTOS              NONE (default on HOST) | HOST (std::thread, PC tests) | FREERTOS (default on ESP32) |
-#                        THREADX (planned: refused with a "not yet" message)
-#   KB_PARTS             any of utils;rtos;interfaces;handlers (default: all); dependencies are added
+#                        THREADX (Eclipse ThreadX, ADR-0015: needs KB_THREADX_INCLUDE_DIRS or KB_THREADX_PORT,
+#                        components/lib/rtos/backends/threadx/README.md)
+#   KB_PARTS             any of utils;rtos;dma;interfaces;handlers (default: all); dependencies are added
 #   KB_ENABLE_<DRIVER>   ON to bind a driver (names in cmake/kb_drivers.cmake); adds the handlers part
 #   KB_DRIVER_<DRIVER>_DIR  where that driver's checkout is (default: <drivers folder>/driver-<slug>; the folders
 #                        are named in tools/layout/paths.yml)
@@ -40,8 +41,8 @@ elseif(NOT KB_MCU IN_LIST _KB_SUPPORTED_MCUS)
 endif()
 
 # -- RTOS ------------------------------------------------------------------------------------------------------------
-set(_KB_SUPPORTED_RTOS NONE HOST FREERTOS)
-set(_KB_PLANNED_RTOS THREADX)
+set(_KB_SUPPORTED_RTOS NONE HOST FREERTOS THREADX)
+set(_KB_PLANNED_RTOS) # none planned now; a future backend is listed here first
 if(NOT DEFINED KB_RTOS OR KB_RTOS STREQUAL "")
   if(KB_MCU STREQUAL "ESP32")
     set(KB_RTOS FREERTOS)
@@ -50,9 +51,8 @@ if(NOT DEFINED KB_RTOS OR KB_RTOS STREQUAL "")
   endif()
 endif()
 string(TOUPPER "${KB_RTOS}" KB_RTOS)
-if(KB_RTOS IN_LIST _KB_PLANNED_RTOS)
-  message(FATAL_ERROR "[kb] KB_RTOS=${KB_RTOS}: not yet. The ThreadX backend is planned (${KB_LIB_REL}/rtos/backends/threadx/"
-                      "README.md: the same API, static allocation, its own boundary files). Supported: ${_KB_SUPPORTED_RTOS}")
+if(_KB_PLANNED_RTOS AND KB_RTOS IN_LIST _KB_PLANNED_RTOS)
+  message(FATAL_ERROR "[kb] KB_RTOS=${KB_RTOS}: not yet; the backend is planned. Supported: ${_KB_SUPPORTED_RTOS}")
 elseif(NOT KB_RTOS IN_LIST _KB_SUPPORTED_RTOS)
   message(FATAL_ERROR "[kb] Unknown KB_RTOS '${KB_RTOS}'. Supported: ${_KB_SUPPORTED_RTOS}")
 endif()
@@ -116,9 +116,10 @@ foreach(_name IN LISTS KB_ENABLED_DRIVERS)
 endforeach()
 
 # -- Parts (dependency closure, in dependency order) -----------------------------------------------------------------
-set(_KB_ALL_PARTS utils rtos interfaces handlers)
+set(_KB_ALL_PARTS utils rtos dma interfaces handlers)
 set(_KB_DEPS_utils "")
 set(_KB_DEPS_rtos utils)
+set(_KB_DEPS_dma utils)
 set(_KB_DEPS_interfaces rtos utils)
 set(_KB_DEPS_handlers interfaces rtos utils)
 if(NOT DEFINED KB_PARTS OR KB_PARTS STREQUAL "")

@@ -10,8 +10,9 @@
  * opaque storage; its handle is kept beside it.
  *
  * Requires configSUPPORT_STATIC_ALLOCATION = 1, configUSE_MUTEXES = 1,
- * configUSE_COUNTING_SEMAPHORES = 1, configUSE_TIMERS = 1 and a 32-bit TickType_t. ESP-IDF provides
- * them with CONFIG_FREERTOS_SUPPORT_STATIC_ALLOCATION=y.
+ * configUSE_RECURSIVE_MUTEXES = 1, configUSE_COUNTING_SEMAPHORES = 1, configUSE_TIMERS = 1,
+ * INCLUDE_uxTaskGetStackHighWaterMark = 1 and a 32-bit TickType_t. ESP-IDF provides them with
+ * CONFIG_FREERTOS_SUPPORT_STATIC_ALLOCATION=y.
  *
  * SPDX-License-Identifier: MIT
  * Copyright (c) 2026 The kb-core authors
@@ -21,6 +22,7 @@
 #include <limits>
 
 #include "kb/rtos/backend.hpp"
+#include "kb/rtos/backend_rules.hpp"
 #include "kb/utils/status.hpp"
 #include "kb/utils/time.hpp"
 
@@ -108,14 +110,10 @@ void TimerTrampoline(TimerHandle_t timer) {
 portMUX_TYPE g_critical = portMUX_INITIALIZER_UNLOCKED;
 #endif
 
-// The 64-bit extension of the 32-bit tick counter: the high word counts wraps seen by Now().
-struct TickExtension {
-  uint32_t last_tick{0U};
-  uint32_t wraps{0U};
-};
-TickExtension& Extension() noexcept {
+// The 64-bit extension of the 32-bit tick counter (backend_rules.hpp), read by Now().
+detail::TickExtender& Extension() noexcept {
   // codeql::misra_deviation_next_line(DEV-KBC-002)
-  static TickExtension extension{};
+  static detail::TickExtender extension{};
   return extension;
 }
 
@@ -133,13 +131,7 @@ uint32_t TickCount() noexcept {
 
 kb::Instant Now() noexcept {
   EnterCritical();
-  TickExtension& ext = Extension();
-  const uint32_t tick = TickCount();
-  if (tick < ext.last_tick) {
-    ++ext.wraps;
-  }
-  ext.last_tick = tick;
-  const uint64_t ticks = (static_cast<uint64_t>(ext.wraps) << 32U) | static_cast<uint64_t>(tick);
+  const uint64_t ticks = Extension().Extend(TickCount());
   ExitCritical();
   constexpr uint64_t kUsPerS = 1000000U;
   return kb::Instant{(ticks * kUsPerS) / static_cast<uint64_t>(TickRateHz())};
@@ -184,6 +176,22 @@ kb::Status MutexCreate(detail::MutexStorage& storage) noexcept {
   SemaphoreHandle_t handle = xSemaphoreCreateMutexStatic(Buffer<StaticSemaphore_t>(storage));
   storage.handle = handle;
   return (handle != nullptr) ? kb::Status::Ok : kb::Status::Fault;
+}
+
+kb::Status RecursiveMutexCreate(detail::MutexStorage& storage) noexcept {
+  SemaphoreHandle_t handle =
+      xSemaphoreCreateRecursiveMutexStatic(Buffer<StaticSemaphore_t>(storage));
+  storage.handle = handle;
+  return (handle != nullptr) ? kb::Status::Ok : kb::Status::Fault;
+}
+
+bool RecursiveMutexLock(const detail::MutexStorage& storage, uint32_t timeout_ticks) noexcept {
+  return xSemaphoreTakeRecursive(Semaphore(storage.handle),
+                                 static_cast<TickType_t>(timeout_ticks)) == pdTRUE;
+}
+
+void RecursiveMutexUnlock(const detail::MutexStorage& storage) noexcept {
+  static_cast<void>(xSemaphoreGiveRecursive(Semaphore(storage.handle)));
 }
 
 bool MutexLock(const detail::MutexStorage& storage, uint32_t timeout_ticks) noexcept {
@@ -274,9 +282,13 @@ uint32_t EventFlagsWait(const detail::EventFlagsStorage& storage, uint32_t bits,
 kb::Status TimerCreate(detail::TimerStorage& storage, const detail::TimerParams& params) noexcept {
   auto* block = Buffer<TimerBlock>(storage);
   block->params = params;
-  TimerHandle_t handle = xTimerCreateStatic("kb", static_cast<TickType_t>(params.period_ms),
-                                            params.periodic ? pdTRUE : pdFALSE, block,
-                                            &TimerTrampoline, &block->timer);
+  // The period in ticks, rounded up and at least one (milliseconds are ticks only at 1000 Hz).
+  const uint32_t raw =
+      kb::utils::MillisecondsToTicksCeil(Milliseconds{params.period_ms}, TickRateHz());
+  const uint32_t period = (raw == 0U) ? 1U : raw;
+  TimerHandle_t handle =
+      xTimerCreateStatic("kb", static_cast<TickType_t>(period), params.periodic ? pdTRUE : pdFALSE,
+                         block, &TimerTrampoline, &block->timer);
   storage.handle = handle;
   return (handle != nullptr) ? kb::Status::Ok : kb::Status::Fault;
 }
@@ -313,6 +325,18 @@ void ThreadExit(const detail::ThreadStorage& storage) noexcept {
 
 void ThreadRelease(detail::ThreadStorage& storage) noexcept {
   storage.handle = nullptr;
+}
+
+kb::Status ThreadStackFree(const detail::ThreadStorage& storage, std::size_t& free_bytes) noexcept {
+  kb::Status status = kb::Status::NotReady;
+  free_bytes = 0U;
+  if (storage.handle != nullptr) {
+    // codeql::misra_deviation_next_line(DEV-KBC-001)
+    auto* const task = static_cast<TaskHandle_t>(storage.handle);
+    free_bytes = static_cast<std::size_t>(uxTaskGetStackHighWaterMark(task)) * sizeof(StackType_t);
+    status = kb::Status::Ok;
+  }
+  return status;
 }
 
 } // namespace backend

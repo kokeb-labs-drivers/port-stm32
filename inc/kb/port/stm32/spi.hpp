@@ -15,6 +15,11 @@
  * again before the next frame. The inter-data idleness (H7 MIDI) is the HAL default (none) for
  * every device.
  *
+ * With a DMA link attached (`SpiBus::AttachDma`, spi_dma.hpp), frames of at least the link's
+ * `min_bytes` go by DMA through the bus's staging buffers at the device's full SCK, in one pass of
+ * at most the staging capacity (larger frames: `OutOfRange`); shorter frames stay interrupt-driven
+ * at the interrupt ceiling. `Capabilities()` and `Health()` say which path serves (never silent).
+ *
  * | Result | Meaning |
  * | --- | --- |
  * | `Ok` | The frame was clocked |
@@ -23,7 +28,10 @@
  * | `Busy` | The bus lock was not had in time; nothing was clocked |
  * | `Timeout` | The HAL did not finish in time; the transfer was aborted |
  * | `BusError` | Mode fault, overrun or CRC error (`HAL_SPI_ERROR_*` in Detail) |
- * | `NotReady` | EnsureReady() has not succeeded |
+ * | `NotReady` | EnsureReady() has not succeeded; or a DMA staging buffer outside its region, an
+ * MPU set-up that does not match the region, an NVIC priority that does not read back | |
+ * `OutOfRange` | A DMA frame larger than the bus's staging buffers | | `Fault` | A DMA stream error
+ * (Detail: 0xFA and the flags), or a quarantined DMA path (0xFB) |
  *
  * SPDX-License-Identifier: MIT
  * Copyright (c) 2026 The port-stm32 authors
@@ -35,6 +43,8 @@
 #include <cstdint>
 #include <span>
 
+#include "kb/dma/assignment.hpp"
+#include "kb/dma/capabilities.hpp"
 #include "kb/interfaces/spi.hpp"
 #include "kb/port/stm32/completion.hpp"
 #include "kb/port/stm32/error.hpp"
@@ -44,6 +54,8 @@
 #include "kb/utils/time.hpp"
 
 namespace kb::port::stm32 {
+
+class SpiDmaPath;
 
 /** @brief How an SPI peripheral is wired. */
 struct SpiBusConfig {
@@ -68,12 +80,14 @@ struct SpiDeviceConfig {
 
 /** @brief Counters of an SPI device. */
 struct SpiStats {
-  uint32_t transfers{0U};       ///< Frames started.
-  uint32_t failures{0U};        ///< Frames that failed.
-  uint32_t rebuilds{0U};        ///< Peripheral initialisations after a timeout.
-  uint32_t lock_timeouts{0U};   ///< Calls refused with Busy.
-  uint32_t clamps{0U};          ///< Clock selections lowered to the bus's interrupt ceiling.
-  uint32_t actual_clock_hz{0U}; ///< The SCK of the next frame (ActualClockHz()); 0 before start.
+  uint32_t transfers{0U};     ///< Frames started.
+  uint32_t failures{0U};      ///< Frames that failed.
+  uint32_t rebuilds{0U};      ///< Peripheral initialisations after a timeout.
+  uint32_t lock_timeouts{0U}; ///< Calls refused with Busy.
+  uint32_t clamps{0U};        ///< Clock selections lowered to the bus's interrupt ceiling.
+  uint32_t actual_clock_hz{
+      0U}; ///< The SCK of the next interrupt frame (ActualClockHz()); 0 before start.
+  uint32_t dma_frames{0U}; ///< Frames that went by DMA.
 };
 
 /**
@@ -154,8 +168,35 @@ public:
   [[nodiscard]] uint32_t TransferLocked(std::span<const uint8_t> tx, std::span<uint8_t> rx,
                                         Deadline& deadline) noexcept;
 
+  /**
+   * @brief Attaches the bus's DMA path (an SpiDmaLink the board defines) before EnsureReady();
+   * InvalidArgument once the bus is ready or when a path is attached already.
+   */
+  [[nodiscard]] kb::Status AttachDma(SpiDmaPath& path) noexcept;
+  /** @brief True when a frame of `bytes` goes by DMA. */
+  [[nodiscard]] bool DmaFrame(std::size_t bytes) const noexcept;
+  /** @brief True when a DMA path is attached. */
+  [[nodiscard]] bool HasDma() const noexcept {
+    return dma_ != nullptr;
+  }
+  /** @brief With the lock held: one DMA frame through the staging buffers, waited for on
+   * `deadline`. */
+  [[nodiscard]] uint32_t DmaTransferLocked(std::span<const uint8_t> tx, std::span<uint8_t> rx,
+                                           Deadline& deadline) noexcept;
+  /** @brief What the bus offers now (kb::dma::Capabilities): DMA or interrupt, never hidden. */
+  [[nodiscard]] kb::dma::Capabilities Capabilities() const noexcept;
+  /** @brief The DMA part of a handler's health record. */
+  [[nodiscard]] kb::dma::DmaHealth Health() const noexcept;
+  /** @brief The bus's DMA limits (kb::dma::BusLimits). */
+  [[nodiscard]] kb::dma::BusLimits Limits() const noexcept;
+  /** @brief After a quarantined DMA path: the streams re-initialised with proof and the staging
+   * buffers released, the peripheral initialised again at the next frame. Call with no transfer in
+   * flight. */
+  [[nodiscard]] kb::Status Recover() noexcept;
+
 private:
   SpiBusConfig config_;
+  SpiDmaPath* dma_{nullptr};
   kb::rtos::Mutex mutex_;
   Completion done_; ///< Completed by the HAL's transfer callbacks.
   LastErrorRecord error_;
@@ -196,8 +237,11 @@ public:
   [[nodiscard]] const SpiDeviceConfig& Config() const noexcept {
     return config_;
   }
-  /** @brief The SCK of the next frame in Hz. */
+  /** @brief The SCK of the next interrupt-driven frame in Hz. */
   [[nodiscard]] uint32_t ActualClockHz() const noexcept;
+  /** @brief The SCK of the next DMA frame in Hz (no interrupt ceiling); ActualClockHz() without
+   * DMA. */
+  [[nodiscard]] uint32_t ActualDmaClockHz() const noexcept;
 
 private:
   [[nodiscard]] uint32_t frame(std::span<const uint8_t> tx, std::span<uint8_t> rx) noexcept;
@@ -213,6 +257,7 @@ private:
   LastErrorRecord error_;
   SpiStats stats_;
   uint8_t prescaler_{0U};
+  uint8_t dma_prescaler_{0U};
   bool ready_{false};
 };
 

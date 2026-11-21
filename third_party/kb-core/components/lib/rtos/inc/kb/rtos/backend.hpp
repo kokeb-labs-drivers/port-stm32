@@ -43,6 +43,22 @@ inline constexpr std::size_t kTimerBytes = 256U;
 inline constexpr std::size_t kThreadBytes = 512U;
 /// Alignment of a thread stack.
 inline constexpr std::size_t kStackAlign = 16U;
+/// A queue slot is a whole number of these bytes. The build sets KB_RTOS_QUEUE_WORD_BYTES for a
+/// backend that moves messages in native words (ThreadX: `sizeof(ULONG)`, checked by the backend);
+/// every other backend copies bytes, so slots are the item size.
+#if defined(KB_RTOS_QUEUE_WORD_BYTES)
+inline constexpr std::size_t kQueueWordBytes = KB_RTOS_QUEUE_WORD_BYTES;
+#else
+inline constexpr std::size_t kQueueWordBytes = 1U;
+#endif
+static_assert(kQueueWordBytes > 0U, "KB_RTOS_QUEUE_WORD_BYTES must be at least 1");
+
+/// Bytes of the item buffer of a queue of `capacity` items of `item_bytes`: each slot rounded up to
+/// whole kQueueWordBytes.
+[[nodiscard]] constexpr std::size_t QueueBufferBytes(std::size_t item_bytes,
+                                                     std::size_t capacity) noexcept {
+  return (((item_bytes + kQueueWordBytes) - 1U) / kQueueWordBytes) * kQueueWordBytes * capacity;
+}
 
 /**
  * @brief Storage for one native RTOS object: raw bytes and the backend's handle to the object in
@@ -133,6 +149,18 @@ void ExitCritical() noexcept;
 /** @brief Gives the mutex back; only its holder may call this. */
 void MutexUnlock(const detail::MutexStorage& storage) noexcept;
 
+// --- Recursive mutex
+// ------------------------------------------------------------------------------------------
+/** @brief Creates a recursive, priority-inheriting mutex in `storage`: its holder may take it again
+ * and must give it back as many times. */
+[[nodiscard]] kb::Status RecursiveMutexCreate(detail::MutexStorage& storage) noexcept;
+/** @brief Takes the recursive mutex (again, when the caller holds it), waiting at most
+ * `timeout_ticks`. */
+[[nodiscard]] bool RecursiveMutexLock(const detail::MutexStorage& storage,
+                                      uint32_t timeout_ticks) noexcept;
+/** @brief Gives one level of the recursive mutex back; only its holder may call this. */
+void RecursiveMutexUnlock(const detail::MutexStorage& storage) noexcept;
+
 // --- Semaphore
 // ------------------------------------------------------------------------------------------------
 /** @brief Creates a counting semaphore with `max_count` (at least 1) and `initial` (at most max).
@@ -151,7 +179,9 @@ void MutexUnlock(const detail::MutexStorage& storage) noexcept;
 
 // --- Queue
 // ----------------------------------------------------------------------------------------------------
-/** @brief Creates a queue of `capacity` items of `item_bytes` over the caller's `buffer`. */
+/** @brief Creates a queue of `capacity` items of `item_bytes` over the caller's `buffer` of
+ * `QueueBufferBytes(item_bytes, capacity)` bytes, aligned to kStorageAlign. A backend with a limit
+ * on the item size (ThreadX: 16 native words) returns Unsupported above it. */
 [[nodiscard]] kb::Status QueueCreate(detail::QueueStorage& storage, std::byte* buffer,
                                      std::size_t item_bytes, std::size_t capacity) noexcept;
 /** @brief Copies `item` to the back, waiting at most `timeout_ticks` for room. */
@@ -206,6 +236,14 @@ void EventFlagsClear(const detail::EventFlagsStorage& storage, uint32_t bits) no
 void ThreadExit(const detail::ThreadStorage& storage) noexcept;
 /** @brief Releases the backend's hold on a thread that has exited (joins it on a host backend). */
 void ThreadRelease(detail::ThreadStorage& storage) noexcept;
+/**
+ * @brief The fewest free bytes the thread's stack has had (its high-water mark), as far as the RTOS
+ * has measured.
+ * @return Unsupported when the backend or its configuration cannot measure it (no scheduler, a host
+ * thread, ThreadX without TX_ENABLE_STACK_CHECKING); NotReady before the thread was created.
+ */
+[[nodiscard]] kb::Status ThreadStackFree(const detail::ThreadStorage& storage,
+                                         std::size_t& free_bytes) noexcept;
 
 } // namespace kb::rtos::backend
 

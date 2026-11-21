@@ -1,4 +1,4 @@
-# kb-core: utils, rtos, interfaces and handlers, one version (cmake/kb_version.cmake). Host build:
+# kb-core: utils, rtos, dma, interfaces and handlers, one version (cmake/kb_version.cmake). Host build:
 #   cmake -S . -B build                       KB_MCU=HOST, KB_RTOS=NONE, every part, no driver
 #   cmake -S . -B build -DKB_PARTS=rtos       one part and its dependencies (utils)
 #   cmake -S . -B build -DKB_ENABLE_PF1550=ON a driver binding (needs the pf1550 driver checkout, see
@@ -11,6 +11,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 if(ESP_PLATFORM)
+  include("${CMAKE_CURRENT_LIST_DIR}/cmake/kb_language.cmake")
   include("${CMAKE_CURRENT_LIST_DIR}/cmake/kb_build_settings.cmake")
   # Absolute paths: the component may be registered through a forwarding folder named `kb`
   # (components/ports/esp32/examples/components/kb), whose own directory is not this one.
@@ -28,22 +29,25 @@ if(ESP_PLATFORM)
   endif()
   idf_component_register(SRCS ${_kb_idf_sources} INCLUDE_DIRS ${_kb_idf_includes} REQUIRES ${KB_IDF_REQUIRES})
   if(_kb_idf_sources)
-    target_compile_features(${COMPONENT_LIB} PUBLIC cxx_std_20)
-    set_source_files_properties(${_kb_idf_sources} PROPERTIES COMPILE_OPTIONS "-std=c++20;-fno-exceptions;-fno-rtti")
+    target_compile_features(${COMPONENT_LIB} PUBLIC ${KB_CXX_FLOOR_FEATURE})
+    set_source_files_properties(${_kb_idf_sources} PROPERTIES COMPILE_OPTIONS
+      "-std=c++${KB_CPP_STANDARD};-fno-exceptions;-fno-rtti")
   else()
-    target_compile_features(${COMPONENT_LIB} INTERFACE cxx_std_20)
+    target_compile_features(${COMPONENT_LIB} INTERFACE ${KB_CXX_FLOOR_FEATURE})
   endif()
   return()
 endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/cmake/kb_version.cmake")
-project(kb_core VERSION ${KB_VERSION} DESCRIPTION "kb-core: utils, RTOS, interfaces and handlers" LANGUAGES CXX)
+project(kb_core VERSION ${KB_VERSION} DESCRIPTION "kb-core: utils, RTOS, DMA, interfaces and handlers" LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+include("${CMAKE_CURRENT_LIST_DIR}/cmake/kb_language.cmake")
+set(CMAKE_CXX_STANDARD ${KB_CPP_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(KB_BUILD_TESTS "Build the unit tests of the selected parts" OFF)
+option(KB_THREADX_HOST_TESTS "With KB_BUILD_TESTS on Linux: also test the ThreadX backend on the pinned kernel's Linux port (third_party/threadx)" OFF)
 option(KB_BUILD_INTEGRATION "Build the driver integration tests (every checked-out driver)" OFF)
 option(KB_CHECK_BINDINGS "Compile every checked-out driver's binding header on its own (no tests)" OFF)
 option(KB_BUILD_FUZZERS "Build the libFuzzer targets (Clang)" OFF)

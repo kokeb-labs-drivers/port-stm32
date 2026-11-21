@@ -17,10 +17,11 @@ H7, F4 and L4** families. Drivers written against the kb contracts run on an STM
 | kb contract | Type | HAL |
 | --- | --- | --- |
 | `I2cBus` | `I2cController` | `hal_i2c` interrupt API, TIMINGR computed (v2) or ClockSpeed (F4), handle restore and BUSY reset, stuck-bus recovery (nine clocks and a STOP) |
-| `SpiDevice`, `SpiClockControl` | `SpiBus` + `SpiDevice` | `hal_spi` interrupt API, GPIO chip select held across chunks, abort and re-init after a timeout |
+| `SpiDevice`, `SpiClockControl` | `SpiBus` + `SpiDevice` | `hal_spi` interrupt API, GPIO chip select held across chunks, abort and re-init after a timeout; with an `SpiDmaLink`, DMA through port-owned staging buffers ([DMA](docs/dma.md)) |
 | `UartPort`, `UartBaudControl`, `UartTxDrain` | `Uart` | `hal_uart` setup, the port's own interrupt for both directions, a receive ring, RS-485 DE optional |
 | `GpioOutput`; `GpioInput`, `GpioInterrupt` | `OutputPin`; `InputPin` | `hal_gpio`, EXTI through the port's handlers |
 | `AdcChannel` | `AdcChannel` | `hal_adc`, single conversion ended by its interrupt, calibration on G4, H7, L4 |
+| `kb::dma::Stream` producer | `AdcDmaStream` | timer-triggered scan by circular DMA, overrun counted, one-shot fallback reported ([DMA](docs/dma.md)) |
 | `PwmOutput` | `PwmChannel` | `hal_tim`, PWM mode 1 |
 | `CanBus` | `CanController` | `hal_fdcan` (G4, H7, classic frames) or `hal_can` (F4, L4), receive interrupt into a ring, bus-off recovery |
 | `MonotonicClock`, `BusyWait`, `LogSink` | `Clock`, `BusyWait`, `ItmLogSink` / `UartLogSink` | TIM2/TIM5 at 1 MHz extended to 64 bits, DWT cycle counter, ITM or a `Uart` |

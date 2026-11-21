@@ -19,7 +19,7 @@ extern uint32_t SystemCoreClock;
 #define configTICK_TYPE_WIDTH_IN_BITS TICK_TYPE_WIDTH_32_BITS
 #define configIDLE_SHOULD_YIELD 1
 #define configUSE_MUTEXES 1
-#define configUSE_RECURSIVE_MUTEXES 0
+#define configUSE_RECURSIVE_MUTEXES 1 // kb::rtos::RecursiveMutex (kb-core FreeRTOS backend)
 #define configUSE_COUNTING_SEMAPHORES 1
 #define configQUEUE_REGISTRY_SIZE 0
 #define configUSE_TIMERS 1
@@ -51,6 +51,7 @@ extern uint32_t SystemCoreClock;
 #define INCLUDE_vTaskDelete 1
 #define INCLUDE_xTaskDelayUntil 1
 #define INCLUDE_xTaskGetSchedulerState 1
+#define INCLUDE_uxTaskGetStackHighWaterMark 1 // kb::rtos stack watermark (kb-core FreeRTOS backend)
 #define INCLUDE_xTimerPendFunctionCall 1
 
 /* The kernel's exception handlers under the names of the CMSIS startup file's vector table. */

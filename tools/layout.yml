@@ -7,8 +7,8 @@
 header_only:
   irq: >-
     declarations only: the interrupt entry points it names are defined next to the handles they read, in
-    src/boundary/<component>.cpp (uart, i2c, spi, adc, can), src/gpio.cpp (EXTI) and src/time.cpp (the clock's
-    timer), and called by src/boundary/vectors.cpp
+    src/boundary/<component>.cpp (uart, i2c, spi, adc, can), src/gpio.cpp (EXTI), src/time.cpp (the clock's
+    timer) and src/dma.cpp (the DMA streams' dispatch), and called by src/boundary/vectors.cpp
   version: >-
     constants only; the version is checked against CMakeLists.txt and CHANGELOG.md by the static_assert in
     src/port.cpp (the translation unit of port.hpp)

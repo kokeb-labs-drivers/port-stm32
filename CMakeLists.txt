@@ -24,14 +24,17 @@ set(KB_PORT_STM32_HAL_CONF_DIR "" CACHE PATH "Folder of the application's stm32<
 
 # One source per public header (src/<stem>.cpp; tools/check_layout.py checks it).
 set(KB_PORT_STM32_LOGIC_SOURCES
-    src/adc.cpp src/can.cpp src/completion.cpp src/error.cpp src/gpio.cpp src/i2c.cpp src/log.cpp src/port.cpp
-    src/pwm.cpp src/spi.cpp src/time.cpp src/uart.cpp)
+    src/adc.cpp src/adc_stream.cpp src/can.cpp src/completion.cpp src/dma.cpp src/error.cpp src/gpio.cpp src/i2c.cpp
+    src/log.cpp src/port.cpp src/pwm.cpp src/spi.cpp src/spi_dma.cpp src/time.cpp src/uart.cpp)
 # The only files that include HAL or CMSIS headers (deviations/boundary-files.yml).
 # One file per HAL component, in src/boundary/ (tools/check_layout.py); the vectors are a file of their own below.
 set(KB_PORT_STM32_BOUNDARY_SOURCES
     src/boundary/adc.cpp src/boundary/can.cpp src/boundary/error.cpp src/boundary/gpio.cpp src/boundary/i2c.cpp
     src/boundary/log.cpp src/boundary/spi.cpp src/boundary/state.cpp src/boundary/time.cpp src/boundary/timer.cpp
     src/boundary/uart.cpp)
+# The DMA boundary (streams, the SPI and ADC sides of a DMA transfer, cache and MPU): on host the tests link a model
+# of it instead (tests/dma_model, over kb-core's kb::dma::host), so these files are compiled for the targets only.
+set(KB_PORT_STM32_DMA_BOUNDARY_SOURCES src/boundary/adc_stream.cpp src/boundary/dma.cpp src/boundary/spi_dma.cpp)
 set(KB_PORT_STM32_VECTOR_SOURCE src/boundary/vectors.cpp)
 
 include("${CMAKE_CURRENT_LIST_DIR}/cmake/kb_port_stm32_kb_core.cmake")
@@ -40,7 +43,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/cmake/kb_port_stm32_kb_core.cmake")
 add_library(kb_port_stm32_api INTERFACE)
 target_compile_features(kb_port_stm32_api INTERFACE cxx_std_20)
 target_include_directories(kb_port_stm32_api INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>")
-target_link_libraries(kb_port_stm32_api INTERFACE kb::interfaces kb::rtos kb::utils)
+target_link_libraries(kb_port_stm32_api INTERFACE kb::interfaces kb::dma kb::rtos kb::utils)
 include("${CMAKE_CURRENT_LIST_DIR}/cmake/kb_port_stm32_rtos.cmake")
 # Whether kb::rtos takes and sleeps block (completion.hpp: the bound of a wait when the clocks stop): from KB_RTOS in
 # any spelling, or from the backend target an installed kb-core package brings.
@@ -73,6 +76,7 @@ endif()
 
 list(TRANSFORM KB_PORT_STM32_LOGIC_SOURCES PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/" OUTPUT_VARIABLE _kb_port_logic)
 list(TRANSFORM KB_PORT_STM32_BOUNDARY_SOURCES PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/" OUTPUT_VARIABLE _kb_port_boundary)
+list(TRANSFORM KB_PORT_STM32_DMA_BOUNDARY_SOURCES PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/" OUTPUT_VARIABLE _kb_port_dma_boundary)
 
 # The platform-free logic alone (no HAL header anywhere): the poison build and the Cortex-M cross build.
 add_library(kb_port_stm32_platform_free OBJECT EXCLUDE_FROM_ALL ${_kb_port_logic})
@@ -87,7 +91,7 @@ if(KB_PORT_STM32_DEVICE)
     set(KB_PORT_STM32_FAMILY "${KB_PORT_STM32_FAMILY}" PARENT_SCOPE)
     set(KB_PORT_STM32_STARTUP "${KB_PORT_STM32_STARTUP}" PARENT_SCOPE)
   endif()
-  add_library(kb_port_stm32 STATIC ${_kb_port_logic} ${_kb_port_boundary})
+  add_library(kb_port_stm32 STATIC ${_kb_port_logic} ${_kb_port_boundary} ${_kb_port_dma_boundary})
   add_library(kb::port_stm32 ALIAS kb_port_stm32)
   target_include_directories(kb_port_stm32 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
   target_link_libraries(kb_port_stm32 PUBLIC kb_port_stm32_api kb_port_stm32_hal)
@@ -111,7 +115,7 @@ if(KB_PORT_STM32_DEVICE)
   # the HAL's and CMSIS's own headers and macros do not build cleanly with (the host build of the boundary files
   # over the fakes has every warning).
   set_source_files_properties(${_kb_port_logic} PROPERTIES COMPILE_OPTIONS "${KB_PORT_STM32_STRICT_FLAGS}")
-  target_compile_options(kb_port_stm32 PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra -Werror)
+  target_compile_options(kb_port_stm32 PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions;-fno-rtti>" -Wall -Wextra -Werror)
 else()
   add_library(kb::port_stm32 ALIAS kb_port_stm32_api)
 endif()

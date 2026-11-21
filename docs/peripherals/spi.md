@@ -76,10 +76,11 @@ reported as `BusError` (`HAL_SPI_ERROR_OVR`). The ceilings are estimates from th
 most of the CPU for the frame's duration (at the SPI interrupt's priority): long frames are cheaper on a slower SCK,
 or with DMA.
 
-Not implemented: DMA, and a polled path above the ceiling. Observed with an earlier implementation on STM32H7
-hardware, SPI by circular DMA into non-cacheable SRAM ran at about 4.8 % of a 240 MHz core against about 28 % for the
-polled path, with zero errors; DMA is the way past the ceiling and comes with the H7 cache rules of
-[Integration](../integration.md). A polled register loop for short frames would busy-wait at the caller's priority,
+DMA is the way past the ceiling: with an `SpiDmaLink` attached (`SpiBus::AttachDma`), frames of at least its
+`min_bytes` go by DMA through the bus's staging buffers at the device's full SCK ([DMA](../dma.md)); shorter frames
+stay interrupt-driven at the ceiling. Observed with an earlier implementation on STM32H7 hardware, SPI by circular
+DMA into non-cacheable SRAM ran at about 4.8 % of a 240 MHz core against about 28 % for the polled path, with zero
+errors. Not implemented: a polled path above the ceiling. A polled register loop for short frames would busy-wait at the caller's priority,
 which the port's wait rule excludes under an RTOS ([How the port waits](../waits.md)), so it is not offered.
 
 ## Timing limits

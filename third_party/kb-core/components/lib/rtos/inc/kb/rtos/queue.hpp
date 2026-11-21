@@ -115,7 +115,7 @@ public:
   }
 
 private:
-  static constexpr std::size_t kBufferBytes = sizeof(T) * N;
+  static constexpr std::size_t kBufferBytes = detail::QueueBufferBytes(sizeof(T), N);
   detail::QueueStorage storage_{};
   alignas(detail::kStorageAlign) std::array<std::byte, kBufferBytes> buffer_{};
   bool created_{false};

@@ -4,7 +4,7 @@
 kb_add_part(utils)
 
 kb_header_checks(utils _kb_utils_checks HEADERS
-  kb/utils/crc.hpp kb/utils/endian.hpp kb/utils/fixed_string.hpp kb/utils/numeric.hpp kb/utils/result.hpp
+  kb/utils/crc.hpp kb/utils/endian.hpp kb/utils/fault_journal.hpp kb/utils/fixed_string.hpp kb/utils/numeric.hpp kb/utils/result.hpp
   kb/utils/ring_buffer.hpp kb/utils/span.hpp kb/utils/static_vector.hpp kb/utils/status.hpp kb/utils/time.hpp
   kb/utils/utils.hpp)
 set_property(GLOBAL APPEND PROPERTY KB_CROSS_SOURCES ${_kb_utils_checks})

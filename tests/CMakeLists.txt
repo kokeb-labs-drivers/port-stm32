@@ -8,6 +8,8 @@ set(_fakes "${CMAKE_CURRENT_SOURCE_DIR}/fakes/stm32")
 list(TRANSFORM KB_PORT_STM32_LOGIC_SOURCES PREPEND "${PROJECT_SOURCE_DIR}/" OUTPUT_VARIABLE _logic)
 list(TRANSFORM KB_PORT_STM32_BOUNDARY_SOURCES PREPEND "${PROJECT_SOURCE_DIR}/" OUTPUT_VARIABLE _boundary)
 set(_vectors "${PROJECT_SOURCE_DIR}/${KB_PORT_STM32_VECTOR_SOURCE}")
+# The DMA boundary on host: kb-core's DMA-and-cache model behind the same sdk:: calls (dma_model/).
+set(_dma_model "${CMAKE_CURRENT_SOURCE_DIR}/dma_model/dma_model.cpp")
 
 # One variant: the fake HAL of a family and the port over it. `defines` selects the family.
 function(kb_port_stm32_variant name)
@@ -22,26 +24,51 @@ function(kb_port_stm32_variant name)
   add_library(${name} STATIC ${_logic} ${_boundary} ${_vectors})
   target_compile_options(${name} PRIVATE ${KB_PORT_STM32_STRICT_FLAGS})
   target_include_directories(${name} PRIVATE "${PROJECT_SOURCE_DIR}/src")
+  # The model of the DMA boundary (test code: the fakes' flags, not the strict set).
+  add_library(${name}_dma STATIC "${_dma_model}")
+  target_include_directories(${name}_dma PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/dma_model" PRIVATE "${PROJECT_SOURCE_DIR}/src")
+  target_compile_definitions(${name}_dma PUBLIC ${ARG_DEFINES})
+  target_link_libraries(${name}_dma PUBLIC kb_port_stm32_api kb::dma_host)
+  target_compile_options(${name}_dma PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra -Wpedantic -Wshadow -Wundef
+                         -Werror)
   # The fake HAL headers stand where the HAL's would: -isystem, like the SDK on target.
   target_include_directories(${name} SYSTEM PRIVATE "${_fakes}/include")
   target_link_libraries(${name} PUBLIC kb_port_stm32_api ${name}_hal)
+  # The model is linked by the test executables after the port (it calls back into it: HandleDmaIrq); it is not a
+  # dependency of the port library, so the scan build (kb_port_stm32_scan) never compiles it beside the real boundary.
+  target_link_libraries(${name}_dma PRIVATE ${name})
 endfunction()
 
 kb_port_stm32_variant(kb_port_stm32_g4 DEFINES KB_PORT_STM32_G4)
+# The target-only DMA boundary compiled over the fakes too (not linked: the tests link dma_model/ in its place), so the
+# MISRA scan and clang-tidy see it in both family variants (channels and DMAMUX on G4, streams on F4).
+list(TRANSFORM KB_PORT_STM32_DMA_BOUNDARY_SOURCES PREPEND "${PROJECT_SOURCE_DIR}/" OUTPUT_VARIABLE _dma_boundary)
+function(kb_port_stm32_dma_boundary name variant)
+  add_library(${name} OBJECT EXCLUDE_FROM_ALL ${_dma_boundary})
+  target_compile_options(${name} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${KB_PORT_STM32_STRICT_FLAGS}>
+                         $<$<COMPILE_LANGUAGE:C>:-Wall -Wextra -Wpedantic -Werror>)
+  target_include_directories(${name} PRIVATE "${PROJECT_SOURCE_DIR}/src")
+  target_include_directories(${name} SYSTEM PRIVATE "${_fakes}/include")
+  target_link_libraries(${name} PRIVATE kb_port_stm32_api ${variant}_hal)
+endfunction()
 kb_port_stm32_variant(kb_port_stm32_f4 DEFINES KB_PORT_STM32_F4 KB_FAKE_STM32F4)
 # What the MISRA scans build (ci-misra.yml): the port in both family variants.
+kb_port_stm32_dma_boundary(kb_port_stm32_dma_boundary_g4 kb_port_stm32_g4)
+kb_port_stm32_dma_boundary(kb_port_stm32_dma_boundary_f4 kb_port_stm32_f4)
 add_custom_target(kb_port_stm32_scan)
-add_dependencies(kb_port_stm32_scan kb_port_stm32_g4 kb_port_stm32_f4)
+add_dependencies(kb_port_stm32_scan kb_port_stm32_g4 kb_port_stm32_f4 kb_port_stm32_dma_boundary_g4
+                 kb_port_stm32_dma_boundary_f4)
 
 set(_tests test_error.cpp test_i2c.cpp test_spi.cpp test_uart.cpp test_gpio.cpp test_adc.cpp test_pwm.cpp test_can.cpp
-    test_time.cpp test_log.cpp test_clock_read.cpp test_completion.cpp test_contracts.cpp)
+    test_time.cpp test_log.cpp test_clock_read.cpp test_completion.cpp test_contracts.cpp test_dma.cpp test_spi_dma.cpp
+    test_adc_stream.cpp test_dma_conformance.cpp)
 foreach(_v IN ITEMS g4 f4)
   set(_name kb_port_stm32_tests_${_v})
   add_executable(${_name} "${_harness}/kb_test_main.cpp" ${_tests})
   target_compile_options(${_name} PRIVATE ${KB_PORT_STM32_STRICT_FLAGS})
   target_include_directories(${_name} PRIVATE "${_harness}" "${CMAKE_CURRENT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/src")
   target_compile_definitions(${_name} PRIVATE _GLIBCXX_ASSERTIONS=1)
-  target_link_libraries(${_name} PRIVATE kb_port_stm32_${_v})
+  target_link_libraries(${_name} PRIVATE kb_port_stm32_${_v} kb_port_stm32_${_v}_dma kb_port_stm32_${_v})
   add_test(NAME ${_name} COMMAND ${_name})
 endforeach()
 
@@ -50,7 +77,7 @@ add_test(NAME kb_port_stm32_rtos_config
          COMMAND ${CMAKE_COMMAND} "-DROOT=${PROJECT_SOURCE_DIR}" -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/test_rtos.cmake")
 
 # Each public header compiles on its own as ISO C++20 with the strict flags.
-set(_headers adc can error gpio i2c irq log port pwm spi time uart version)
+set(_headers adc adc_stream can dma error gpio i2c irq log port pwm spi spi_dma time uart version)
 set(_checks "")
 foreach(_h IN LISTS _headers)
   set(_check "${CMAKE_CURRENT_BINARY_DIR}/header_checks/${_h}.cpp")
@@ -63,7 +90,8 @@ target_compile_options(kb_port_stm32_header_checks PRIVATE ${KB_PORT_STM32_STRIC
 target_link_libraries(kb_port_stm32_header_checks PRIVATE kb_port_stm32_api)
 
 # Compile-fail tests: each file must fail to build, for the reason in its "EXPECT: <regex>" line.
-foreach(_file IN ITEMS ref_from_wrong_contract.cpp controller_copied.cpp output_pin_as_input.cpp)
+foreach(_file IN ITEMS ref_from_wrong_contract.cpp controller_copied.cpp output_pin_as_input.cpp dma_dtcm_for_dma1.cpp
+                      dma_priority_bits.cpp dma_engine_not_dma.cpp spi_frame_over_staging.cpp adc_frame_not_samples.cpp)
   set(_src "${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/${_file}")
   get_filename_component(_stem "${_src}" NAME_WE)
   file(STRINGS "${_src}" _expect REGEX "EXPECT: ")

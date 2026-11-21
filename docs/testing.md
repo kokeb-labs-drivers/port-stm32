@@ -16,11 +16,20 @@ port's handler while a transmit interrupt is enabled; `fake::Stall` holds an are
 timeout and its stop-and-restore. Each variant has only the macros its family's HAL has (the F4 fake has no 7-bit
 UART word).
 
+The DMA boundary files (`src/boundary/dma.cpp`, `spi_dma.cpp`, `adc_stream.cpp`) are the exception:
+the tests link `tests/dma_model/dma_model.cpp` in their place, the same `sdk::` calls over kb-core's host
+DMA-and-cache model (the files themselves are compiled over the fakes' register declarations, not linked, so the MISRA
+scan and clang-tidy see them) (`kb::dma::host::Machine`, `DmaEngine`, `HwRing`). kb-core's conformance suite T1 to T18 runs
+against the port's real classes through the adapter rigs of `tests/dma_model/port_rig.hpp`; the result per case is in
+[DMA](dma.md).
+
 | Test | Proves |
 | --- | --- |
 | `kb_port_stm32_tests_g4` | Every member of every type, every refusal and every HAL error path, over a G4-like device: I2C v2 (TIMINGR), FDCAN, ADC calibration; the `*Ref` of each contract at run time; the clock's read rule over every interleaving of its reads with the wrap interrupt (`test_clock_read.cpp`); the waits with the HAL tick stopped and with no clock at all (`test_completion.cpp`) |
 | `kb_port_stm32_tests_f4` | The same tests over an F4-like device: I2C v1 (ClockSpeed), bxCAN, no ADC calibration, the SR-register UART flags |
-| `kb_port_stm32_compile_fail_*` | Misuse is a compile error: a `*Ref` of the wrong contract, a copied controller, an output pin as an input |
+| `test_dma_conformance.cpp` (in both variants) | kb-core's DMA conformance suite T1 to T18 on the port, in the `Maintained` (AXI) and `NonCacheable` (D2) regions; T1, T2 and T7 also with a defect in the boundary model, which they catch |
+| `test_dma.cpp`, `test_spi_dma.cpp`, `test_adc_stream.cpp` | The DMA layer: B31 (a flag with nothing in flight cleared, counted, no re-entry), B32 (NVIC priority read back), B33 (conversion count against the frame, one-shot fallback), the SPI order, errors, quarantine and recovery, the ADC stream's supervision, overrun, seqlock and start rules |
+| `kb_port_stm32_compile_fail_*` | Misuse is a compile error: a `*Ref` of the wrong contract, a copied controller, an output pin as an input, a DTCM buffer for DMA1, a stream priority outside the implemented bits, an engine that is not DMA1/2, a driver frame above the staging buffers, an ADC frame that is not 16-bit samples |
 | `kb_port_stm32_header_checks` | Each public header compiles on its own as ISO C++20 with the strict flags |
 | `static_assert`s in `port.hpp`, beside each type and in the tests | Each type satisfies its concepts and converts to its `*Ref`; `Cycles()` and `CompareFor()` at compile time |
 
@@ -67,4 +76,5 @@ Behaviour on silicon (TIMINGR at the bus, the interrupt-driven transfers and the
 stuck slave and of a BUSY flag that stays set, FDCAN and bxCAN bus-off recovery and receive bursts, ADC accuracy,
 UART at high baud rates under interrupt load, the FreeRTOS example) needs a bench run per family. The earlier
 implementation's hardware observations that shaped these rules are quoted where they apply (I2C, UART, SPI, clock,
-integration); they were made on STM32H7 hardware, not with this port.
+integration); they were made on STM32H7 hardware, not with this port. The DMA layer has its own bench kit
+(`tests/target/dma/`, built in CI) and procedure: [Bench verification](assurance/bench/README.md).

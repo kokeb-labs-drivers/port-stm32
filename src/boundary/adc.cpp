@@ -295,6 +295,12 @@ uint32_t AdcClockCheck() noexcept {
   return AdcClockChoice(prescaler);
 }
 
+uint32_t AdcClockPrescaler() noexcept {
+  uint32_t prescaler = 0U;
+  static_cast<void>(AdcClockChoice(prescaler));
+  return prescaler;
+}
+
 uint32_t AdcOpen(uint8_t instance, Completion& conversion, uint8_t priority) noexcept {
   AdcSlot& slot = Adcs()[instance];
   AdcClock(instance);

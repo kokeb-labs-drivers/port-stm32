@@ -81,8 +81,8 @@ public:
     kb::Status s = begin(address, d);
     if ((s == kb::Status::Ok) && (d != nullptr) && (!tx.empty())) {
       d->pointer = tx[0];
-      for (std::size_t i = 1U; i < tx.size(); ++i) {
-        d->regs[d->pointer] = tx[i];
+      for (const uint8_t byte : tx.subspan(1U)) {
+        d->regs[d->pointer] = byte;
         ++d->pointer;
       }
     }

@@ -57,3 +57,6 @@ add_custom_command(TARGET port_selftest POST_BUILD
           "-DVECTORS=$<TARGET_OBJECTS:kb_port_stm32_vectors>" "-DLIBRARY=$<TARGET_FILE:kb_port_stm32>"
           -P "${_root}/tools/check_vectors.cmake"
   COMMAND_EXPAND_LISTS VERBATIM)
+
+# The DMA bench app (tests/target/dma): built for every board, run by hand (docs/assurance/bench/).
+include("${_root}/tests/target/dma/targets.cmake")

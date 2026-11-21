@@ -35,6 +35,10 @@ void HandleSpiIrq(uint8_t instance) noexcept;
 void HandleCanIrq(uint8_t controller) noexcept;
 /** @brief The ADC instances `first` to `last` sharing one vector. */
 void HandleAdcIrq(uint8_t first, uint8_t last) noexcept;
+/** @brief The interrupt of DMA `engine` (1 or 2), stream (F4, H7: 0 to 7) or channel (G4, L4: 1 to
+ * 8) `stream`: the started DmaStream's service (src/dma.cpp); an unowned stream's line is disabled.
+ */
+void HandleDmaIrq(uint8_t engine, uint8_t stream) noexcept;
 
 } // namespace kb::port::stm32
 

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="860" viewBox="0 0 720 860" role="img" aria-labelledby="bench-h7-memory-title bench-h7-memory-desc" font-family="Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
+<title id="bench-h7-memory-title">Where the DMA buffers live (H7)</title>
+<desc id="bench-h7-memory-desc">DTCM at 0x20000000 holds data and stack and is not reachable by DMA1/2 (the forced transfer error item); AXI SRAM at 0x24000000 is cached write-back, the Maintained region; D2 SRAM1 at 0x30000000 is MPU region 0, non-cacheable, the default region.</desc>
+<rect width="720" height="860" fill="#FFFFFF"/>
+<text x="36" y="58" font-size="30" fill="#1E429F" text-anchor="start" font-weight="700">Where the DMA buffers live (H7)</text>
+<text x="36" y="92" font-size="20" fill="#566070" text-anchor="start" font-weight="400" font-family="'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace">tests/target/dma/h7_dma.ld, MPU region 0</text>
+<rect x="36" y="130" width="648" height="180" rx="14" fill="#EAF2FF" stroke="#C26A05" stroke-width="3"/>
+<text x="60" y="176" font-size="23" fill="#0E1726" text-anchor="start" font-weight="700" font-family="'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace">DTCM 0x2000_0000</text>
+<text x="60" y="222" font-size="21" fill="#0E1726" text-anchor="start" font-weight="400">CPU only: data, bss, stack</text>
+<text x="60" y="266" font-size="20" fill="#C26A05" text-anchor="start" font-weight="400">DMA1/2 cannot reach: forced TE item</text>
+<rect x="36" y="340" width="648" height="180" rx="14" fill="#EAF2FF" stroke="#2563EB" stroke-width="3"/>
+<text x="60" y="386" font-size="23" fill="#0E1726" text-anchor="start" font-weight="700" font-family="'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace">AXI SRAM 0x2400_0000</text>
+<text x="60" y="432" font-size="21" fill="#0E1726" text-anchor="start" font-weight="400">cached, write-back (D-cache on)</text>
+<text x="60" y="476" font-size="20" fill="#2563EB" text-anchor="start" font-weight="400">Maintained: clean and invalidate by line</text>
+<rect x="36" y="550" width="648" height="180" rx="14" fill="#EAF2FF" stroke="#2563EB" stroke-width="3"/>
+<text x="60" y="596" font-size="23" fill="#0E1726" text-anchor="start" font-weight="700" font-family="'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace">D2 SRAM1 0x3000_0000</text>
+<text x="60" y="642" font-size="21" fill="#0E1726" text-anchor="start" font-weight="400">MPU region 0: non-cacheable</text>
+<text x="60" y="686" font-size="20" fill="#2563EB" text-anchor="start" font-weight="400">NonCacheable (default): no maintenance</text>
+<text x="36" y="780" font-size="19" fill="#566070" text-anchor="start" font-weight="400">Sections .kb_dma.d2 and .kb_dma.axi are loaded from</text>
+<text x="36" y="808" font-size="19" fill="#566070" text-anchor="start" font-weight="400">flash like .data (a Buffer holds its data address).</text>
+</svg>

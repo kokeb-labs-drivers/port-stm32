@@ -10,6 +10,7 @@
 
 #include "kb/utils/crc.hpp"
 #include "kb/utils/endian.hpp"
+#include "kb/utils/fault_journal.hpp"
 #include "kb/utils/fixed_string.hpp"
 #include "kb/utils/numeric.hpp"
 #include "kb/utils/result.hpp"

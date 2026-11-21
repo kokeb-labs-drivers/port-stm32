@@ -63,6 +63,17 @@ inline constexpr uint32_t kHalTickStopped = 0xF8U;
 
 /** @brief A peripheral's kernel clock reads 0 Hz: its clock source is not running. */
 inline constexpr uint32_t kNoClock = 0xF9U;
+/** @brief A DMA stream ended in a transfer or direct-mode error; Detail's upper bits are its flags.
+ */
+inline constexpr uint32_t kDma = 0xFAU;
+/** @brief A DMA stop could not be confirmed: the memory is quarantined until Recover(). */
+inline constexpr uint32_t kQuarantined = 0xFBU;
+/** @brief A DMA buffer lies outside its region, or the region's MPU or cache set-up differs. */
+inline constexpr uint32_t kPlacement = 0xFCU;
+/** @brief A frame larger than the DMA staging buffer of the bus. */
+inline constexpr uint32_t kTooLarge = 0xFDU;
+/** @brief An NVIC priority written from the board's assignment did not read back. */
+inline constexpr uint32_t kPriority = 0xFEU;
 } // namespace port_code
 
 /**
@@ -127,7 +138,12 @@ inline constexpr uint8_t kLowestIrqPriority = 15U;
   case port_code::kNotReady:
   case port_code::kHalTickStopped:
   case port_code::kNoClock:
+  case port_code::kPlacement:
+  case port_code::kPriority:
     out = kb::Status::NotReady;
+    break;
+  case port_code::kTooLarge:
+    out = kb::Status::OutOfRange;
     break;
   case port_code::kUnsupported:
     out = kb::Status::Unsupported;
