@@ -372,6 +372,47 @@
   
   
     <li class="md-tabs__item">
+      <a href="dma/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  DMA
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="assurance/bench/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Bench verification
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="error-mapping/" class="md-tabs__link">
         
   
@@ -816,6 +857,98 @@
   
   
     <li class="md-nav__item">
+      <a href="dma/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DMA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    <li class="md-nav__item md-nav__item--pruned md-nav__item--nested">
+      
+        
+  
+  
+  
+    <a href="assurance/bench/" class="md-nav__link">
+      
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench verification
+  
+
+    
+  </span>
+  
+  
+
+      
+        <span class="md-nav__icon md-icon"></span>
+      
+    </a>
+  
+
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="error-mapping/" class="md-nav__link">
         
   
@@ -1192,7 +1325,7 @@ interrupt ceiling).</p>
 <details class="kb-figure-desc">
 <summary>Figure description and sources</summary>
 <p>Rows are the peripherals I2C, SPI, UART, CAN, ADC, PWM, GPIO, Clock and delay, Log and Pulse output; the columns are the base contract of the peripheral and its extra contracts. Native means the contract maps onto the HAL module or core peripheral named in the cell; adapted means the port adds its own logic to meet it, such as its own UART interrupt handler and receive ring, or an SPI clock capped at the interrupt ceiling. Planned marks a contract or form kb-core has not defined yet, and n/a one that kb-core does not have.</p>
-<p>Drawn from: <a href="model/port-contracts.matrix.yml"><code>docs/model/port-contracts.matrix.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/adc.hpp"><code>inc/kb/port/stm32/adc.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/can.hpp"><code>inc/kb/port/stm32/can.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/gpio.hpp"><code>inc/kb/port/stm32/gpio.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/i2c.hpp"><code>inc/kb/port/stm32/i2c.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/log.hpp"><code>inc/kb/port/stm32/log.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/port.hpp"><code>inc/kb/port/stm32/port.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/pwm.hpp"><code>inc/kb/port/stm32/pwm.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/spi.hpp"><code>inc/kb/port/stm32/spi.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/time.hpp"><code>inc/kb/port/stm32/time.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/uart.hpp"><code>inc/kb/port/stm32/uart.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/spi.cpp"><code>src/spi.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/uart.cpp"><code>src/uart.cpp</code></a>.</p>
+<p>Drawn from: <a href="model/port-contracts.matrix.yml"><code>docs/model/port-contracts.matrix.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/adc.hpp"><code>inc/kb/port/stm32/adc.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/can.hpp"><code>inc/kb/port/stm32/can.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/gpio.hpp"><code>inc/kb/port/stm32/gpio.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/i2c.hpp"><code>inc/kb/port/stm32/i2c.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/log.hpp"><code>inc/kb/port/stm32/log.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/port.hpp"><code>inc/kb/port/stm32/port.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/pwm.hpp"><code>inc/kb/port/stm32/pwm.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/spi.hpp"><code>inc/kb/port/stm32/spi.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/time.hpp"><code>inc/kb/port/stm32/time.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/uart.hpp"><code>inc/kb/port/stm32/uart.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/spi.cpp"><code>src/spi.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/uart.cpp"><code>src/uart.cpp</code></a>.</p>
 </details>
 <p>Every type satisfies its concepts (<code>static_assert</code> beside its definition) and converts to the contract's
 type-erased <code>*Ref</code> (<code>I2cBusRef</code>, <code>SpiDeviceRef</code>, ...), proven at compile time in <code>kb/port/stm32/port.hpp</code> and at

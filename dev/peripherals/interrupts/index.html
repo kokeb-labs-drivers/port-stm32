@@ -16,7 +16,7 @@
         <link rel="prev" href="../time-log/">
       
       
-        <link rel="next" href="../../error-mapping/">
+        <link rel="next" href="../../dma/">
       
       
         
@@ -361,6 +361,47 @@
     
   
   Peripherals
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../dma/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  DMA
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../assurance/bench/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Bench verification
 
         </a>
       </li>
@@ -1061,6 +1102,98 @@
   
   
     <li class="md-nav__item">
+      <a href="../../dma/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DMA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    <li class="md-nav__item md-nav__item--pruned md-nav__item--nested">
+      
+        
+  
+  
+  
+    <a href="../../assurance/bench/" class="md-nav__link">
+      
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench verification
+  
+
+    
+  </span>
+  
+  
+
+      
+        <span class="md-nav__icon md-icon"></span>
+      
+    </a>
+  
+
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../error-mapping/" class="md-nav__link">
         
   
@@ -1348,6 +1481,11 @@ vectors, each only where the device header defines the instance, and calls the e
 <td><code>HAL_ADC_IRQHandler</code> of each open instance on the vector</td>
 </tr>
 <tr>
+<td><code>HandleDmaIrq(engine, stream)</code></td>
+<td><code>DMA1_Stream0_IRQHandler</code> ... <code>DMA2_Stream7_IRQHandler</code> (F4, H7), <code>DMA1_Channel1_IRQHandler</code> ... (G4, L4)</td>
+<td>The started <code>DmaStream</code>'s service (or its owner's hook, an ADC stream); an unowned stream's line is disabled (<a href="../../dma/">DMA</a>)</td>
+</tr>
+<tr>
 <td><code>HandleCanIrq(controller)</code></td>
 <td><code>FDCANn_IT0_IRQHandler</code> (G4, H7), <code>CANn_TX_IRQHandler</code>, <code>CANn_RX0_IRQHandler</code>, <code>CANn_SCE_IRQHandler</code> (F4, L4)</td>
 <td><code>HAL_FDCAN_IRQHandler</code> / <code>HAL_CAN_IRQHandler</code> of the open controller</td>
@@ -1424,13 +1562,13 @@ The table is in <a href="../../integration/">Integration</a>.</p>
         
         
           
-          <a href="../../error-mapping/" class="md-footer__link md-footer__link--next" aria-label="Next: Error mapping">
+          <a href="../../dma/" class="md-footer__link md-footer__link--next" aria-label="Next: DMA">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Error mapping
+                DMA
               </div>
             </div>
             <div class="md-footer__button md-icon">

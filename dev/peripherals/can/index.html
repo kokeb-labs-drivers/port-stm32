@@ -374,6 +374,47 @@
   
   
     <li class="md-tabs__item">
+      <a href="../../dma/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  DMA
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../assurance/bench/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Bench verification
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../../error-mapping/" class="md-tabs__link">
         
   
@@ -1105,6 +1146,98 @@
   
   
     <li class="md-nav__item">
+      <a href="../../dma/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DMA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    <li class="md-nav__item md-nav__item--pruned md-nav__item--nested">
+      
+        
+  
+  
+  
+    <a href="../../assurance/bench/" class="md-nav__link">
+      
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench verification
+  
+
+    
+  </span>
+  
+  
+
+      
+        <span class="md-nav__icon md-icon"></span>
+      
+    </a>
+  
+
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../error-mapping/" class="md-nav__link">
         
   
@@ -1451,7 +1584,7 @@ reception by interrupt into a ring, waits on the port's clock (<a href="../../wa
 <details class="kb-figure-desc">
 <summary>Figure description and sources</summary>
 <p>The driver's Send call reaches the CanController, which takes its send lock and adds the frame to a free TX FIFO element (FDCAN) or mailbox (bxCAN) through HAL CAN, sleeping for the transmit-complete interrupt when none is free. The controller sends the frame to the Other node, which acknowledges it. A frame the Other node sends lands in RX FIFO 0, and the HAL CAN receive callback moves every frame into the port's ring of 32 frames at once. The driver's Receive call takes its own receive lock and the oldest frame of the ring, waiting for the receive interrupt when the ring is empty; frames lost to a full FIFO or ring are reported as Overflow by the next Receive.</p>
-<p>Drawn from: <a href="../../model/can-send-receive.seq.yml"><code>docs/model/can-send-receive.seq.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/can.hpp"><code>inc/kb/port/stm32/can.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/boundary/can.cpp"><code>src/boundary/can.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/can.cpp"><code>src/can.cpp</code></a>.</p>
+<p>Drawn from: <a href="../../model/can-send-receive.seq.yml"><code>docs/model/can-send-receive.seq.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/can.hpp"><code>inc/kb/port/stm32/can.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/boundary/can.cpp"><code>src/boundary/can.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/can.cpp"><code>src/can.cpp</code></a>.</p>
 </details>
 <p>Modes (<code>CanConfig::mode</code>): <code>Normal</code>, <code>Loopback</code> (internal: frames sent are received, the bus is not driven) and
 <code>ListenOnly</code> (bus monitoring / silent).</p>

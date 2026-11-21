@@ -374,6 +374,47 @@
   
   
     <li class="md-tabs__item">
+      <a href="../../dma/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  DMA
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../assurance/bench/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Bench verification
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../../error-mapping/" class="md-tabs__link">
         
   
@@ -1094,6 +1135,98 @@
   
   
     <li class="md-nav__item">
+      <a href="../../dma/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DMA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    <li class="md-nav__item md-nav__item--pruned md-nav__item--nested">
+      
+        
+  
+  
+  
+    <a href="../../assurance/bench/" class="md-nav__link">
+      
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench verification
+  
+
+    
+  </span>
+  
+  
+
+      
+        <span class="md-nav__icon md-icon"></span>
+      
+    </a>
+  
+
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../error-mapping/" class="md-nav__link">
         
   
@@ -1421,7 +1554,7 @@ handler, and every wait is on the port's clock, asleep under an RTOS (<a href=".
 <details class="kb-figure-desc">
 <summary>Figure description and sources</summary>
 <p>The driver's Write call reaches the Uart, which takes its writer lock and enables the transmit-empty interrupt; the port's UART IRQ handler then sends the frame to the Device byte by byte and completes the write at the last byte, with a DE pin at transmit-complete. The driver's Read call takes the reader lock and sleeps while the ring is empty, at most its timeout. The Device's reply arrives on RX, and the UART IRQ handler puts each byte into the port's ring of 256 bytes, latches any receive error and wakes the Read, which takes what the ring holds; the count returns to the driver.</p>
-<p>Drawn from: <a href="../../model/uart-write-read.seq.yml"><code>docs/model/uart-write-read.seq.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/uart.hpp"><code>inc/kb/port/stm32/uart.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/boundary/uart.cpp"><code>src/boundary/uart.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/completion.cpp"><code>src/completion.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/uart.cpp"><code>src/uart.cpp</code></a>.</p>
+<p>Drawn from: <a href="../../model/uart-write-read.seq.yml"><code>docs/model/uart-write-read.seq.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/uart.hpp"><code>inc/kb/port/stm32/uart.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/boundary/uart.cpp"><code>src/boundary/uart.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/completion.cpp"><code>src/completion.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/uart.cpp"><code>src/uart.cpp</code></a>.</p>
 </details>
 <h2 id="pins-and-clock">Pins and clock<a class="headerlink" href="#pins-and-clock" title="Permanent link">&para;</a></h2>
 <table>

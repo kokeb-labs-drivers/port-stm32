@@ -374,6 +374,47 @@
   
   
     <li class="md-tabs__item">
+      <a href="../../dma/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  DMA
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../assurance/bench/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Bench verification
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../../error-mapping/" class="md-tabs__link">
         
   
@@ -1105,6 +1146,98 @@
   
   
     <li class="md-nav__item">
+      <a href="../../dma/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DMA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    <li class="md-nav__item md-nav__item--pruned md-nav__item--nested">
+      
+        
+  
+  
+  
+    <a href="../../assurance/bench/" class="md-nav__link">
+      
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench verification
+  
+
+    
+  </span>
+  
+  
+
+      
+        <span class="md-nav__icon md-icon"></span>
+      
+    </a>
+  
+
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../error-mapping/" class="md-nav__link">
         
   
@@ -1444,7 +1577,7 @@ first.</p>
 <details class="kb-figure-desc">
 <summary>Figure description and sources</summary>
 <p>The driver's Transfer call reaches the SpiDevice, which takes the bus lock within its timeout and, when another device used the bus last, initialises the HAL SPI again with its own mode and prescaler. It drives its chip select GPIO low, starts HAL_SPI_TransmitReceive_IT, and the HAL's interrupt handler clocks the bytes to the Device and reads its reply. The task sleeps on the port's Completion until the HAL's completion callback, at most the timeout per chunk, then the SpiDevice raises chip select; a timeout aborts the transfer and the peripheral is initialised again before the next frame. A kb::Status returns to the driver.</p>
-<p>Drawn from: <a href="../../model/spi-transfer.seq.yml"><code>docs/model/spi-transfer.seq.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/spi.hpp"><code>inc/kb/port/stm32/spi.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/boundary/spi.cpp"><code>src/boundary/spi.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/completion.cpp"><code>src/completion.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/spi.cpp"><code>src/spi.cpp</code></a>.</p>
+<p>Drawn from: <a href="../../model/spi-transfer.seq.yml"><code>docs/model/spi-transfer.seq.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/spi.hpp"><code>inc/kb/port/stm32/spi.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/boundary/spi.cpp"><code>src/boundary/spi.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/completion.cpp"><code>src/completion.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/spi.cpp"><code>src/spi.cpp</code></a>.</p>
 </details>
 <p>Chip select is a GPIO, not the peripheral's NSS: any pin can be a chip select, and CS stays low across chunks. Its
 idle level is written before the pin becomes an output.</p>
@@ -1539,10 +1672,11 @@ reported as <code>BusError</code> (<code>HAL_SPI_ERROR_OVR</code>). The ceilings
 <strong>a bench measurement per family is an open verification item (not yet done)</strong>. At the ceiling the handler takes
 most of the CPU for the frame's duration (at the SPI interrupt's priority): long frames are cheaper on a slower SCK,
 or with DMA.</p>
-<p>Not implemented: DMA, and a polled path above the ceiling. Observed with an earlier implementation on STM32H7
-hardware, SPI by circular DMA into non-cacheable SRAM ran at about 4.8 % of a 240 MHz core against about 28 % for the
-polled path, with zero errors; DMA is the way past the ceiling and comes with the H7 cache rules of
-<a href="../../integration/">Integration</a>. A polled register loop for short frames would busy-wait at the caller's priority,
+<p>DMA is the way past the ceiling: with an <code>SpiDmaLink</code> attached (<code>SpiBus::AttachDma</code>), frames of at least its
+<code>min_bytes</code> go by DMA through the bus's staging buffers at the device's full SCK (<a href="../../dma/">DMA</a>); shorter frames
+stay interrupt-driven at the ceiling. Observed with an earlier implementation on STM32H7 hardware, SPI by circular
+DMA into non-cacheable SRAM ran at about 4.8 % of a 240 MHz core against about 28 % for the polled path, with zero
+errors. Not implemented: a polled path above the ceiling. A polled register loop for short frames would busy-wait at the caller's priority,
 which the port's wait rule excludes under an RTOS (<a href="../../waits/">How the port waits</a>), so it is not offered.</p>
 <h2 id="timing-limits">Timing limits<a class="headerlink" href="#timing-limits" title="Permanent link">&para;</a></h2>
 <table>

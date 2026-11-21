@@ -370,6 +370,47 @@
   
   
     <li class="md-tabs__item">
+      <a href="../dma/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  DMA
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../assurance/bench/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Bench verification
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../error-mapping/" class="md-tabs__link">
         
   
@@ -700,6 +741,98 @@
     
   
     Peripherals
+  
+
+    
+  </span>
+  
+  
+
+      
+        <span class="md-nav__icon md-icon"></span>
+      
+    </a>
+  
+
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dma/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DMA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    <li class="md-nav__item md-nav__item--pruned md-nav__item--nested">
+      
+        
+  
+  
+  
+    <a href="../assurance/bench/" class="md-nav__link">
+      
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench verification
   
 
     
@@ -1248,6 +1381,24 @@
   models in <code>docs/model/</code> (light and dark SVG, readable on a phone).</li>
 <li>CI path filter: a pull request that changes only documentation runs only the docs, handbook and DCO checks; the
   gate allows the code jobs to be skipped only then. The docs publish only from main and <code>v*</code> tags.</li>
+<li>DMA (<code>docs/dma.md</code>), on kb-core's <code>kb::dma</code> vocabulary: <code>dma.hpp</code> (masters and region tags of each
+  family, <code>RequireStream</code> / <code>RequireStreamReaches</code>, <code>DmaStream</code> over DMA1/DMA2 streams and channels with the NVIC
+  priority written from the board's assignment and read back, every flag serviced by its own clear bit on every
+  interrupt entry, a stop bounded in core cycles that proves EN reads 0, quarantine and <code>Recover()</code>; <code>DmaTransfer</code>
+  over a leased <code>kb::dma::Buffer</code>; the cache hooks and the start-time placement and MPU check), <code>spi_dma.hpp</code>
+  (<code>SpiDmaLink</code>: SPI by DMA through a staging pair per bus, H7 order with TSIZE, frames from <code>min_bytes</code> at the full
+  SCK, <code>Capabilities()</code>, <code>Health()</code>, <code>Limits()</code> and <code>Recover()</code> on <code>SpiBus</code>, <code>SpiLimitsOf</code>) and <code>adc_stream.hpp</code>
+  (<code>AdcDmaStream</code>: a timer-triggered scan into a <code>kb::dma::Stream</code> of two frames, OVRMOD 0 with the overrun counted in
+  the drain, the interrupt the only drainer, seqlock publication, supervision, idempotent start, the kernel clock
+  read and never selected, DMA only when the conversion count read back equals the frame, else the one-shot fallback,
+  reported). The DMA vectors of each family dispatch to the started stream.</li>
+<li>kb-core's DMA conformance suite T1 to T18 runs on the port (its DMA boundary linked against kb-core's host
+  DMA-and-cache model, <code>tests/dma_model/</code>), in the AXI (<code>Maintained</code>) and D2 (<code>NonCacheable</code>) regions; unit and
+  compile-fail tests of the DMA layer.</li>
+<li>The DMA bench kit: <code>tests/target/dma/dma_bench.cpp</code> (built for the four families by the example project), the
+  procedure for an STM32H7 board with its wiring figures, the evidence form (<code>docs/assurance/bench/</code>).</li>
+<li>Known limit: <code>kb::dma::Stream</code> needs 64-bit atomics that the Arm GNU toolchain lowers to <code>libatomic</code> calls it does
+  not ship; the bench app carries a weak pair (<code>tests/target/dma/atomic64.c</code>) until kb-core keeps 32-bit stamps.</li>
 </ul>
 <h3 id="removed">Removed<a class="headerlink" href="#removed" title="Permanent link">&para;</a></h3>
 <ul>
@@ -1257,6 +1408,15 @@
 </ul>
 <h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
 <ul>
+<li>kb-core moves to its republished main with the <code>kb::dma</code> part; <code>tools/kb_core_snapshot.py</code> copies the paths
+  kb-core's <code>tools/layout/layout.py vendor</code> names instead of a list of its own.</li>
+<li>Port codes 0xFA to 0xFE (DMA error, quarantined, placement, frame too large, priority read-back); <code>MapHalStatus</code>
+  maps placement and priority to <code>NotReady</code> and a frame too large to <code>OutOfRange</code>.</li>
+<li>An <code>AdcChannel</code> on an instance an ADC stream owns is refused (<code>Busy</code>).</li>
+<li>The interrupt vectors include the DMA streams or channels of the device (<code>KB_PORT_STM32_VECTORS_EXCLUDE</code> keeps one
+  for the application).</li>
+<li>The FreeRTOS example configuration enables recursive mutexes and the stack high-water mark, which kb-core's
+  FreeRTOS backend now uses.</li>
 <li>Source layout: every public header has a source file of the same name (<code>src/adc.cpp</code> for <code>adc.hpp</code>, and so
   on; <code>irq.hpp</code> and <code>version.hpp</code> are header-only), and the HAL boundary is one file per HAL component in
   <code>src/boundary/</code> (<code>i2c.cpp</code>, <code>spi.cpp</code>, <code>uart.cpp</code>, <code>gpio.cpp</code>, <code>adc.cpp</code>, <code>timer.cpp</code>, <code>can.cpp</code>, <code>time.cpp</code>,

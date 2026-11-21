@@ -372,6 +372,47 @@
   
   
     <li class="md-tabs__item">
+      <a href="../dma/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  DMA
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../assurance/bench/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Bench verification
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../error-mapping/" class="md-tabs__link">
         
   
@@ -727,6 +768,98 @@
   
   
     <li class="md-nav__item">
+      <a href="../dma/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DMA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    <li class="md-nav__item md-nav__item--pruned md-nav__item--nested">
+      
+        
+  
+  
+  
+    <a href="../assurance/bench/" class="md-nav__link">
+      
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench verification
+  
+
+    
+  </span>
+  
+  
+
+      
+        <span class="md-nav__icon md-icon"></span>
+      
+    </a>
+  
+
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../error-mapping/" class="md-nav__link">
         
   
@@ -844,7 +977,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -866,14 +999,14 @@
             </a>
             
               
-              <label class="md-nav__link md-nav__link--active" for="__nav_10" id="__nav_10_label" tabindex="">
+              <label class="md-nav__link md-nav__link--active" for="__nav_12" id="__nav_12_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_10">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_12">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1180,15 +1313,15 @@ committed figure no longer matches the code. Each figure below lists the files i
 <details class="kb-figure-desc">
 <summary>Figure description and sources</summary>
 <p>The driver's Send call reaches the CanController, which takes its send lock and adds the frame to a free TX FIFO element (FDCAN) or mailbox (bxCAN) through HAL CAN, sleeping for the transmit-complete interrupt when none is free. The controller sends the frame to the Other node, which acknowledges it. A frame the Other node sends lands in RX FIFO 0, and the HAL CAN receive callback moves every frame into the port's ring of 32 frames at once. The driver's Receive call takes its own receive lock and the oldest frame of the ring, waiting for the receive interrupt when the ring is empty; frames lost to a full FIFO or ring are reported as Overflow by the next Receive.</p>
-<p>Drawn from: <a href="../model/can-send-receive.seq.yml"><code>docs/model/can-send-receive.seq.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/can.hpp"><code>inc/kb/port/stm32/can.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/boundary/can.cpp"><code>src/boundary/can.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/can.cpp"><code>src/can.cpp</code></a>.</p>
+<p>Drawn from: <a href="../model/can-send-receive.seq.yml"><code>docs/model/can-send-receive.seq.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/can.hpp"><code>inc/kb/port/stm32/can.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/boundary/can.cpp"><code>src/boundary/can.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/can.cpp"><code>src/can.cpp</code></a>.</p>
 </details>
 <p>Hardware description: <a href="../model/can-send-receive.seq.yml"><code>docs/model/can-send-receive.seq.yml</code></a></p>
 <p>Drawn from:</p>
 <ul>
 <li><a href="../model/can-send-receive.seq.yml"><code>docs/model/can-send-receive.seq.yml</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/can.hpp"><code>inc/kb/port/stm32/can.hpp</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/boundary/can.cpp"><code>src/boundary/can.cpp</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/can.cpp"><code>src/can.cpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/can.hpp"><code>inc/kb/port/stm32/can.hpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/boundary/can.cpp"><code>src/boundary/can.cpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/can.cpp"><code>src/can.cpp</code></a></li>
 </ul>
 <h2 id="one-i2c-register-read">One I2C register read<a class="headerlink" href="#one-i2c-register-read" title="Permanent link">&para;</a></h2>
 <figure class="kb-figure">
@@ -1199,16 +1332,16 @@ committed figure no longer matches the code. Each figure below lists the files i
 <details class="kb-figure-desc">
 <summary>Figure description and sources</summary>
 <p>The driver's WriteRead call reaches the I2cController, which takes its lock within the timeout and clears stale transfer state in the peripheral. It starts HAL_I2C_Master_Seq_Transmit_IT without a STOP; the HAL I2C interrupt handler sends START, the address with the write bit and the register bytes to the Device, and its completion callback wakes the task. The controller then starts HAL_I2C_Master_Seq_Receive_IT, which sends a repeated START and the address with the read bit, reads the reply and ends with STOP. Both phases share one timeout on the port's clock; the controller classifies the HAL status and error code, restores the handle after a failure, runs the bus recovery when SDA or SCL stays low, and returns a kb::Status to the driver.</p>
-<p>Drawn from: <a href="../model/i2c-write-read.seq.yml"><code>docs/model/i2c-write-read.seq.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/i2c.hpp"><code>inc/kb/port/stm32/i2c.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/boundary/i2c.cpp"><code>src/boundary/i2c.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/completion.cpp"><code>src/completion.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/i2c.cpp"><code>src/i2c.cpp</code></a>.</p>
+<p>Drawn from: <a href="../model/i2c-write-read.seq.yml"><code>docs/model/i2c-write-read.seq.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/i2c.hpp"><code>inc/kb/port/stm32/i2c.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/boundary/i2c.cpp"><code>src/boundary/i2c.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/completion.cpp"><code>src/completion.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/i2c.cpp"><code>src/i2c.cpp</code></a>.</p>
 </details>
 <p>Hardware description: <a href="../model/i2c-write-read.seq.yml"><code>docs/model/i2c-write-read.seq.yml</code></a></p>
 <p>Drawn from:</p>
 <ul>
 <li><a href="../model/i2c-write-read.seq.yml"><code>docs/model/i2c-write-read.seq.yml</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/i2c.hpp"><code>inc/kb/port/stm32/i2c.hpp</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/boundary/i2c.cpp"><code>src/boundary/i2c.cpp</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/completion.cpp"><code>src/completion.cpp</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/i2c.cpp"><code>src/i2c.cpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/i2c.hpp"><code>inc/kb/port/stm32/i2c.hpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/boundary/i2c.cpp"><code>src/boundary/i2c.cpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/completion.cpp"><code>src/completion.cpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/i2c.cpp"><code>src/i2c.cpp</code></a></li>
 </ul>
 <h2 id="contracts-on-the-stm32-port">Contracts on the STM32 port<a class="headerlink" href="#contracts-on-the-stm32-port" title="Permanent link">&para;</a></h2>
 <figure class="kb-figure">
@@ -1219,24 +1352,24 @@ committed figure no longer matches the code. Each figure below lists the files i
 <details class="kb-figure-desc">
 <summary>Figure description and sources</summary>
 <p>Rows are the peripherals I2C, SPI, UART, CAN, ADC, PWM, GPIO, Clock and delay, Log and Pulse output; the columns are the base contract of the peripheral and its extra contracts. Native means the contract maps onto the HAL module or core peripheral named in the cell; adapted means the port adds its own logic to meet it, such as its own UART interrupt handler and receive ring, or an SPI clock capped at the interrupt ceiling. Planned marks a contract or form kb-core has not defined yet, and n/a one that kb-core does not have.</p>
-<p>Drawn from: <a href="../model/port-contracts.matrix.yml"><code>docs/model/port-contracts.matrix.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/adc.hpp"><code>inc/kb/port/stm32/adc.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/can.hpp"><code>inc/kb/port/stm32/can.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/gpio.hpp"><code>inc/kb/port/stm32/gpio.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/i2c.hpp"><code>inc/kb/port/stm32/i2c.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/log.hpp"><code>inc/kb/port/stm32/log.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/port.hpp"><code>inc/kb/port/stm32/port.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/pwm.hpp"><code>inc/kb/port/stm32/pwm.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/spi.hpp"><code>inc/kb/port/stm32/spi.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/time.hpp"><code>inc/kb/port/stm32/time.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/uart.hpp"><code>inc/kb/port/stm32/uart.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/spi.cpp"><code>src/spi.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/uart.cpp"><code>src/uart.cpp</code></a>.</p>
+<p>Drawn from: <a href="../model/port-contracts.matrix.yml"><code>docs/model/port-contracts.matrix.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/adc.hpp"><code>inc/kb/port/stm32/adc.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/can.hpp"><code>inc/kb/port/stm32/can.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/gpio.hpp"><code>inc/kb/port/stm32/gpio.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/i2c.hpp"><code>inc/kb/port/stm32/i2c.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/log.hpp"><code>inc/kb/port/stm32/log.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/port.hpp"><code>inc/kb/port/stm32/port.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/pwm.hpp"><code>inc/kb/port/stm32/pwm.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/spi.hpp"><code>inc/kb/port/stm32/spi.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/time.hpp"><code>inc/kb/port/stm32/time.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/uart.hpp"><code>inc/kb/port/stm32/uart.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/spi.cpp"><code>src/spi.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/uart.cpp"><code>src/uart.cpp</code></a>.</p>
 </details>
 <p>Hardware description: <a href="../model/port-contracts.matrix.yml"><code>docs/model/port-contracts.matrix.yml</code></a></p>
 <p>Drawn from:</p>
 <ul>
 <li><a href="../model/port-contracts.matrix.yml"><code>docs/model/port-contracts.matrix.yml</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/adc.hpp"><code>inc/kb/port/stm32/adc.hpp</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/can.hpp"><code>inc/kb/port/stm32/can.hpp</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/gpio.hpp"><code>inc/kb/port/stm32/gpio.hpp</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/i2c.hpp"><code>inc/kb/port/stm32/i2c.hpp</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/log.hpp"><code>inc/kb/port/stm32/log.hpp</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/port.hpp"><code>inc/kb/port/stm32/port.hpp</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/pwm.hpp"><code>inc/kb/port/stm32/pwm.hpp</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/spi.hpp"><code>inc/kb/port/stm32/spi.hpp</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/time.hpp"><code>inc/kb/port/stm32/time.hpp</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/uart.hpp"><code>inc/kb/port/stm32/uart.hpp</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/spi.cpp"><code>src/spi.cpp</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/uart.cpp"><code>src/uart.cpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/adc.hpp"><code>inc/kb/port/stm32/adc.hpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/can.hpp"><code>inc/kb/port/stm32/can.hpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/gpio.hpp"><code>inc/kb/port/stm32/gpio.hpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/i2c.hpp"><code>inc/kb/port/stm32/i2c.hpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/log.hpp"><code>inc/kb/port/stm32/log.hpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/port.hpp"><code>inc/kb/port/stm32/port.hpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/pwm.hpp"><code>inc/kb/port/stm32/pwm.hpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/spi.hpp"><code>inc/kb/port/stm32/spi.hpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/time.hpp"><code>inc/kb/port/stm32/time.hpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/uart.hpp"><code>inc/kb/port/stm32/uart.hpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/spi.cpp"><code>src/spi.cpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/uart.cpp"><code>src/uart.cpp</code></a></li>
 </ul>
 <h2 id="one-spi-frame">One SPI frame<a class="headerlink" href="#one-spi-frame" title="Permanent link">&para;</a></h2>
 <figure class="kb-figure">
@@ -1247,16 +1380,16 @@ committed figure no longer matches the code. Each figure below lists the files i
 <details class="kb-figure-desc">
 <summary>Figure description and sources</summary>
 <p>The driver's Transfer call reaches the SpiDevice, which takes the bus lock within its timeout and, when another device used the bus last, initialises the HAL SPI again with its own mode and prescaler. It drives its chip select GPIO low, starts HAL_SPI_TransmitReceive_IT, and the HAL's interrupt handler clocks the bytes to the Device and reads its reply. The task sleeps on the port's Completion until the HAL's completion callback, at most the timeout per chunk, then the SpiDevice raises chip select; a timeout aborts the transfer and the peripheral is initialised again before the next frame. A kb::Status returns to the driver.</p>
-<p>Drawn from: <a href="../model/spi-transfer.seq.yml"><code>docs/model/spi-transfer.seq.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/spi.hpp"><code>inc/kb/port/stm32/spi.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/boundary/spi.cpp"><code>src/boundary/spi.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/completion.cpp"><code>src/completion.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/spi.cpp"><code>src/spi.cpp</code></a>.</p>
+<p>Drawn from: <a href="../model/spi-transfer.seq.yml"><code>docs/model/spi-transfer.seq.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/spi.hpp"><code>inc/kb/port/stm32/spi.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/boundary/spi.cpp"><code>src/boundary/spi.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/completion.cpp"><code>src/completion.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/spi.cpp"><code>src/spi.cpp</code></a>.</p>
 </details>
 <p>Hardware description: <a href="../model/spi-transfer.seq.yml"><code>docs/model/spi-transfer.seq.yml</code></a></p>
 <p>Drawn from:</p>
 <ul>
 <li><a href="../model/spi-transfer.seq.yml"><code>docs/model/spi-transfer.seq.yml</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/spi.hpp"><code>inc/kb/port/stm32/spi.hpp</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/boundary/spi.cpp"><code>src/boundary/spi.cpp</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/completion.cpp"><code>src/completion.cpp</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/spi.cpp"><code>src/spi.cpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/spi.hpp"><code>inc/kb/port/stm32/spi.hpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/boundary/spi.cpp"><code>src/boundary/spi.cpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/completion.cpp"><code>src/completion.cpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/spi.cpp"><code>src/spi.cpp</code></a></li>
 </ul>
 <h2 id="a-uart-request-and-reply">A UART request and reply<a class="headerlink" href="#a-uart-request-and-reply" title="Permanent link">&para;</a></h2>
 <figure class="kb-figure">
@@ -1267,16 +1400,16 @@ committed figure no longer matches the code. Each figure below lists the files i
 <details class="kb-figure-desc">
 <summary>Figure description and sources</summary>
 <p>The driver's Write call reaches the Uart, which takes its writer lock and enables the transmit-empty interrupt; the port's UART IRQ handler then sends the frame to the Device byte by byte and completes the write at the last byte, with a DE pin at transmit-complete. The driver's Read call takes the reader lock and sleeps while the ring is empty, at most its timeout. The Device's reply arrives on RX, and the UART IRQ handler puts each byte into the port's ring of 256 bytes, latches any receive error and wakes the Read, which takes what the ring holds; the count returns to the driver.</p>
-<p>Drawn from: <a href="../model/uart-write-read.seq.yml"><code>docs/model/uart-write-read.seq.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/uart.hpp"><code>inc/kb/port/stm32/uart.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/boundary/uart.cpp"><code>src/boundary/uart.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/completion.cpp"><code>src/completion.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/uart.cpp"><code>src/uart.cpp</code></a>.</p>
+<p>Drawn from: <a href="../model/uart-write-read.seq.yml"><code>docs/model/uart-write-read.seq.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/uart.hpp"><code>inc/kb/port/stm32/uart.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/boundary/uart.cpp"><code>src/boundary/uart.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/completion.cpp"><code>src/completion.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/uart.cpp"><code>src/uart.cpp</code></a>.</p>
 </details>
 <p>Hardware description: <a href="../model/uart-write-read.seq.yml"><code>docs/model/uart-write-read.seq.yml</code></a></p>
 <p>Drawn from:</p>
 <ul>
 <li><a href="../model/uart-write-read.seq.yml"><code>docs/model/uart-write-read.seq.yml</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/uart.hpp"><code>inc/kb/port/stm32/uart.hpp</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/boundary/uart.cpp"><code>src/boundary/uart.cpp</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/completion.cpp"><code>src/completion.cpp</code></a></li>
-<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/uart.cpp"><code>src/uart.cpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/uart.hpp"><code>inc/kb/port/stm32/uart.hpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/boundary/uart.cpp"><code>src/boundary/uart.cpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/completion.cpp"><code>src/completion.cpp</code></a></li>
+<li><a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/uart.cpp"><code>src/uart.cpp</code></a></li>
 </ul>
 
 

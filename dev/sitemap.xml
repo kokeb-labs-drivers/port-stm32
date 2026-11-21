@@ -13,6 +13,10 @@
          <lastmod>2026-11-21</lastmod>
     </url>
     <url>
+         <loc>https://kokeb-labs-drivers.github.io/port-stm32/latest/dma/</loc>
+         <lastmod>2026-11-21</lastmod>
+    </url>
+    <url>
          <loc>https://kokeb-labs-drivers.github.io/port-stm32/latest/error-mapping/</loc>
          <lastmod>2026-11-21</lastmod>
     </url>
@@ -54,6 +58,22 @@
     </url>
     <url>
          <loc>https://kokeb-labs-drivers.github.io/port-stm32/latest/waits/</loc>
+         <lastmod>2026-11-21</lastmod>
+    </url>
+    <url>
+         <loc>https://kokeb-labs-drivers.github.io/port-stm32/latest/assurance/bench/</loc>
+         <lastmod>2026-11-21</lastmod>
+    </url>
+    <url>
+         <loc>https://kokeb-labs-drivers.github.io/port-stm32/latest/assurance/bench/evidence-form/</loc>
+         <lastmod>2026-11-21</lastmod>
+    </url>
+    <url>
+         <loc>https://kokeb-labs-drivers.github.io/port-stm32/latest/assurance/bench/procedure-stm32h7/</loc>
+         <lastmod>2026-11-21</lastmod>
+    </url>
+    <url>
+         <loc>https://kokeb-labs-drivers.github.io/port-stm32/latest/assurance/bench/runs/</loc>
          <lastmod>2026-11-21</lastmod>
     </url>
     <url>

@@ -372,6 +372,47 @@
   
   
     <li class="md-tabs__item">
+      <a href="../dma/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  DMA
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../assurance/bench/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Bench verification
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../error-mapping/" class="md-tabs__link">
         
   
@@ -727,6 +768,98 @@
   
   
     <li class="md-nav__item">
+      <a href="../dma/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DMA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    <li class="md-nav__item md-nav__item--pruned md-nav__item--nested">
+      
+        
+  
+  
+  
+    <a href="../assurance/bench/" class="md-nav__link">
+      
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench verification
+  
+
+    
+  </span>
+  
+  
+
+      
+        <span class="md-nav__icon md-icon"></span>
+      
+    </a>
+  
+
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../error-mapping/" class="md-nav__link">
         
   
@@ -844,7 +977,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -866,14 +999,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="">
+              <label class="md-nav__link " for="__nav_12" id="__nav_12_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_10">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_12">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1260,6 +1393,12 @@ interrupt APIs (<code>*_IT</code>) call the port's HAL callbacks at once, as the
 port's handler while a transmit interrupt is enabled; <code>fake::Stall</code> holds an area's interrupts to prove every
 timeout and its stop-and-restore. Each variant has only the macros its family's HAL has (the F4 fake has no 7-bit
 UART word).</p>
+<p>The DMA boundary files (<code>src/boundary/dma.cpp</code>, <code>spi_dma.cpp</code>, <code>adc_stream.cpp</code>) are the exception:
+the tests link <code>tests/dma_model/dma_model.cpp</code> in their place, the same <code>sdk::</code> calls over kb-core's host
+DMA-and-cache model (the files themselves are compiled over the fakes' register declarations, not linked, so the MISRA
+scan and clang-tidy see them) (<code>kb::dma::host::Machine</code>, <code>DmaEngine</code>, <code>HwRing</code>). kb-core's conformance suite T1 to T18 runs
+against the port's real classes through the adapter rigs of <code>tests/dma_model/port_rig.hpp</code>; the result per case is in
+<a href="../dma/">DMA</a>.</p>
 <table>
 <thead>
 <tr>
@@ -1277,8 +1416,16 @@ UART word).</p>
 <td>The same tests over an F4-like device: I2C v1 (ClockSpeed), bxCAN, no ADC calibration, the SR-register UART flags</td>
 </tr>
 <tr>
+<td><code>test_dma_conformance.cpp</code> (in both variants)</td>
+<td>kb-core's DMA conformance suite T1 to T18 on the port, in the <code>Maintained</code> (AXI) and <code>NonCacheable</code> (D2) regions; T1, T2 and T7 also with a defect in the boundary model, which they catch</td>
+</tr>
+<tr>
+<td><code>test_dma.cpp</code>, <code>test_spi_dma.cpp</code>, <code>test_adc_stream.cpp</code></td>
+<td>The DMA layer: B31 (a flag with nothing in flight cleared, counted, no re-entry), B32 (NVIC priority read back), B33 (conversion count against the frame, one-shot fallback), the SPI order, errors, quarantine and recovery, the ADC stream's supervision, overrun, seqlock and start rules</td>
+</tr>
+<tr>
 <td><code>kb_port_stm32_compile_fail_*</code></td>
-<td>Misuse is a compile error: a <code>*Ref</code> of the wrong contract, a copied controller, an output pin as an input</td>
+<td>Misuse is a compile error: a <code>*Ref</code> of the wrong contract, a copied controller, an output pin as an input, a DTCM buffer for DMA1, a stream priority outside the implemented bits, an engine that is not DMA&frac12;, a driver frame above the staging buffers, an ADC frame that is not 16-bit samples</td>
 </tr>
 <tr>
 <td><code>kb_port_stm32_header_checks</code></td>
@@ -1373,7 +1520,8 @@ Behaviour on silicon (TIMINGR at the bus, the interrupt-driven transfers and the
 stuck slave and of a BUSY flag that stays set, FDCAN and bxCAN bus-off recovery and receive bursts, ADC accuracy,
 UART at high baud rates under interrupt load, the FreeRTOS example) needs a bench run per family. The earlier
 implementation's hardware observations that shaped these rules are quoted where they apply (I2C, UART, SPI, clock,
-integration); they were made on STM32H7 hardware, not with this port.</p>
+integration); they were made on STM32H7 hardware, not with this port. The DMA layer has its own bench kit
+(<code>tests/target/dma/</code>, built in CI) and procedure: <a href="../assurance/bench/">Bench verification</a>.</p>
 
 
 

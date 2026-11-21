@@ -374,6 +374,47 @@
   
   
     <li class="md-tabs__item">
+      <a href="../dma/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  DMA
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../assurance/bench/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Bench verification
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../error-mapping/" class="md-tabs__link">
         
   
@@ -840,6 +881,98 @@
   
   
     <li class="md-nav__item">
+      <a href="../dma/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DMA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    <li class="md-nav__item md-nav__item--pruned md-nav__item--nested">
+      
+        
+  
+  
+  
+    <a href="../assurance/bench/" class="md-nav__link">
+      
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench verification
+  
+
+    
+  </span>
+  
+  
+
+      
+        <span class="md-nav__icon md-icon"></span>
+      
+    </a>
+  
+
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../error-mapping/" class="md-nav__link">
         
   
@@ -1254,10 +1387,16 @@ first task), never from a static constructor: an RTOS object created before the 
 raised until the scheduler starts, which stops the HAL time base. The example under <code>EXAMPLE_RTOS=FREERTOS</code> does
 this.</p>
 <h2 id="caches-and-dma-h7">Caches and DMA (H7)<a class="headerlink" href="#caches-and-dma-h7" title="Permanent link">&para;</a></h2>
-<p>The port moves data by interrupt (the CPU copies every byte); it uses no DMA. CPU-path transfers need no cache
-maintenance, and caller buffers may be anywhere the CPU can reach, D-cache on or off.</p>
-<p>When DMA is added to the port, these rules apply on STM32H7 (observed with an earlier implementation on STM32H7
-hardware):</p>
+<p>Interrupt-driven transfers are CPU copies: they need no cache maintenance, and caller buffers may be anywhere the CPU
+can reach, D-cache on or off. DMA transfers (<a href="../dma/">DMA</a>) never use a caller buffer: they go through port-owned
+<code>kb::dma::Buffer</code>s the board places in a DMA region. The board's start-up owns the MPU (the D2 window: one region,
+non-cacheable, shareable) and the caches; the port reads the MPU back at start and refuses a mismatch. A board's DMA
+buffer sections are loaded like <code>.data</code> (a <code>kb::dma::Buffer</code> holds its data address), not NOLOAD.</p>
+<p>The port's DMA vectors (<code>DMA1_Stream0_IRQHandler</code> ... or <code>DMA1_Channel1_IRQHandler</code> ...) dispatch to the started
+<code>DmaStream</code> and disable the line of a stream the port does not own. An application that keeps a DMA vector for
+itself names it in <code>KB_PORT_STM32_VECTORS_EXCLUDE</code> and calls <code>kb::port::stm32::HandleDmaIrq(engine, stream)</code> for the
+port's streams.</p>
+<p>The rules behind the DMA layer on STM32H7 (observed with an earlier implementation on STM32H7 hardware):</p>
 <ul>
 <li>DMA buffers are 32-byte aligned and sized to whole cache lines; the D-cache is cleaned before a transmit and
   invalidated before the CPU reads received data, or the buffers are in an MPU region marked non-cacheable;</li>

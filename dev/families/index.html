@@ -374,6 +374,47 @@
   
   
     <li class="md-tabs__item">
+      <a href="../dma/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  DMA
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../assurance/bench/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Bench verification
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../error-mapping/" class="md-tabs__link">
         
   
@@ -796,6 +837,98 @@
   
   
     <li class="md-nav__item">
+      <a href="../dma/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DMA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    <li class="md-nav__item md-nav__item--pruned md-nav__item--nested">
+      
+        
+  
+  
+  
+    <a href="../assurance/bench/" class="md-nav__link">
+      
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench verification
+  
+
+    
+  </span>
+  
+  
+
+      
+        <span class="md-nav__icon md-icon"></span>
+      
+    </a>
+  
+
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../error-mapping/" class="md-nav__link">
         
   
@@ -1164,8 +1297,11 @@ macros (<code>I2C4</code>, <code>FDCAN2</code>, <code>TIM5</code>, ...) so a per
 <li><strong>Timer clocks.</strong> Timers run at twice their APB clock when the APB prescaler is not 1 (the RM's rule), and at
   HCLK (up to an APB divider of 4, else 4 x PCLK) when TIMPRE is set (F42x/F43x/F446 DCKCFGR, H7 CFGR); the port
   applies both. <code>timer_clock_hz</code> overrides them.</li>
-<li><strong>H7 caches.</strong> The port's transfers are CPU copies (interrupt driven, no DMA), so the D-cache needs no
-  maintenance for them; the rules for DMA are in <a href="../integration/">Integration</a>.</li>
+<li><strong>H7 caches.</strong> Interrupt-driven transfers are CPU copies and need no cache maintenance. DMA transfers use
+  port-owned buffers in the D2 window (MPU non-cacheable, the default) or in AXI SRAM (cleaned and invalidated by
+  line): <a href="../dma/">DMA</a>.</li>
+<li><strong>DMA engines.</strong> DMA1 and DMA2: streams 0 to 7 with DMAMUX1 on H7, streams 0 to 7 with <code>CHSEL</code> on F4, channels 1
+  to 8 with DMAMUX1 on G4, channels 1 to 7 with <code>CSELR</code> on L4 (<a href="../dma/">DMA</a>).</li>
 <li><strong>Dual-core H7</strong> (<code>STM32H745xx</code>, <code>STM32H747xx</code>, <code>STM32H755xx</code>, <code>STM32H757xx</code>) is refused at configure time, and
   <code>CORE_CM4</code> at compile time (<a href="../integration/">Integration</a>).</li>
 </ul>

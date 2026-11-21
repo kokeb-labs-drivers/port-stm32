@@ -374,6 +374,47 @@
   
   
     <li class="md-tabs__item">
+      <a href="../../dma/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  DMA
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../assurance/bench/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Bench verification
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../../error-mapping/" class="md-tabs__link">
         
   
@@ -1127,6 +1168,98 @@
   
   
     <li class="md-nav__item">
+      <a href="../../dma/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DMA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    <li class="md-nav__item md-nav__item--pruned md-nav__item--nested">
+      
+        
+  
+  
+  
+    <a href="../../assurance/bench/" class="md-nav__link">
+      
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench verification
+  
+
+    
+  </span>
+  
+  
+
+      
+        <span class="md-nav__icon md-icon"></span>
+      
+    </a>
+  
+
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../error-mapping/" class="md-nav__link">
         
   
@@ -1491,7 +1624,7 @@ completion callback, asleep under an RTOS (<a href="../../waits/">How the port w
 <details class="kb-figure-desc">
 <summary>Figure description and sources</summary>
 <p>The driver's WriteRead call reaches the I2cController, which takes its lock within the timeout and clears stale transfer state in the peripheral. It starts HAL_I2C_Master_Seq_Transmit_IT without a STOP; the HAL I2C interrupt handler sends START, the address with the write bit and the register bytes to the Device, and its completion callback wakes the task. The controller then starts HAL_I2C_Master_Seq_Receive_IT, which sends a repeated START and the address with the read bit, reads the reply and ends with STOP. Both phases share one timeout on the port's clock; the controller classifies the HAL status and error code, restores the handle after a failure, runs the bus recovery when SDA or SCL stays low, and returns a kb::Status to the driver.</p>
-<p>Drawn from: <a href="../../model/i2c-write-read.seq.yml"><code>docs/model/i2c-write-read.seq.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/i2c.hpp"><code>inc/kb/port/stm32/i2c.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/boundary/i2c.cpp"><code>src/boundary/i2c.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/completion.cpp"><code>src/completion.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/i2c.cpp"><code>src/i2c.cpp</code></a>.</p>
+<p>Drawn from: <a href="../../model/i2c-write-read.seq.yml"><code>docs/model/i2c-write-read.seq.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/inc/kb/port/stm32/i2c.hpp"><code>inc/kb/port/stm32/i2c.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/boundary/i2c.cpp"><code>src/boundary/i2c.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/completion.cpp"><code>src/completion.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/4805264d1879947cca85e222f04f693d58bb0a65/src/i2c.cpp"><code>src/i2c.cpp</code></a>.</p>
 </details>
 <p>The controller owns the instance: a second <code>I2cController</code> on it gets <code>Busy</code> from <code>EnsureReady()</code>.</p>
 <h2 id="pins-and-clock">Pins and clock<a class="headerlink" href="#pins-and-clock" title="Permanent link">&para;</a></h2>
