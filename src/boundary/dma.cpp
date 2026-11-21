@@ -28,11 +28,9 @@
 // The device's DMA kind selects preprocessor branches below: a macro by necessity.
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define KB_PORT_STM32_DMA_STREAMS 1 // F4, H7: DMA_Stream_TypeDef, streams 0 to 7
-#elif defined(DMA1_Channel1)
+#else
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define KB_PORT_STM32_DMA_STREAMS 0 // G4, L4: DMA_Channel_TypeDef, channels 1 to 8
-#else
-#error "the device has no DMA1"
 #endif
 
 namespace kb::port::stm32::sdk {
