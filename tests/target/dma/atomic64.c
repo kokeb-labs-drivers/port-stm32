@@ -1,4 +1,4 @@
-/* Boundary file (deviations/boundary-files.yml), targets only: the two 64-bit atomic helpers the
+/* Bench code (outside the MISRA claim): the two 64-bit atomic helpers the
  * GNU toolchain calls for std::atomic<uint64_t> on a 32-bit Cortex-M, which has no 64-bit exclusive
  * load/store and whose arm-none-eabi toolchain ships no libatomic. kb::dma::Stream keeps its frame
  * time stamp in one (adc_stream.hpp). Single-core: interrupts are masked (PRIMASK saved and

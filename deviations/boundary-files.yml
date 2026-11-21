@@ -8,9 +8,6 @@ boundary_files:
   - path: src/boundary/adc_stream.cpp
     sdk: stm32cube-hal
     status: present
-  - path: src/boundary/atomic64.c
-    sdk: cmsis-core
-    status: present
   - path: src/boundary/can.cpp
     sdk: stm32cube-hal
     status: present

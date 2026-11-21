@@ -22,7 +22,7 @@ handbook at level `high` (`.kokeb/handbook.yml`).
 - `cmake/`: the pinned HAL fetch (`kb_port_stm32_hal.cmake`), the pinned FreeRTOS-Kernel fetch for the example
   (`kb_port_stm32_freertos.cmake`), the kb-core copy check, an Arm toolchain file.
 - `tests/`: host tests; `tests/fakes/stm32/` fakes every HAL call the boundary files make; `tests/dma_model/` is the
-  host form of the DMA boundary (`dma`, `spi_dma`, `adc_stream`, `atomic64`: compiled for targets only) over kb-core's
+  host form of the DMA boundary (`dma`, `spi_dma`, `adc_stream`: linked into the targets only) over kb-core's
   DMA-and-cache model, and the adapter rigs that run kb-core's DMA conformance suite on the port ([DMA](docs/dma.md));
   `tests/target/dma/` is the DMA bench app (built by the example project, run by hand: `docs/assurance/bench/`).
 - `examples/stm32/`: one firmware project for the four families (`boards/<board>/`): the port's self test.

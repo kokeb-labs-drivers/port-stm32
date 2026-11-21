@@ -28,8 +28,8 @@ All notable changes of port-stm32. The format follows Keep a Changelog; versions
   compile-fail tests of the DMA layer.
 - The DMA bench kit: `tests/target/dma/dma_bench.cpp` (built for the four families by the example project), the
   procedure for an STM32H7 board with its wiring figures, the evidence form (`docs/assurance/bench/`).
-- `src/boundary/atomic64.c` (targets only): the 64-bit atomic load and store the Arm GNU toolchain calls for
-  `std::atomic<uint64_t>` on a Cortex-M, which `kb::dma::Stream` uses.
+- Known limit: `kb::dma::Stream` needs 64-bit atomics that the Arm GNU toolchain lowers to `libatomic` calls it does
+  not ship; the bench app carries a weak pair (`tests/target/dma/atomic64.c`) until kb-core keeps 32-bit stamps.
 
 ### Removed
 

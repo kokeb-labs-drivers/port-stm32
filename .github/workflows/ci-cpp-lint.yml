@@ -17,7 +17,5 @@ jobs:
     with:
       clang_version: "20"
       cmake_args: "-DKB_PORT_STM32_BUILD_TESTS=ON"
-      # kb-core and the drivers have their own CI; ci-cmake-matrix.yml builds the examples; tests are test code. The DMA
-      # boundary files are compiled for the targets only (the host links tests/dma_model in their place, so they have no
-      # compile-database entry); the family builds compile them with -Wall -Wextra -Werror and the preflight formats them.
-      ignore: "build|.git|third_party|drivers|examples|tests|src/boundary/dma.cpp|src/boundary/spi_dma.cpp|src/boundary/adc_stream.cpp|src/boundary/atomic64.c"
+      # kb-core and the drivers have their own CI; ci-cmake-matrix.yml builds the examples; tests are test code.
+      ignore: "build|.git|third_party|drivers|examples|tests"

@@ -16,7 +16,7 @@ port's handler while a transmit interrupt is enabled; `fake::Stall` holds an are
 timeout and its stop-and-restore. Each variant has only the macros its family's HAL has (the F4 fake has no 7-bit
 UART word).
 
-The DMA boundary files (`src/boundary/dma.cpp`, `spi_dma.cpp`, `adc_stream.cpp`, `atomic64.c`) are the exception:
+The DMA boundary files (`src/boundary/dma.cpp`, `spi_dma.cpp`, `adc_stream.cpp`) are the exception:
 the tests link `tests/dma_model/dma_model.cpp` in their place, the same `sdk::` calls over kb-core's host
 DMA-and-cache model (the files themselves are compiled over the fakes' register declarations, not linked, so the MISRA
 scan and clang-tidy see them) (`kb::dma::host::Machine`, `DmaEngine`, `HwRing`). kb-core's conformance suite T1 to T18 runs

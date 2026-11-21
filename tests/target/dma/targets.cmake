@@ -6,11 +6,11 @@
 # Copyright (c) 2026 The port-stm32 authors
 if(EXAMPLE_RTOS STREQUAL "NONE")
   set(_bench "${_root}/tests/target/dma")
-  add_executable(dma_bench "${_bench}/dma_bench.cpp" "${KB_PORT_STM32_STARTUP}")
+  add_executable(dma_bench "${_bench}/dma_bench.cpp" "${_bench}/atomic64.c" "${KB_PORT_STM32_STARTUP}")
   target_include_directories(dma_bench PRIVATE "${_board}" "${_root}/src")
   target_link_libraries(dma_bench PRIVATE kb::port_stm32)
   target_compile_options(dma_bench PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions -fno-rtti -fno-threadsafe-statics
-                         -Wall -Wextra -Werror>)
+                         -Wall -Wextra -Werror> $<$<COMPILE_LANGUAGE:C>:-Wall -Wextra -Werror>)
   if(EXAMPLE_BOARD STREQUAL "h7")
     set(_bench_ld "${_bench}/h7_dma.ld")
   else()

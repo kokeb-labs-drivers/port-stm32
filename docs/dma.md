@@ -84,12 +84,14 @@ whole lines it owns, so an invalidate never reaches a neighbour.
 | DMA or fallback | DMA only when a stream is assigned **and** the conversion count read back from the sequence register equals `StreamShape.elements`; otherwise the one-shot fallback (each `Service()` converts every rank by interrupt), reported in `FallbackReason()`, `Mode()`, `Capabilities()`, `Health()` and every frame |
 | Calibration | Offset and linearity on H7, offset on G4 and L4, none on F4 |
 
-### 64-bit atomics on Cortex-M
+### 64-bit atomics on Cortex-M (known limit)
 
 `kb::dma::Stream` keeps its frame time stamp in a `std::atomic<uint64_t>`. A 32-bit Cortex-M has no 64-bit atomic
-load or store and the Arm GNU toolchain ships no `libatomic`, so the port provides `__atomic_load_8` and
-`__atomic_store_8` for the targets (`src/boundary/atomic64.c`: interrupts masked for the two word accesses, correct on
-a single core; weak, so a toolchain or application definition wins).
+load or store, the Arm GNU toolchain lowers them to calls of `__atomic_load_8` and `__atomic_store_8`, and it ships
+no `libatomic`: a firmware that uses `AdcDmaStream` does not link without them. The port library does not provide
+them (they are reserved names taking a pointer to void, which would need a MISRA deviation in the port). The bench
+app carries a weak pair (`tests/target/dma/atomic64.c`: interrupts masked for the two word accesses, correct on a
+single core) that an application may copy until kb-core keeps the time stamp in 32-bit atomics.
 
 ## Errata handled
 

@@ -34,8 +34,7 @@ set(KB_PORT_STM32_BOUNDARY_SOURCES
     src/boundary/uart.cpp)
 # The DMA boundary (streams, the SPI and ADC sides of a DMA transfer, cache and MPU): on host the tests link a model
 # of it instead (tests/dma_model, over kb-core's kb::dma::host), so these files are compiled for the targets only.
-set(KB_PORT_STM32_DMA_BOUNDARY_SOURCES src/boundary/adc_stream.cpp src/boundary/atomic64.c src/boundary/dma.cpp
-    src/boundary/spi_dma.cpp)
+set(KB_PORT_STM32_DMA_BOUNDARY_SOURCES src/boundary/adc_stream.cpp src/boundary/dma.cpp src/boundary/spi_dma.cpp)
 set(KB_PORT_STM32_VECTOR_SOURCE src/boundary/vectors.cpp)
 
 include("${CMAKE_CURRENT_LIST_DIR}/cmake/kb_port_stm32_kb_core.cmake")

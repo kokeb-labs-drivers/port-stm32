@@ -33,8 +33,9 @@ function(kb_port_stm32_variant name)
                          -Werror)
   # The fake HAL headers stand where the HAL's would: -isystem, like the SDK on target.
   target_include_directories(${name} SYSTEM PRIVATE "${_fakes}/include")
-  target_link_libraries(${name} PUBLIC kb_port_stm32_api ${name}_hal ${name}_dma)
-  # The model calls back into the port (HandleDmaIrq) and the port into the model: one link group.
+  target_link_libraries(${name} PUBLIC kb_port_stm32_api ${name}_hal)
+  # The model is linked by the test executables after the port (it calls back into it: HandleDmaIrq); it is not a
+  # dependency of the port library, so the scan build (kb_port_stm32_scan) never compiles it beside the real boundary.
   target_link_libraries(${name}_dma PRIVATE ${name})
 endfunction()
 
@@ -67,7 +68,7 @@ foreach(_v IN ITEMS g4 f4)
   target_compile_options(${_name} PRIVATE ${KB_PORT_STM32_STRICT_FLAGS})
   target_include_directories(${_name} PRIVATE "${_harness}" "${CMAKE_CURRENT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/src")
   target_compile_definitions(${_name} PRIVATE _GLIBCXX_ASSERTIONS=1)
-  target_link_libraries(${_name} PRIVATE kb_port_stm32_${_v})
+  target_link_libraries(${_name} PRIVATE kb_port_stm32_${_v} kb_port_stm32_${_v}_dma kb_port_stm32_${_v})
   add_test(NAME ${_name} COMMAND ${_name})
 endforeach()
 
