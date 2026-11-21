@@ -102,72 +102,6 @@
   <meta property="og:description" content="kb-core's bus, pin, clock and log contracts implemented over the STM32Cube HAL for STM32 G4, H7, F4 and L4.">
   <meta property="og:url" content="https://kokeb-labs-drivers.github.io/port-stm32/latest/peripherals/can/">
   <meta name="twitter:card" content="summary">
-  <script>
-(function () {
-  if (typeof mermaid != "undefined" && !(mermaid instanceof Element)) return;
-  var SRC = "https://unpkg.com/mermaid@11.17.2/dist/mermaid.min.js",
-      SRI = "sha384-EOXBFmc3gx5mb+vn0vPvvGqACToJD24hhacX5Yx+8NUUQrHIle/Qi5Bg9o3zKwW2", config = {}, real, loading;
-  var waiting = [], io = null, ahead = false, ENGAGE = ["scroll", "keydown", "pointerdown", "touchstart"];
-  var stub = {
-    initialize: function (c) { config = c || {}; if (real) real.initialize(config); },
-    render: function (id, text) {
-      var el = null, pres = document.querySelectorAll("pre.mermaid:not([data-kb-mermaid])");
-      for (var i = 0; i < pres.length && !el; i++) if (pres[i].textContent === text) el = pres[i];
-      if (el) el.setAttribute("data-kb-mermaid", "");
-      return near(el).then(load).then(function (m) { return m.render(id, text); });
-    }
-  };
-  function load() {
-    return loading || (loading = new Promise(function (resolve, reject) {
-      var s = document.createElement("script");
-      s.src = SRC;
-      s.integrity = SRI;
-      s.crossOrigin = "anonymous";
-      s.onload = function () {
-        real = window.mermaid;
-        window.mermaid = stub;
-        real.initialize(config);
-        resolve(real);
-      };
-      s.onerror = function () { loading = null; reject(new Error("Mermaid did not load")); };
-      document.head.appendChild(s);
-    }));
-  }
-  // One observer for the diagrams still waiting: on the screen only until the reader engages, then a screen ahead.
-  function watch() {
-    if (io) io.disconnect();
-    io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (e) {
-        if (e.isIntersecting) release(function (w) { return w.el === e.target; });
-      });
-    }, { rootMargin: ahead ? "100% 0px" : "0px" });
-    waiting.forEach(function (w) { io.observe(w.el); });
-  }
-  function release(which) {
-    waiting = waiting.filter(function (w) {
-      if (!which(w)) return true;
-      io.unobserve(w.el);
-      w.go();
-      return false;
-    });
-  }
-  function near(el) {
-    if (real || !el || !("IntersectionObserver" in window)) return Promise.resolve();
-    return new Promise(function (resolve) {
-      waiting.push({ el: el, go: resolve });
-      if (io) io.observe(el); else watch();
-    });
-  }
-  function engaged() {
-    ENGAGE.forEach(function (t) { window.removeEventListener(t, engaged, true); });
-    ahead = true;
-    if (io) watch();
-  }
-  ENGAGE.forEach(function (t) { window.addEventListener(t, engaged, { capture: true, passive: true }); });
-  window.addEventListener("beforeprint", function () { if (io) release(function () { return true; }); });
-  window.mermaid = stub;
-})();
-</script>
 
   </head>
   
@@ -1264,6 +1198,10 @@
       
         
       
+        
+          
+        
+      
     
     
     
@@ -1505,6 +1443,16 @@ reception by interrupt into a ring, waits on the port's clock (<a href="../../wa
 </tr>
 </tbody>
 </table>
+<figure class="kb-figure">
+<img src="../../diagrams/can-send-receive.svg#only-light" alt="Sequence of a CAN Send and a Receive on the STM32 port, in which Send puts the frame into a free transmit slot of the HAL, the receive interrupt moves every frame into the port&#x27;s ring, and Receive takes the oldest one." width="580" height="860"><img src="../../diagrams/can-send-receive.dark.svg#only-dark" alt="Sequence of a CAN Send and a Receive on the STM32 port, in which Send puts the frame into a free transmit slot of the HAL, the receive interrupt moves every frame into the port&#x27;s ring, and Receive takes the oldest one." width="580" height="860">
+<figcaption>Sending and receiving a CAN frame</figcaption>
+</figure>
+
+<details class="kb-figure-desc">
+<summary>Figure description and sources</summary>
+<p>The driver's Send call reaches the CanController, which takes its send lock and adds the frame to a free TX FIFO element (FDCAN) or mailbox (bxCAN) through HAL CAN, sleeping for the transmit-complete interrupt when none is free. The controller sends the frame to the Other node, which acknowledges it. A frame the Other node sends lands in RX FIFO 0, and the HAL CAN receive callback moves every frame into the port's ring of 32 frames at once. The driver's Receive call takes its own receive lock and the oldest frame of the ring, waiting for the receive interrupt when the ring is empty; frames lost to a full FIFO or ring are reported as Overflow by the next Receive.</p>
+<p>Drawn from: <a href="../../model/can-send-receive.seq.yml"><code>docs/model/can-send-receive.seq.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/can.hpp"><code>inc/kb/port/stm32/can.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/boundary/can.cpp"><code>src/boundary/can.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/can.cpp"><code>src/can.cpp</code></a>.</p>
+</details>
 <p>Modes (<code>CanConfig::mode</code>): <code>Normal</code>, <code>Loopback</code> (internal: frames sent are received, the bus is not driven) and
 <code>ListenOnly</code> (bus monitoring / silent).</p>
 <h2 id="bit-timing">Bit timing<a class="headerlink" href="#bit-timing" title="Permanent link">&para;</a></h2>

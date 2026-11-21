@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://kokeb-labs-drivers.github.io/port-stm32/latest/changelog/">
       
       
-        <link rel="prev" href="../kb-core-dependency/">
+        <link rel="prev" href="../diagrams/">
       
       
       
@@ -100,72 +100,6 @@
   <meta property="og:description" content="kb-core's bus, pin, clock and log contracts implemented over the STM32Cube HAL for STM32 G4, H7, F4 and L4.">
   <meta property="og:url" content="https://kokeb-labs-drivers.github.io/port-stm32/latest/changelog/">
   <meta name="twitter:card" content="summary">
-  <script>
-(function () {
-  if (typeof mermaid != "undefined" && !(mermaid instanceof Element)) return;
-  var SRC = "https://unpkg.com/mermaid@11.17.2/dist/mermaid.min.js",
-      SRI = "sha384-EOXBFmc3gx5mb+vn0vPvvGqACToJD24hhacX5Yx+8NUUQrHIle/Qi5Bg9o3zKwW2", config = {}, real, loading;
-  var waiting = [], io = null, ahead = false, ENGAGE = ["scroll", "keydown", "pointerdown", "touchstart"];
-  var stub = {
-    initialize: function (c) { config = c || {}; if (real) real.initialize(config); },
-    render: function (id, text) {
-      var el = null, pres = document.querySelectorAll("pre.mermaid:not([data-kb-mermaid])");
-      for (var i = 0; i < pres.length && !el; i++) if (pres[i].textContent === text) el = pres[i];
-      if (el) el.setAttribute("data-kb-mermaid", "");
-      return near(el).then(load).then(function (m) { return m.render(id, text); });
-    }
-  };
-  function load() {
-    return loading || (loading = new Promise(function (resolve, reject) {
-      var s = document.createElement("script");
-      s.src = SRC;
-      s.integrity = SRI;
-      s.crossOrigin = "anonymous";
-      s.onload = function () {
-        real = window.mermaid;
-        window.mermaid = stub;
-        real.initialize(config);
-        resolve(real);
-      };
-      s.onerror = function () { loading = null; reject(new Error("Mermaid did not load")); };
-      document.head.appendChild(s);
-    }));
-  }
-  // One observer for the diagrams still waiting: on the screen only until the reader engages, then a screen ahead.
-  function watch() {
-    if (io) io.disconnect();
-    io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (e) {
-        if (e.isIntersecting) release(function (w) { return w.el === e.target; });
-      });
-    }, { rootMargin: ahead ? "100% 0px" : "0px" });
-    waiting.forEach(function (w) { io.observe(w.el); });
-  }
-  function release(which) {
-    waiting = waiting.filter(function (w) {
-      if (!which(w)) return true;
-      io.unobserve(w.el);
-      w.go();
-      return false;
-    });
-  }
-  function near(el) {
-    if (real || !el || !("IntersectionObserver" in window)) return Promise.resolve();
-    return new Promise(function (resolve) {
-      waiting.push({ el: el, go: resolve });
-      if (io) io.observe(el); else watch();
-    });
-  }
-  function engaged() {
-    ENGAGE.forEach(function (t) { window.removeEventListener(t, engaged, true); });
-    ahead = true;
-    if (io) watch();
-  }
-  ENGAGE.forEach(function (t) { window.addEventListener(t, engaged, { capture: true, passive: true }); });
-  window.addEventListener("beforeprint", function () { if (io) release(function () { return true; }); });
-  window.mermaid = stub;
-})();
-</script>
 
   </head>
   
@@ -884,6 +818,10 @@
       
         
       
+        
+          
+        
+      
     
     
     
@@ -1009,6 +947,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#added" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#removed" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1064,7 +1013,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#added" class="md-nav__link">
+  <a href="#added_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         Added
@@ -1092,7 +1041,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#added_1" class="md-nav__link">
+  <a href="#added_2" class="md-nav__link">
     <span class="md-ellipsis">
       
         Added
@@ -1154,6 +1103,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#added" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#removed" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1209,7 +1169,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#added" class="md-nav__link">
+  <a href="#added_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         Added
@@ -1237,7 +1197,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#added_1" class="md-nav__link">
+  <a href="#added_2" class="md-nav__link">
     <span class="md-ellipsis">
       
         Added
@@ -1281,6 +1241,14 @@
 <p>All notable changes of port-stm32. The format follows Keep a Changelog; versions follow Semantic Versioning (before
 1.0 a minor version may break).</p>
 <h2 id="unreleased">[Unreleased]<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
+<h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Figures: a matrix of the bus contracts the port implements (native, adapted, planned, not available) on the home
+  page, and a sequence of one transaction through the port on the I2C, SPI, UART and CAN pages, drawn by figkit from
+  models in <code>docs/model/</code> (light and dark SVG, readable on a phone).</li>
+<li>CI path filter: a pull request that changes only documentation runs only the docs, handbook and DCO checks; the
+  gate allows the code jobs to be skipped only then. The docs publish only from main and <code>v*</code> tags.</li>
+</ul>
 <h3 id="removed">Removed<a class="headerlink" href="#removed" title="Permanent link">&para;</a></h3>
 <ul>
 <li>The <code>drivers/</code> submodules (pcal9555, tmc5160, bno08x), <code>drivers/drivers.lock.yml</code>, the pin-hygiene workflow and
@@ -1386,7 +1354,7 @@
 <li>kb-core copy re-pinned to kb-core <code>main</code> (<code>efd67da</code>); the snapshot tool copies the whole <code>cmake/</code> folder and refuses
   a commit that is not on <code>origin/main</code>.</li>
 </ul>
-<h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
+<h3 id="added_1">Added<a class="headerlink" href="#added_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>completion.hpp</code> (<code>Deadline</code>, <code>Completion</code>), <code>docs/waits.md</code>, <code>docs/integration.md</code> (CubeMX, priorities, RTOS
   start-up, the H7 cache and DMA rules, dual core), <code>docs/kb-core-dependency.md</code>, <code>docs/misra-review.md</code>.</li>
@@ -1394,7 +1362,7 @@
 </ul>
 <h2 id="010-rc1">[0.1.0-rc.1]<a class="headerlink" href="#010-rc1" title="Permanent link">&para;</a></h2>
 <p>First release candidate: kb-core's contracts over the STM32Cube HAL for the STM32 G4, H7, F4 and L4 families.</p>
-<h3 id="added_1">Added<a class="headerlink" href="#added_1" title="Permanent link">&para;</a></h3>
+<h3 id="added_2">Added<a class="headerlink" href="#added_2" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>I2cController</code> (<code>I2cBus</code>): TIMINGR computed from the kernel clock (I2C v2) or ClockSpeed (F4), address and data
   NACK told apart, stuck-bus detection and nine-clock recovery on the pins as GPIO, one owner per instance,
@@ -1453,7 +1421,7 @@
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../kb-core-dependency/" class="md-footer__link md-footer__link--prev" aria-label="Previous: kb-core dependency plan">
+          <a href="../diagrams/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Figures">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -1463,7 +1431,7 @@
                 Previous
               </span>
               <div class="md-ellipsis">
-                kb-core dependency plan
+                Figures
               </div>
             </div>
           </a>

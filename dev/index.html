@@ -100,72 +100,6 @@
   <meta property="og:description" content="kb-core's bus, pin, clock and log contracts implemented over the STM32Cube HAL for STM32 G4, H7, F4 and L4.">
   <meta property="og:url" content="https://kokeb-labs-drivers.github.io/port-stm32/latest/">
   <meta name="twitter:card" content="summary">
-  <script>
-(function () {
-  if (typeof mermaid != "undefined" && !(mermaid instanceof Element)) return;
-  var SRC = "https://unpkg.com/mermaid@11.17.2/dist/mermaid.min.js",
-      SRI = "sha384-EOXBFmc3gx5mb+vn0vPvvGqACToJD24hhacX5Yx+8NUUQrHIle/Qi5Bg9o3zKwW2", config = {}, real, loading;
-  var waiting = [], io = null, ahead = false, ENGAGE = ["scroll", "keydown", "pointerdown", "touchstart"];
-  var stub = {
-    initialize: function (c) { config = c || {}; if (real) real.initialize(config); },
-    render: function (id, text) {
-      var el = null, pres = document.querySelectorAll("pre.mermaid:not([data-kb-mermaid])");
-      for (var i = 0; i < pres.length && !el; i++) if (pres[i].textContent === text) el = pres[i];
-      if (el) el.setAttribute("data-kb-mermaid", "");
-      return near(el).then(load).then(function (m) { return m.render(id, text); });
-    }
-  };
-  function load() {
-    return loading || (loading = new Promise(function (resolve, reject) {
-      var s = document.createElement("script");
-      s.src = SRC;
-      s.integrity = SRI;
-      s.crossOrigin = "anonymous";
-      s.onload = function () {
-        real = window.mermaid;
-        window.mermaid = stub;
-        real.initialize(config);
-        resolve(real);
-      };
-      s.onerror = function () { loading = null; reject(new Error("Mermaid did not load")); };
-      document.head.appendChild(s);
-    }));
-  }
-  // One observer for the diagrams still waiting: on the screen only until the reader engages, then a screen ahead.
-  function watch() {
-    if (io) io.disconnect();
-    io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (e) {
-        if (e.isIntersecting) release(function (w) { return w.el === e.target; });
-      });
-    }, { rootMargin: ahead ? "100% 0px" : "0px" });
-    waiting.forEach(function (w) { io.observe(w.el); });
-  }
-  function release(which) {
-    waiting = waiting.filter(function (w) {
-      if (!which(w)) return true;
-      io.unobserve(w.el);
-      w.go();
-      return false;
-    });
-  }
-  function near(el) {
-    if (real || !el || !("IntersectionObserver" in window)) return Promise.resolve();
-    return new Promise(function (resolve) {
-      waiting.push({ el: el, go: resolve });
-      if (io) io.observe(el); else watch();
-    });
-  }
-  function engaged() {
-    ENGAGE.forEach(function (t) { window.removeEventListener(t, engaged, true); });
-    ahead = true;
-    if (io) watch();
-  }
-  ENGAGE.forEach(function (t) { window.addEventListener(t, engaged, { capture: true, passive: true }); });
-  window.addEventListener("beforeprint", function () { if (io) release(function () { return true; }); });
-  window.mermaid = stub;
-})();
-</script>
 
   </head>
   
@@ -975,6 +909,10 @@
       
         
       
+        
+          
+        
+      
     
     
     
@@ -1243,6 +1181,19 @@ run on an STM32 without a line of HAL code in the driver.</p>
 </tr>
 </tbody>
 </table>
+<p>The same at a glance: native where the contract maps onto the HAL module or core peripheral, adapted where the port
+adds its own logic to meet it (the UART's own interrupt handler and receive ring, the SPI clock capped at the
+interrupt ceiling).</p>
+<figure class="kb-figure">
+<img src="diagrams/port-contracts.svg#only-light" alt="Matrix of the kb-core contracts the STM32 port implements for I2C, SPI, UART, CAN, ADC, PWM, GPIO, clock and log, each marked native, adapted, planned or not available." width="631" height="826"><img src="diagrams/port-contracts.dark.svg#only-dark" alt="Matrix of the kb-core contracts the STM32 port implements for I2C, SPI, UART, CAN, ADC, PWM, GPIO, clock and log, each marked native, adapted, planned or not available." width="631" height="826">
+<figcaption>Contracts on the STM32 port</figcaption>
+</figure>
+
+<details class="kb-figure-desc">
+<summary>Figure description and sources</summary>
+<p>Rows are the peripherals I2C, SPI, UART, CAN, ADC, PWM, GPIO, Clock and delay, Log and Pulse output; the columns are the base contract of the peripheral and its extra contracts. Native means the contract maps onto the HAL module or core peripheral named in the cell; adapted means the port adds its own logic to meet it, such as its own UART interrupt handler and receive ring, or an SPI clock capped at the interrupt ceiling. Planned marks a contract or form kb-core has not defined yet, and n/a one that kb-core does not have.</p>
+<p>Drawn from: <a href="model/port-contracts.matrix.yml"><code>docs/model/port-contracts.matrix.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/adc.hpp"><code>inc/kb/port/stm32/adc.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/can.hpp"><code>inc/kb/port/stm32/can.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/gpio.hpp"><code>inc/kb/port/stm32/gpio.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/i2c.hpp"><code>inc/kb/port/stm32/i2c.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/log.hpp"><code>inc/kb/port/stm32/log.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/port.hpp"><code>inc/kb/port/stm32/port.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/pwm.hpp"><code>inc/kb/port/stm32/pwm.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/spi.hpp"><code>inc/kb/port/stm32/spi.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/time.hpp"><code>inc/kb/port/stm32/time.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/uart.hpp"><code>inc/kb/port/stm32/uart.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/spi.cpp"><code>src/spi.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/uart.cpp"><code>src/uart.cpp</code></a>.</p>
+</details>
 <p>Every type satisfies its concepts (<code>static_assert</code> beside its definition) and converts to the contract's
 type-erased <code>*Ref</code> (<code>I2cBusRef</code>, <code>SpiDeviceRef</code>, ...), proven at compile time in <code>kb/port/stm32/port.hpp</code> and at
 run time in the host tests.</p>

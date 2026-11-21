@@ -1,0 +1,40 @@
+---
+kind: seq
+id: can-send-receive
+title: Sending and receiving a CAN frame
+kicker: port-stm32
+subtitle: FDCAN (G4, H7) or bxCAN (F4, L4) in classic mode; received frames go into the port's ring by interrupt.
+alt: >-
+  Sequence of a CAN Send and a Receive on the STM32 port, in which Send puts the frame into a free transmit slot of
+  the HAL, the receive interrupt moves every frame into the port's ring, and Receive takes the oldest one.
+reads: >-
+  The driver's Send call reaches the CanController, which takes its send lock and adds the frame to a free TX FIFO
+  element (FDCAN) or mailbox (bxCAN) through HAL CAN, sleeping for the transmit-complete interrupt when none is free.
+  The controller sends the frame to the Other node, which acknowledges it. A frame the Other node sends lands in RX
+  FIFO 0, and the HAL CAN receive callback moves every frame into the port's ring of 32 frames at once. The driver's
+  Receive call takes its own receive lock and the oldest frame of the ring, waiting for the receive interrupt when
+  the ring is empty; frames lost to a full FIFO or ring are reported as Overflow by the next Receive.
+profile: phone
+print: portrait
+sources:
+  - src/can.cpp
+  - src/boundary/can.cpp
+  - inc/kb/port/stm32/can.hpp
+participants:
+  - {id: ctl, label: CanController, tone: amber}
+  - {id: hal, label: HAL CAN, tone: slate}
+  - {id: bus, label: Other node, tone: green}
+steps:
+  - {note: "the driver calls Send(frame, t)", over: [ctl, hal], tone: blue}
+  - {from: ctl, to: ctl, label: send lock}
+  - {from: ctl, to: hal, label: add to a free TX slot}
+  - {note: "none free: sleep for TX complete", over: [ctl, hal]}
+  - {from: hal, to: ctl, label: "queued: Ok", return: true}
+  - {from: hal, to: bus, label: frame on the bus}
+  - {from: bus, to: hal, label: ACK slot, return: true}
+  - {from: bus, to: hal, label: a frame for us, dashed: true}
+  - {from: hal, to: ctl, label: "RX callback: into ring"}
+  - {note: "the driver calls Receive(frame, t)", over: [ctl, hal], tone: blue}
+  - {from: ctl, to: ctl, label: receive lock}
+  - {from: ctl, to: ctl, label: oldest frame of ring}
+  - {note: "frames lost: Overflow next time", over: [ctl, hal]}

@@ -102,72 +102,6 @@
   <meta property="og:description" content="kb-core's bus, pin, clock and log contracts implemented over the STM32Cube HAL for STM32 G4, H7, F4 and L4.">
   <meta property="og:url" content="https://kokeb-labs-drivers.github.io/port-stm32/latest/peripherals/spi/">
   <meta name="twitter:card" content="summary">
-  <script>
-(function () {
-  if (typeof mermaid != "undefined" && !(mermaid instanceof Element)) return;
-  var SRC = "https://unpkg.com/mermaid@11.17.2/dist/mermaid.min.js",
-      SRI = "sha384-EOXBFmc3gx5mb+vn0vPvvGqACToJD24hhacX5Yx+8NUUQrHIle/Qi5Bg9o3zKwW2", config = {}, real, loading;
-  var waiting = [], io = null, ahead = false, ENGAGE = ["scroll", "keydown", "pointerdown", "touchstart"];
-  var stub = {
-    initialize: function (c) { config = c || {}; if (real) real.initialize(config); },
-    render: function (id, text) {
-      var el = null, pres = document.querySelectorAll("pre.mermaid:not([data-kb-mermaid])");
-      for (var i = 0; i < pres.length && !el; i++) if (pres[i].textContent === text) el = pres[i];
-      if (el) el.setAttribute("data-kb-mermaid", "");
-      return near(el).then(load).then(function (m) { return m.render(id, text); });
-    }
-  };
-  function load() {
-    return loading || (loading = new Promise(function (resolve, reject) {
-      var s = document.createElement("script");
-      s.src = SRC;
-      s.integrity = SRI;
-      s.crossOrigin = "anonymous";
-      s.onload = function () {
-        real = window.mermaid;
-        window.mermaid = stub;
-        real.initialize(config);
-        resolve(real);
-      };
-      s.onerror = function () { loading = null; reject(new Error("Mermaid did not load")); };
-      document.head.appendChild(s);
-    }));
-  }
-  // One observer for the diagrams still waiting: on the screen only until the reader engages, then a screen ahead.
-  function watch() {
-    if (io) io.disconnect();
-    io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (e) {
-        if (e.isIntersecting) release(function (w) { return w.el === e.target; });
-      });
-    }, { rootMargin: ahead ? "100% 0px" : "0px" });
-    waiting.forEach(function (w) { io.observe(w.el); });
-  }
-  function release(which) {
-    waiting = waiting.filter(function (w) {
-      if (!which(w)) return true;
-      io.unobserve(w.el);
-      w.go();
-      return false;
-    });
-  }
-  function near(el) {
-    if (real || !el || !("IntersectionObserver" in window)) return Promise.resolve();
-    return new Promise(function (resolve) {
-      waiting.push({ el: el, go: resolve });
-      if (io) io.observe(el); else watch();
-    });
-  }
-  function engaged() {
-    ENGAGE.forEach(function (t) { window.removeEventListener(t, engaged, true); });
-    ahead = true;
-    if (io) watch();
-  }
-  ENGAGE.forEach(function (t) { window.addEventListener(t, engaged, { capture: true, passive: true }); });
-  window.addEventListener("beforeprint", function () { if (io) release(function () { return true; }); });
-  window.mermaid = stub;
-})();
-</script>
 
   </head>
   
@@ -1264,6 +1198,10 @@
       
         
       
+        
+          
+        
+      
     
     
     
@@ -1498,6 +1436,16 @@ first.</p>
 </tr>
 </tbody>
 </table>
+<figure class="kb-figure">
+<img src="../../diagrams/spi-transfer.svg#only-light" alt="Sequence of an SPI Transfer on the STM32 port, in which the device takes the bus lock, drives its chip select low, starts an interrupt-driven HAL transfer, sleeps until the completion callback, and raises chip select whatever the result." width="553" height="868"><img src="../../diagrams/spi-transfer.dark.svg#only-dark" alt="Sequence of an SPI Transfer on the STM32 port, in which the device takes the bus lock, drives its chip select low, starts an interrupt-driven HAL transfer, sleeps until the completion callback, and raises chip select whatever the result." width="553" height="868">
+<figcaption>One SPI frame</figcaption>
+</figure>
+
+<details class="kb-figure-desc">
+<summary>Figure description and sources</summary>
+<p>The driver's Transfer call reaches the SpiDevice, which takes the bus lock within its timeout and, when another device used the bus last, initialises the HAL SPI again with its own mode and prescaler. It drives its chip select GPIO low, starts HAL_SPI_TransmitReceive_IT, and the HAL's interrupt handler clocks the bytes to the Device and reads its reply. The task sleeps on the port's Completion until the HAL's completion callback, at most the timeout per chunk, then the SpiDevice raises chip select; a timeout aborts the transfer and the peripheral is initialised again before the next frame. A kb::Status returns to the driver.</p>
+<p>Drawn from: <a href="../../model/spi-transfer.seq.yml"><code>docs/model/spi-transfer.seq.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/spi.hpp"><code>inc/kb/port/stm32/spi.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/boundary/spi.cpp"><code>src/boundary/spi.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/completion.cpp"><code>src/completion.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/spi.cpp"><code>src/spi.cpp</code></a>.</p>
+</details>
 <p>Chip select is a GPIO, not the peripheral's NSS: any pin can be a chip select, and CS stays low across chunks. Its
 idle level is written before the pin becomes an output.</p>
 <p>While the peripheral is disabled for a mode change, SCK is not driven on F4, G4 and L4 (H7 keeps it at its idle

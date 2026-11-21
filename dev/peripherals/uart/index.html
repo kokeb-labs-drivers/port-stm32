@@ -102,72 +102,6 @@
   <meta property="og:description" content="kb-core's bus, pin, clock and log contracts implemented over the STM32Cube HAL for STM32 G4, H7, F4 and L4.">
   <meta property="og:url" content="https://kokeb-labs-drivers.github.io/port-stm32/latest/peripherals/uart/">
   <meta name="twitter:card" content="summary">
-  <script>
-(function () {
-  if (typeof mermaid != "undefined" && !(mermaid instanceof Element)) return;
-  var SRC = "https://unpkg.com/mermaid@11.17.2/dist/mermaid.min.js",
-      SRI = "sha384-EOXBFmc3gx5mb+vn0vPvvGqACToJD24hhacX5Yx+8NUUQrHIle/Qi5Bg9o3zKwW2", config = {}, real, loading;
-  var waiting = [], io = null, ahead = false, ENGAGE = ["scroll", "keydown", "pointerdown", "touchstart"];
-  var stub = {
-    initialize: function (c) { config = c || {}; if (real) real.initialize(config); },
-    render: function (id, text) {
-      var el = null, pres = document.querySelectorAll("pre.mermaid:not([data-kb-mermaid])");
-      for (var i = 0; i < pres.length && !el; i++) if (pres[i].textContent === text) el = pres[i];
-      if (el) el.setAttribute("data-kb-mermaid", "");
-      return near(el).then(load).then(function (m) { return m.render(id, text); });
-    }
-  };
-  function load() {
-    return loading || (loading = new Promise(function (resolve, reject) {
-      var s = document.createElement("script");
-      s.src = SRC;
-      s.integrity = SRI;
-      s.crossOrigin = "anonymous";
-      s.onload = function () {
-        real = window.mermaid;
-        window.mermaid = stub;
-        real.initialize(config);
-        resolve(real);
-      };
-      s.onerror = function () { loading = null; reject(new Error("Mermaid did not load")); };
-      document.head.appendChild(s);
-    }));
-  }
-  // One observer for the diagrams still waiting: on the screen only until the reader engages, then a screen ahead.
-  function watch() {
-    if (io) io.disconnect();
-    io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (e) {
-        if (e.isIntersecting) release(function (w) { return w.el === e.target; });
-      });
-    }, { rootMargin: ahead ? "100% 0px" : "0px" });
-    waiting.forEach(function (w) { io.observe(w.el); });
-  }
-  function release(which) {
-    waiting = waiting.filter(function (w) {
-      if (!which(w)) return true;
-      io.unobserve(w.el);
-      w.go();
-      return false;
-    });
-  }
-  function near(el) {
-    if (real || !el || !("IntersectionObserver" in window)) return Promise.resolve();
-    return new Promise(function (resolve) {
-      waiting.push({ el: el, go: resolve });
-      if (io) io.observe(el); else watch();
-    });
-  }
-  function engaged() {
-    ENGAGE.forEach(function (t) { window.removeEventListener(t, engaged, true); });
-    ahead = true;
-    if (io) watch();
-  }
-  ENGAGE.forEach(function (t) { window.addEventListener(t, engaged, { capture: true, passive: true }); });
-  window.addEventListener("beforeprint", function () { if (io) release(function () { return true; }); });
-  window.mermaid = stub;
-})();
-</script>
 
   </head>
   
@@ -1253,6 +1187,10 @@
       
         
       
+        
+          
+        
+      
     
     
     
@@ -1475,6 +1413,16 @@ handler, and every wait is on the port's clock, asleep under an RTOS (<a href=".
 </tr>
 </tbody>
 </table>
+<figure class="kb-figure">
+<img src="../../diagrams/uart-write-read.svg#only-light" alt="Sequence of a UART Write followed by a Read on the STM32 port, in which the port&#x27;s interrupt handler sends the frame byte by byte, puts the reply into the port&#x27;s receive ring, and wakes the Read that waits for it." width="553" height="912"><img src="../../diagrams/uart-write-read.dark.svg#only-dark" alt="Sequence of a UART Write followed by a Read on the STM32 port, in which the port&#x27;s interrupt handler sends the frame byte by byte, puts the reply into the port&#x27;s receive ring, and wakes the Read that waits for it." width="553" height="912">
+<figcaption>A UART request and reply</figcaption>
+</figure>
+
+<details class="kb-figure-desc">
+<summary>Figure description and sources</summary>
+<p>The driver's Write call reaches the Uart, which takes its writer lock and enables the transmit-empty interrupt; the port's UART IRQ handler then sends the frame to the Device byte by byte and completes the write at the last byte, with a DE pin at transmit-complete. The driver's Read call takes the reader lock and sleeps while the ring is empty, at most its timeout. The Device's reply arrives on RX, and the UART IRQ handler puts each byte into the port's ring of 256 bytes, latches any receive error and wakes the Read, which takes what the ring holds; the count returns to the driver.</p>
+<p>Drawn from: <a href="../../model/uart-write-read.seq.yml"><code>docs/model/uart-write-read.seq.yml</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/inc/kb/port/stm32/uart.hpp"><code>inc/kb/port/stm32/uart.hpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/boundary/uart.cpp"><code>src/boundary/uart.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/completion.cpp"><code>src/completion.cpp</code></a>; <a href="https://github.com/kokeb-labs-drivers/port-stm32/blob/eaa255a43aa6f4055c09051fc7830428ea589efd/src/uart.cpp"><code>src/uart.cpp</code></a>.</p>
+</details>
 <h2 id="pins-and-clock">Pins and clock<a class="headerlink" href="#pins-and-clock" title="Permanent link">&para;</a></h2>
 <table>
 <thead>

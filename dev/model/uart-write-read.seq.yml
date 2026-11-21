@@ -1,0 +1,42 @@
+---
+kind: seq
+id: uart-write-read
+title: A UART request and reply
+kicker: port-stm32
+subtitle: Both directions run in the port's own UART interrupt handler; the HAL only sets the peripheral up.
+alt: >-
+  Sequence of a UART Write followed by a Read on the STM32 port, in which the port's interrupt handler sends the
+  frame byte by byte, puts the reply into the port's receive ring, and wakes the Read that waits for it.
+reads: >-
+  The driver's Write call reaches the Uart, which takes its writer lock and enables the transmit-empty interrupt;
+  the port's UART IRQ handler then sends the frame to the Device byte by byte and completes the write at the last
+  byte, with a DE pin at transmit-complete. The driver's Read call takes the reader lock and sleeps while the ring
+  is empty, at most its timeout. The Device's reply arrives on RX, and the UART IRQ handler puts each byte into the
+  port's ring of 256 bytes, latches any receive error and wakes the Read, which takes what the ring holds; the
+  count returns to the driver.
+profile: phone
+print: portrait
+sources:
+  - src/uart.cpp
+  - src/boundary/uart.cpp
+  - src/completion.cpp
+  - inc/kb/port/stm32/uart.hpp
+participants:
+  - {id: ctl, label: Uart, tone: amber}
+  - {id: irq, label: UART IRQ, tone: slate}
+  - {id: dev, label: Device, tone: green}
+steps:
+  - {note: "the driver calls Write(tx)", over: [ctl, irq], tone: blue}
+  - {from: ctl, to: ctl, label: writer lock}
+  - {from: ctl, to: irq, label: enable TXE interrupt}
+  - {from: irq, to: dev, label: TX byte by byte}
+  - {from: irq, to: ctl, label: last byte sent, return: true}
+  - {note: "with DE: DE low at transmit-complete", over: [ctl, irq]}
+  - {note: "the driver calls Read(rx, timeout)", over: [ctl, irq], tone: blue}
+  - {from: ctl, to: ctl, label: reader lock}
+  - {note: "sleeps while the ring is empty", over: [ctl, irq]}
+  - {from: dev, to: irq, label: RX reply, dashed: true}
+  - {from: irq, to: irq, label: into the ring}
+  - {from: irq, to: ctl, label: wake, return: true}
+  - {from: ctl, to: ctl, label: take bytes from ring}
+  - {note: byte count back to the driver, over: [ctl, irq], tone: blue}

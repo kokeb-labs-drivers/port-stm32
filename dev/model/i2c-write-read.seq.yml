@@ -1,0 +1,44 @@
+---
+kind: seq
+id: i2c-write-read
+title: One I2C register read
+kicker: port-stm32
+subtitle: WriteRead as two interrupt-driven HAL sequential transfers joined by a repeated START.
+alt: >-
+  Sequence of an I2C WriteRead on the STM32 port, in which the controller sends the register address without a STOP,
+  sleeps until the HAL's callback, then reads the reply after a repeated START and classifies the result.
+reads: >-
+  The driver's WriteRead call reaches the I2cController, which takes its lock within the timeout and clears stale
+  transfer state in the peripheral. It starts HAL_I2C_Master_Seq_Transmit_IT without a STOP; the HAL I2C interrupt
+  handler sends START, the address with the write bit and the register bytes to the Device, and its completion
+  callback wakes the task. The controller then starts HAL_I2C_Master_Seq_Receive_IT, which sends a repeated START
+  and the address with the read bit, reads the reply and ends with STOP. Both phases share one timeout on the port's
+  clock; the controller classifies the HAL status and error code, restores the handle after a failure, runs the bus
+  recovery when SDA or SCL stays low, and returns a kb::Status to the driver.
+profile: phone
+print: portrait
+sources:
+  - src/i2c.cpp
+  - src/boundary/i2c.cpp
+  - src/completion.cpp
+  - inc/kb/port/stm32/i2c.hpp
+participants:
+  - {id: ctl, label: I2cController, tone: amber}
+  - {id: hal, label: HAL I2C, tone: slate}
+  - {id: dev, label: Device, tone: green}
+steps:
+  - {note: "the driver calls WriteRead", over: [ctl, hal], tone: blue}
+  - {from: ctl, to: ctl, label: take lock}
+  - {from: ctl, to: hal, label: "Seq_Transmit_IT, no STOP"}
+  - {from: hal, to: dev, label: "START, addr+W, tx"}
+  - {from: dev, to: hal, label: ACK, return: true}
+  - {from: hal, to: ctl, label: TxCplt callback, return: true}
+  - {from: ctl, to: hal, label: Seq_Receive_IT}
+  - {from: hal, to: dev, label: "Sr, addr+R"}
+  - {from: dev, to: hal, label: rx bytes, return: true}
+  - {from: hal, to: dev, label: STOP}
+  - {from: hal, to: ctl, label: RxCplt callback, return: true}
+  - {note: "both phases within one timeout", over: [ctl, hal]}
+  - {from: ctl, to: ctl, label: classify}
+  - {note: a line held low runs RecoverBus, over: [ctl, hal]}
+  - {note: kb::Status back to the driver, over: [ctl, hal], tone: blue}

@@ -1,0 +1,19 @@
+<details>
+<summary>Table form of this figure</summary>
+<table>
+<caption>Contracts on the STM32 port</caption>
+<thead><tr><th scope="col"></th><th scope="col">Base contract</th><th scope="col">Extra contracts</th></tr></thead>
+<tbody>
+<tr><th scope="row">I2C</th><td>native (I2cBus, HAL I2C IT)</td><td>planned (async Start/Poll)</td></tr>
+<tr><th scope="row">SPI</th><td>native (SpiDevice, HAL SPI IT)</td><td>adapted (SpiClockControl)</td></tr>
+<tr><th scope="row">UART</th><td>adapted (UartPort, own IRQ)</td><td>native (BaudControl, TxDrain)</td></tr>
+<tr><th scope="row">CAN</th><td>native (CanBus, FDCAN, bxCAN)</td><td>n/a (CAN FD frames)</td></tr>
+<tr><th scope="row">ADC</th><td>native (AdcChannel, HAL ADC)</td><td>n/a (none defined)</td></tr>
+<tr><th scope="row">PWM</th><td>native (PwmOutput, TIM)</td><td>n/a (CHxN, capture)</td></tr>
+<tr><th scope="row">GPIO</th><td>native (GpioOutput, GpioInput)</td><td>native (GpioInterrupt, EXTI)</td></tr>
+<tr><th scope="row">Clock and delay</th><td>native (MonotonicClock, TIM2/5)</td><td>native (BusyWait, DWT)</td></tr>
+<tr><th scope="row">Log</th><td>native (LogSink, ITM or UART)</td><td>n/a (none defined)</td></tr>
+<tr><th scope="row">Pulse output</th><td>planned (PulseTx)</td><td>n/a (none defined)</td></tr>
+</tbody>
+</table>
+</details>
