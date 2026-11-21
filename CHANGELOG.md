@@ -5,6 +5,14 @@ All notable changes of port-stm32. The format follows Keep a Changelog; versions
 
 ## [Unreleased]
 
+### Added
+
+- Figures: a matrix of the bus contracts the port implements (native, adapted, planned, not available) on the home
+  page, and a sequence of one transaction through the port on the I2C, SPI, UART and CAN pages, drawn by figkit from
+  models in `docs/model/` (light and dark SVG, readable on a phone).
+- CI path filter: a pull request that changes only documentation runs only the docs, handbook and DCO checks; the
+  gate allows the code jobs to be skipped only then. The docs publish only from main and `v*` tags.
+
 ### Removed
 
 - The `drivers/` submodules (pcal9555, tmc5160, bno08x), `drivers/drivers.lock.yml`, the pin-hygiene workflow and

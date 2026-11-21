@@ -25,4 +25,5 @@ nav:
       - MISRA review of "to review" findings: misra-review.md
       - SOUP and kb-core: soup.md
       - kb-core dependency plan: kb-core-dependency.md
+      - Figures: diagrams/index.md
   - Changelog: changelog.md

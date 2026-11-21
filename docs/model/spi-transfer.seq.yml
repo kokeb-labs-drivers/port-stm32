@@ -1,0 +1,42 @@
+---
+kind: seq
+id: spi-transfer
+title: One SPI frame
+kicker: port-stm32
+subtitle: Transfer through SpiDevice and the HAL's interrupt-driven SPI, chip select a GPIO held low for the frame.
+alt: >-
+  Sequence of an SPI Transfer on the STM32 port, in which the device takes the bus lock, drives its chip select low,
+  starts an interrupt-driven HAL transfer, sleeps until the completion callback, and raises chip select whatever the
+  result.
+reads: >-
+  The driver's Transfer call reaches the SpiDevice, which takes the bus lock within its timeout and, when another
+  device used the bus last, initialises the HAL SPI again with its own mode and prescaler. It drives its chip select
+  GPIO low, starts HAL_SPI_TransmitReceive_IT, and the HAL's interrupt handler clocks the bytes to the Device and
+  reads its reply. The task sleeps on the port's Completion until the HAL's completion callback, at most the timeout
+  per chunk, then the SpiDevice raises chip select; a timeout aborts the transfer and the peripheral is initialised
+  again before the next frame. A kb::Status returns to the driver.
+profile: phone
+print: portrait
+sources:
+  - src/spi.cpp
+  - src/boundary/spi.cpp
+  - src/completion.cpp
+  - inc/kb/port/stm32/spi.hpp
+participants:
+  - {id: ctl, label: SpiDevice, tone: amber}
+  - {id: hal, label: HAL SPI, tone: slate}
+  - {id: dev, label: Device, tone: green}
+steps:
+  - {note: "the driver calls Transfer(tx, rx)", over: [ctl, hal], tone: blue}
+  - {from: ctl, to: ctl, label: take bus lock}
+  - {from: ctl, to: hal, label: "Init: mode, prescaler"}
+  - {note: only when another device used it last, over: [ctl, hal]}
+  - {from: ctl, to: dev, label: CS low (GPIO)}
+  - {from: ctl, to: hal, label: TransmitReceive_IT}
+  - {note: "the task sleeps, at most T", over: [ctl, hal]}
+  - {from: hal, to: dev, label: "SCK, MOSI"}
+  - {from: dev, to: hal, label: MISO bytes, return: true}
+  - {from: hal, to: ctl, label: completion callback, return: true}
+  - {from: ctl, to: dev, label: CS high (GPIO)}
+  - {note: "timeout: abort, Init next frame", over: [ctl, hal]}
+  - {note: kb::Status back to the driver, over: [ctl, hal], tone: blue}

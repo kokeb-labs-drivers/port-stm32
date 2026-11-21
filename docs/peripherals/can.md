@@ -16,6 +16,16 @@ reception by interrupt into a ring, waits on the port's clock ([How the port wai
 | `Recover(timeout)` | When bus-off: `HAL_FDCAN_Stop`, `HAL_FDCAN_Start` (leaving INIT starts the recovery of 128 x 11 recessive bits), then waits | When bus-off: waits; the hardware recovers by itself |
 | `Release()` | `HAL_FDCAN_Stop`, `HAL_FDCAN_DeInit` | `HAL_CAN_Stop`, `HAL_CAN_DeInit` |
 
+<!-- figure: can-send-receive -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../diagrams/can-send-receive.dark.svg">
+  <img src="../diagrams/can-send-receive.svg"
+    alt="Sequence of a CAN Send and a Receive on the STM32 port, in which Send puts the frame into a free
+    transmit slot of the HAL, the receive interrupt moves every frame into the port's ring, and Receive
+    takes the oldest one.">
+</picture>
+<!-- /figure -->
+
 Modes (`CanConfig::mode`): `Normal`, `Loopback` (internal: frames sent are received, the bus is not driven) and
 `ListenOnly` (bus monitoring / silent).
 

@@ -17,6 +17,16 @@ first.
 | `SpiDevice::Release()` | The chip select pin back to its reset state and unclaimed |
 | `SpiBus::Release()` | `HAL_SPI_DeInit` (release the devices first) |
 
+<!-- figure: spi-transfer -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../diagrams/spi-transfer.dark.svg">
+  <img src="../diagrams/spi-transfer.svg"
+    alt="Sequence of an SPI Transfer on the STM32 port, in which the device takes the bus lock, drives its
+    chip select low, starts an interrupt-driven HAL transfer, sleeps until the completion callback, and
+    raises chip select whatever the result.">
+</picture>
+<!-- /figure -->
+
 Chip select is a GPIO, not the peripheral's NSS: any pin can be a chip select, and CS stays low across chunks. Its
 idle level is written before the pin becomes an output.
 

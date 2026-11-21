@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="609" height="948" viewBox="0 0 609 948" role="img" aria-labelledby="i2c-write-read-title i2c-write-read-desc" font-family="Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
+<title id="i2c-write-read-title">One I2C register read</title>
+<desc id="i2c-write-read-desc">Sequence of an I2C WriteRead on the STM32 port, in which the controller sends the register address without a STOP, sleeps until the HAL's callback, then reads the reply after a repeated START and classifies the result.</desc>
+<defs><marker id="i2c-write-read-arrow-rail" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#7C8798"/></marker></defs>
+<rect x="0.5" y="0.5" width="608" height="947" rx="16" fill="#FFFFFF" stroke="#E2E7EE"/>
+<text x="32" y="44.4" font-size="13" font-weight="700" letter-spacing="1.2" fill="#7A360E">PORT-STM32</text>
+<text x="32" y="76.2" font-size="24" font-weight="700" fill="#0E1726">One I2C register read</text>
+<text x="32" y="102.7" font-size="15" fill="#566070">WriteRead as two interrupt-driven HAL sequential transfers joined by a</text>
+<text x="32" y="124.5" font-size="15" fill="#566070">repeated START.</text>
+<rect x="32" y="140.4" width="545" height="1" fill="#E2E7EE"/>
+<path d="M118.3 214.4 L118.3 932.5" fill="none" stroke="#738093" stroke-width="1.2" stroke-dasharray="5 5"/>
+<path d="M334.4 214.4 L334.4 932.5" fill="none" stroke="#738093" stroke-width="1.2" stroke-dasharray="5 5"/>
+<path d="M504.4 214.4 L504.4 932.5" fill="none" stroke="#738093" stroke-width="1.2" stroke-dasharray="5 5"/>
+<path d="M122.3 294.4 L144.3 294.4 Q152.3 294.4 152.3 302.4 L152.3 302.4 Q152.3 310.4 144.3 310.4 L122.3 310.4" fill="none" stroke="#7C8798" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#i2c-write-read-arrow-rail)"/>
+<path d="M122.3 346.4 L330.4 346.4" fill="none" stroke="#7C8798" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#i2c-write-read-arrow-rail)"/>
+<path d="M338.4 390.4 L500.4 390.4" fill="none" stroke="#7C8798" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#i2c-write-read-arrow-rail)"/>
+<path d="M500.4 434.4 L338.4 434.4" fill="none" stroke="#7C8798" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 5" marker-end="url(#i2c-write-read-arrow-rail)"/>
+<path d="M330.4 478.4 L122.3 478.4" fill="none" stroke="#7C8798" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 5" marker-end="url(#i2c-write-read-arrow-rail)"/>
+<path d="M122.3 522.5 L330.4 522.5" fill="none" stroke="#7C8798" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#i2c-write-read-arrow-rail)"/>
+<path d="M338.4 566.5 L500.4 566.5" fill="none" stroke="#7C8798" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#i2c-write-read-arrow-rail)"/>
+<path d="M500.4 610.5 L338.4 610.5" fill="none" stroke="#7C8798" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 5" marker-end="url(#i2c-write-read-arrow-rail)"/>
+<path d="M338.4 654.5 L500.4 654.5" fill="none" stroke="#7C8798" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#i2c-write-read-arrow-rail)"/>
+<path d="M330.4 698.5 L122.3 698.5" fill="none" stroke="#7C8798" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 5" marker-end="url(#i2c-write-read-arrow-rail)"/>
+<path d="M122.3 786.5 L144.3 786.5 Q152.3 786.5 152.3 794.5 L152.3 794.5 Q152.3 802.5 144.3 802.5 L122.3 802.5" fill="none" stroke="#7C8798" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#i2c-write-read-arrow-rail)"/>
+<rect x="39.6" y="158.4" width="157.4" height="52" rx="10" fill="#FFF5E3" stroke="#C26A05" stroke-width="1.4"/>
+<rect x="39.6" y="166.4" width="4" height="36" rx="2" fill="#C26A05"/>
+<rect x="269.4" y="158.4" width="130" height="52" rx="10" fill="#F1F4F8" stroke="#64748B" stroke-width="1.4"/>
+<rect x="269.4" y="166.4" width="4" height="36" rx="2" fill="#64748B"/>
+<rect x="439.4" y="158.4" width="130" height="52" rx="10" fill="#EAF7EF" stroke="#15803D" stroke-width="1.4"/>
+<rect x="439.4" y="166.4" width="4" height="36" rx="2" fill="#15803D"/>
+<rect x="48.3" y="234.4" width="356.2" height="43" rx="10" fill="#EAF2FF" stroke="#BCD2F9" stroke-width="1"/>
+<rect x="48.3" y="726.5" width="356.2" height="43" rx="10" fill="#FFF5E3" stroke="#F1CF93" stroke-width="1"/>
+<rect x="48.3" y="822.5" width="356.2" height="43" rx="10" fill="#FFF5E3" stroke="#F1CF93" stroke-width="1"/>
+<rect x="48.3" y="874.5" width="356.2" height="43" rx="10" fill="#EAF2FF" stroke="#BCD2F9" stroke-width="1"/>
+<text x="121.3" y="189.5" font-size="17" font-weight="700" text-anchor="middle" fill="#8A3C0B">I2cController</text>
+<text x="337.4" y="189.5" font-size="17" font-weight="700" text-anchor="middle" fill="#334155">HAL I2C</text>
+<text x="507.4" y="189.5" font-size="17" font-weight="700" text-anchor="middle" fill="#14532D">Device</text>
+<text x="62.3" y="261.2" font-size="15" fill="#1E429F">the driver calls WriteRead</text>
+<rect x="156.3" y="291.4" width="76" height="22" rx="11" fill="#FFFFFF"/>
+<text x="194.3" y="307.5" font-size="14" font-weight="500" text-anchor="middle" fill="#566070">take lock</text>
+<rect x="126.3" y="321.4" width="200.2" height="22" rx="11" fill="#FFFFFF"/>
+<text x="226.4" y="337.5" font-size="14" font-weight="500" text-anchor="middle" fill="#566070">Seq_Transmit_IT, no STOP</text>
+<rect x="345.1" y="365.4" width="148.6" height="22" rx="11" fill="#FFFFFF"/>
+<text x="419.4" y="381.5" font-size="14" font-weight="500" text-anchor="middle" fill="#566070">START, addr+W, tx</text>
+<rect x="397.6" y="409.4" width="43.6" height="22" rx="11" fill="#FFFFFF"/>
+<text x="419.4" y="425.5" font-size="14" font-weight="500" text-anchor="middle" fill="#566070">ACK</text>
+<rect x="165.5" y="453.4" width="121.7" height="22" rx="11" fill="#FFFFFF"/>
+<text x="226.4" y="469.5" font-size="14" font-weight="500" text-anchor="middle" fill="#566070">TxCplt callback</text>
+<rect x="164.6" y="497.4" width="123.5" height="22" rx="11" fill="#FFFFFF"/>
+<text x="226.4" y="513.5" font-size="14" font-weight="500" text-anchor="middle" fill="#566070">Seq_Receive_IT</text>
+<rect x="375.5" y="541.5" width="87.8" height="22" rx="11" fill="#FFFFFF"/>
+<text x="419.4" y="557.5" font-size="14" font-weight="500" text-anchor="middle" fill="#566070">Sr, addr+R</text>
+<rect x="384.7" y="585.5" width="69.4" height="22" rx="11" fill="#FFFFFF"/>
+<text x="419.4" y="601.5" font-size="14" font-weight="500" text-anchor="middle" fill="#566070">rx bytes</text>
+<rect x="393.4" y="629.5" width="52.2" height="22" rx="11" fill="#FFFFFF"/>
+<text x="419.4" y="645.5" font-size="14" font-weight="500" text-anchor="middle" fill="#566070">STOP</text>
+<rect x="165.6" y="673.5" width="121.6" height="22" rx="11" fill="#FFFFFF"/>
+<text x="226.4" y="689.5" font-size="14" font-weight="500" text-anchor="middle" fill="#566070">RxCplt callback</text>
+<text x="62.3" y="753.2" font-size="15" fill="#8A3C0B">both phases within one timeout</text>
+<rect x="156.3" y="783.5" width="66.6" height="22" rx="11" fill="#FFFFFF"/>
+<text x="189.6" y="799.5" font-size="14" font-weight="500" text-anchor="middle" fill="#566070">classify</text>
+<text x="62.3" y="849.2" font-size="15" fill="#8A3C0B">a line held low runs RecoverBus</text>
+<text x="62.3" y="901.2" font-size="15" fill="#1E429F">kb::Status back to the driver</text>
+</svg>

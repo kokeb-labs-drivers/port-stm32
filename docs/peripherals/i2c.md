@@ -17,6 +17,16 @@ completion callback, asleep under an RTOS ([How the port waits](../waits.md)).
 | `RecoverBus()` | `HAL_I2C_DeInit`, SCL and SDA as open-drain GPIO with the configured pull, up to nine SCL clocks at 100 kHz until SDA is high, a STOP, both lines read back, then `HAL_I2C_Init` again |
 | `Release()` | `HAL_I2C_DeInit` |
 
+<!-- figure: i2c-write-read -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../diagrams/i2c-write-read.dark.svg">
+  <img src="../diagrams/i2c-write-read.svg"
+    alt="Sequence of an I2C WriteRead on the STM32 port, in which the controller sends the register address
+    without a STOP, sleeps until the HAL's callback, then reads the reply after a repeated START and
+    classifies the result.">
+</picture>
+<!-- /figure -->
+
 The controller owns the instance: a second `I2cController` on it gets `Busy` from `EnsureReady()`.
 
 ## Pins and clock

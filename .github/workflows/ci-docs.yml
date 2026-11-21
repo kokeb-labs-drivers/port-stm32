@@ -11,12 +11,13 @@ permissions:
 
 jobs:
   docs:
-    uses: kokeb-labs/ci-tools/.github/workflows/ru-mkdocs-publish.yml@dc7332736ae931501f30513c33d0c51e9c693a80 # v1
+    uses: kokeb-labs/ci-tools/.github/workflows/ru-mkdocs-publish.yml@5fa8e5f4ef6012ada6862f0a0d697ad7c4fff5e2 # v1
     permissions:
       contents: write  # push to the gh-pages deployment branch
     with:
       mkdocs_config: _config/mkdocs.yml
-      deploy: true
+      # Only main and v* tags publish; pull requests never do, and a release/* branch only builds.
+      deploy: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
       # Links to the private organisation and the not yet published site cannot be checked from CI.
       link_check: false
       lighthouse: false

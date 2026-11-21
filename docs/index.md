@@ -28,6 +28,19 @@ run on an STM32 without a line of HAL code in the driver.
 | FDCAN (G4, H7), bxCAN (F4, L4) | `CanBus` | `CanController` | [CAN](peripherals/can.md) |
 | TIM2/TIM5, DWT, ITM | `MonotonicClock`, `BusyWait`, `LogSink` | `Clock`, `BusyWait`, `ItmLogSink`, `UartLogSink` | [Clock, delay and log](peripherals/time-log.md) |
 
+The same at a glance: native where the contract maps onto the HAL module or core peripheral, adapted where the port
+adds its own logic to meet it (the UART's own interrupt handler and receive ring, the SPI clock capped at the
+interrupt ceiling).
+
+<!-- figure: port-contracts -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/port-contracts.dark.svg">
+  <img src="diagrams/port-contracts.svg"
+    alt="Matrix of the kb-core contracts the STM32 port implements for I2C, SPI, UART, CAN, ADC, PWM, GPIO,
+    clock and log, each marked native, adapted, planned or not available.">
+</picture>
+<!-- /figure -->
+
 Every type satisfies its concepts (`static_assert` beside its definition) and converts to the contract's
 type-erased `*Ref` (`I2cBusRef`, `SpiDeviceRef`, ...), proven at compile time in `kb/port/stm32/port.hpp` and at
 run time in the host tests.
