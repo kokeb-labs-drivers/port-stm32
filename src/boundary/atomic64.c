@@ -1,10 +1,10 @@
 /* Boundary file (deviations/boundary-files.yml), targets only: the two 64-bit atomic helpers the
  * GNU toolchain calls for std::atomic<uint64_t> on a 32-bit Cortex-M, which has no 64-bit exclusive
  * load/store and whose arm-none-eabi toolchain ships no libatomic. kb::dma::Stream keeps its frame
- * time stamp in one (adc_stream.hpp). Single-core: interrupts are masked (PRIMASK saved and restored)
- * for the two word accesses, which makes them atomic against every interrupt. Weak, so a toolchain
- * libatomic or the application's own definition wins.
- * SPDX-License-Identifier: MIT Copyright (c) 2026 The port-stm32 authors */
+ * time stamp in one (adc_stream.hpp). Single-core: interrupts are masked (PRIMASK saved and
+ * restored) for the two word accesses, which makes them atomic against every interrupt. Weak, so a
+ * toolchain libatomic or the application's own definition wins. SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 The port-stm32 authors */
 /* The fixed-width types of the Arm EABI, spelled out: this file includes no header. */
 typedef unsigned int uint32_t;
 typedef unsigned long long uint64_t;

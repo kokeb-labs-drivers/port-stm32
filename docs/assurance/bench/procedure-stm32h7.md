@@ -16,7 +16,6 @@ supports its Cortex-M7 build.
 | An SWD tool (OpenOCD or STM32CubeProgrammer) | flashing |
 | A logic analyser on PA5, PB5, PA6, PD14 (optional) | SCK rate and frame gaps of the `spi-*` items |
 
-<!-- figure: bench-h7-wiring -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="figures/bench-h7-wiring.dark.svg">
   <img src="figures/bench-h7-wiring.svg"
@@ -24,12 +23,10 @@ supports its Cortex-M7 build.
     analyser; ADC1 inputs PA3, PC0, PB1, PF11, PA0 and PA4 on the mid point of a 10 k / 10 k divider from 3V3;
     USART3 PD8/PD9 to the ST-LINK virtual COM port at 115200 8N1; SWD through the ST-LINK.">
 </picture>
-<!-- /figure -->
 
 The ADC pins are analog at reset; the app does not change their mode. Keep the divider short (the six inputs share
 one mid point; each reads about 1.65 V, half of VREF+).
 
-<!-- figure: bench-h7-memory -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="figures/bench-h7-memory.dark.svg">
   <img src="figures/bench-h7-memory.svg"
@@ -37,7 +34,6 @@ one mid point; each reads about 1.65 V, half of VREF+).
     (the forced transfer error item); AXI SRAM at 0x24000000 is cached write-back, the Maintained region; D2 SRAM1 at
     0x30000000 is MPU region 0, non-cacheable, the default region.">
 </picture>
-<!-- /figure -->
 
 ## Steps
 

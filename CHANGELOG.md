@@ -12,7 +12,7 @@ All notable changes of port-stm32. The format follows Keep a Changelog; versions
   models in `docs/model/` (light and dark SVG, readable on a phone).
 - CI path filter: a pull request that changes only documentation runs only the docs, handbook and DCO checks; the
   gate allows the code jobs to be skipped only then. The docs publish only from main and `v*` tags.
-- DMA ([docs/dma.md](docs/dma.md)), on kb-core's `kb::dma` vocabulary: `dma.hpp` (masters and region tags of each
+- DMA (`docs/dma.md`), on kb-core's `kb::dma` vocabulary: `dma.hpp` (masters and region tags of each
   family, `RequireStream` / `RequireStreamReaches`, `DmaStream` over DMA1/DMA2 streams and channels with the NVIC
   priority written from the board's assignment and read back, every flag serviced by its own clear bit on every
   interrupt entry, a stop bounded in core cycles that proves EN reads 0, quarantine and `Recover()`; `DmaTransfer`
@@ -46,6 +46,8 @@ All notable changes of port-stm32. The format follows Keep a Changelog; versions
 - An `AdcChannel` on an instance an ADC stream owns is refused (`Busy`).
 - The interrupt vectors include the DMA streams or channels of the device (`KB_PORT_STM32_VECTORS_EXCLUDE` keeps one
   for the application).
+- The FreeRTOS example configuration enables recursive mutexes and the stack high-water mark, which kb-core's
+  FreeRTOS backend now uses.
 - Source layout: every public header has a source file of the same name (`src/adc.cpp` for `adc.hpp`, and so
   on; `irq.hpp` and `version.hpp` are header-only), and the HAL boundary is one file per HAL component in
   `src/boundary/` (`i2c.cpp`, `spi.cpp`, `uart.cpp`, `gpio.cpp`, `adc.cpp`, `timer.cpp`, `can.cpp`, `time.cpp`,

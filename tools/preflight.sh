@@ -26,7 +26,7 @@ fails=()
 step() { local name="$1"; shift; echo "== $name"; if "$@" >"$out/$name.log" 2>&1; then echo "   PASS"; else
   echo "   FAIL ($out/$name.log)"; tail -25 "$out/$name.log" | sed 's/^/   | /'; fails+=("$name"); fi; }
 
-sources() { find inc src tests -name '*.cpp' -o -name '*.hpp' -o -name '*.h' | sort; }
+sources() { find inc src tests -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' | sort; }
 library() { find inc src -name '*.cpp' -o -name '*.hpp' | sort; }
 layout() { python3 tools/check_layout.py && python3 tools/test_check_layout.py; }
 
