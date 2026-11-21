@@ -18,39 +18,98 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Which files a pull request changes. A pull request that touches only documentation (docs/, figure models,
+  # Markdown, the MkDocs configuration) cannot change a build, a test, a lint or a MISRA result, so it runs only the
+  # docs, handbook and DCO checks; the gate allows exactly the code jobs to be skipped, and only then. Workflows,
+  # sources and everything else run every job; pushes to main, release branches and tags always run everything.
+  changes:
+    name: Changed files
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+      skippable: ${{ steps.diff.outputs.skippable }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          code=true
+          if [ "$EVENT" = "pull_request" ]; then
+            code=false
+            files=$(git diff --name-only "$BASE...$HEAD")
+            while IFS= read -r f; do
+              [ -n "$f" ] || continue
+              case "$f" in
+                docs/*|*.md|_config/mkdocs.yml) ;;
+                *) code=true ;;
+              esac
+            done <<< "$files"
+            [ -n "$files" ] || code=true
+          fi
+          skippable="dco"
+          if [ "$code" = false ]; then
+            skippable="dco host quality misra lint cross targets layering"
+          fi
+          { echo "code=$code"; echo "skippable=$skippable"; } >> "$GITHUB_OUTPUT"
+          echo "Code jobs run: $code"
+
   host:
     name: Host
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     uses: ./.github/workflows/ci-host.yml
 
   quality:
     name: Host quality
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     uses: ./.github/workflows/ci-quality.yml
 
   misra:
     name: MISRA
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     uses: ./.github/workflows/ci-misra.yml
 
   lint:
     name: C++ lint
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     uses: ./.github/workflows/ci-cpp-lint.yml
 
   cross:
     name: Cross-compile
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     uses: ./.github/workflows/ci-cross-build.yml
 
   targets:
     name: STM32 families
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     uses: ./.github/workflows/ci-cmake-matrix.yml
 
   layering:
     name: Layering
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     uses: ./.github/workflows/ci-layering.yml
 
   docs:
     name: Docs
     uses: ./.github/workflows/ci-docs.yml
     permissions:
-      contents: write  # the reusable workflow's publish job declares it; with deploy: false nothing is published
+      contents: write  # the publish job pushes gh-pages on main and tags; pull requests never publish
 
   handbook:
     name: Handbook
@@ -66,12 +125,13 @@ jobs:
 
   ci-gate:
     name: CI gate
-    needs: [host, quality, misra, lint, cross, targets, layering, docs, handbook, dco]
+    needs: [changes, host, quality, misra, lint, cross, targets, layering, docs, handbook, dco]
     if: always()
     uses: kokeb-labs/ci-tools/.github/workflows/ru-ci-gate.yml@v1
     permissions:
       contents: read
     with:
       needs_json: ${{ toJSON(needs) }}
-      # The DCO check runs on pull requests only; on a push it is skipped.
-      allow_skipped: dco
+      # DCO runs on pull requests only (skipped on a push); the code jobs may be skipped only when `changes` found a
+      # documentation-only pull request.
+      allow_skipped: ${{ needs.changes.outputs.skippable }}

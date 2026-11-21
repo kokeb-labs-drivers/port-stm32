@@ -1,0 +1,114 @@
+{
+  "can-send-receive": {
+    "title": "Sending and receiving a CAN frame",
+    "alt": "Sequence of a CAN Send and a Receive on the STM32 port, in which Send puts the frame into a free transmit slot of the HAL, the receive interrupt moves every frame into the port's ring, and Receive takes the oldest one.",
+    "description": "The driver's Send call reaches the CanController, which takes its send lock and adds the frame to a free TX FIFO element (FDCAN) or mailbox (bxCAN) through HAL CAN, sleeping for the transmit-complete interrupt when none is free. The controller sends the frame to the Other node, which acknowledges it. A frame the Other node sends lands in RX FIFO 0, and the HAL CAN receive callback moves every frame into the port's ring of 32 frames at once. The driver's Receive call takes its own receive lock and the oldest frame of the ring, waiting for the receive interrupt when the ring is empty; frames lost to a full FIFO or ring are reported as Overflow by the next Receive.",
+    "profile": "phone",
+    "width": 580,
+    "source": "docs/model/can-send-receive.seq.yml",
+    "sources": [
+      "docs/model/can-send-receive.seq.yml",
+      "inc/kb/port/stm32/can.hpp",
+      "src/boundary/can.cpp",
+      "src/can.cpp"
+    ],
+    "kind": "seq",
+    "palette": 2,
+    "print": "portrait",
+    "adaptive": true,
+    "twin": false,
+    "font": ""
+  },
+  "i2c-write-read": {
+    "title": "One I2C register read",
+    "alt": "Sequence of an I2C WriteRead on the STM32 port, in which the controller sends the register address without a STOP, sleeps until the HAL's callback, then reads the reply after a repeated START and classifies the result.",
+    "description": "The driver's WriteRead call reaches the I2cController, which takes its lock within the timeout and clears stale transfer state in the peripheral. It starts HAL_I2C_Master_Seq_Transmit_IT without a STOP; the HAL I2C interrupt handler sends START, the address with the write bit and the register bytes to the Device, and its completion callback wakes the task. The controller then starts HAL_I2C_Master_Seq_Receive_IT, which sends a repeated START and the address with the read bit, reads the reply and ends with STOP. Both phases share one timeout on the port's clock; the controller classifies the HAL status and error code, restores the handle after a failure, runs the bus recovery when SDA or SCL stays low, and returns a kb::Status to the driver.",
+    "profile": "phone",
+    "width": 609,
+    "source": "docs/model/i2c-write-read.seq.yml",
+    "sources": [
+      "docs/model/i2c-write-read.seq.yml",
+      "inc/kb/port/stm32/i2c.hpp",
+      "src/boundary/i2c.cpp",
+      "src/completion.cpp",
+      "src/i2c.cpp"
+    ],
+    "kind": "seq",
+    "palette": 2,
+    "print": "portrait",
+    "adaptive": true,
+    "twin": false,
+    "font": ""
+  },
+  "port-contracts": {
+    "title": "Contracts on the STM32 port",
+    "alt": "Matrix of the kb-core contracts the STM32 port implements for I2C, SPI, UART, CAN, ADC, PWM, GPIO, clock and log, each marked native, adapted, planned or not available.",
+    "description": "Rows are the peripherals I2C, SPI, UART, CAN, ADC, PWM, GPIO, Clock and delay, Log and Pulse output; the columns are the base contract of the peripheral and its extra contracts. Native means the contract maps onto the HAL module or core peripheral named in the cell; adapted means the port adds its own logic to meet it, such as its own UART interrupt handler and receive ring, or an SPI clock capped at the interrupt ceiling. Planned marks a contract or form kb-core has not defined yet, and n/a one that kb-core does not have.",
+    "profile": "phone",
+    "width": 631,
+    "source": "docs/model/port-contracts.matrix.yml",
+    "sources": [
+      "docs/model/port-contracts.matrix.yml",
+      "inc/kb/port/stm32/adc.hpp",
+      "inc/kb/port/stm32/can.hpp",
+      "inc/kb/port/stm32/gpio.hpp",
+      "inc/kb/port/stm32/i2c.hpp",
+      "inc/kb/port/stm32/log.hpp",
+      "inc/kb/port/stm32/port.hpp",
+      "inc/kb/port/stm32/pwm.hpp",
+      "inc/kb/port/stm32/spi.hpp",
+      "inc/kb/port/stm32/time.hpp",
+      "inc/kb/port/stm32/uart.hpp",
+      "src/spi.cpp",
+      "src/uart.cpp"
+    ],
+    "kind": "matrix",
+    "palette": 2,
+    "print": "portrait",
+    "adaptive": true,
+    "twin": true,
+    "font": ""
+  },
+  "spi-transfer": {
+    "title": "One SPI frame",
+    "alt": "Sequence of an SPI Transfer on the STM32 port, in which the device takes the bus lock, drives its chip select low, starts an interrupt-driven HAL transfer, sleeps until the completion callback, and raises chip select whatever the result.",
+    "description": "The driver's Transfer call reaches the SpiDevice, which takes the bus lock within its timeout and, when another device used the bus last, initialises the HAL SPI again with its own mode and prescaler. It drives its chip select GPIO low, starts HAL_SPI_TransmitReceive_IT, and the HAL's interrupt handler clocks the bytes to the Device and reads its reply. The task sleeps on the port's Completion until the HAL's completion callback, at most the timeout per chunk, then the SpiDevice raises chip select; a timeout aborts the transfer and the peripheral is initialised again before the next frame. A kb::Status returns to the driver.",
+    "profile": "phone",
+    "width": 553,
+    "source": "docs/model/spi-transfer.seq.yml",
+    "sources": [
+      "docs/model/spi-transfer.seq.yml",
+      "inc/kb/port/stm32/spi.hpp",
+      "src/boundary/spi.cpp",
+      "src/completion.cpp",
+      "src/spi.cpp"
+    ],
+    "kind": "seq",
+    "palette": 2,
+    "print": "portrait",
+    "adaptive": true,
+    "twin": false,
+    "font": ""
+  },
+  "uart-write-read": {
+    "title": "A UART request and reply",
+    "alt": "Sequence of a UART Write followed by a Read on the STM32 port, in which the port's interrupt handler sends the frame byte by byte, puts the reply into the port's receive ring, and wakes the Read that waits for it.",
+    "description": "The driver's Write call reaches the Uart, which takes its writer lock and enables the transmit-empty interrupt; the port's UART IRQ handler then sends the frame to the Device byte by byte and completes the write at the last byte, with a DE pin at transmit-complete. The driver's Read call takes the reader lock and sleeps while the ring is empty, at most its timeout. The Device's reply arrives on RX, and the UART IRQ handler puts each byte into the port's ring of 256 bytes, latches any receive error and wakes the Read, which takes what the ring holds; the count returns to the driver.",
+    "profile": "phone",
+    "width": 553,
+    "source": "docs/model/uart-write-read.seq.yml",
+    "sources": [
+      "docs/model/uart-write-read.seq.yml",
+      "inc/kb/port/stm32/uart.hpp",
+      "src/boundary/uart.cpp",
+      "src/completion.cpp",
+      "src/uart.cpp"
+    ],
+    "kind": "seq",
+    "palette": 2,
+    "print": "portrait",
+    "adaptive": true,
+    "twin": false,
+    "font": ""
+  }
+}

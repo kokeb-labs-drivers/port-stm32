@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="580" height="860" viewBox="0 0 580 860" role="img" aria-labelledby="can-send-receive-title can-send-receive-desc" font-family="Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
+<title id="can-send-receive-title">Sending and receiving a CAN frame</title>
+<desc id="can-send-receive-desc">Sequence of a CAN Send and a Receive on the STM32 port, in which Send puts the frame into a free transmit slot of the HAL, the receive interrupt moves every frame into the port's ring, and Receive takes the oldest one.</desc>
+<defs><marker id="can-send-receive-arrow-rail" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#6C7889"/></marker></defs>
+<rect x="0.5" y="0.5" width="579" height="859" rx="16" fill="#0E131A" stroke="#283241"/>
+<text x="32" y="44.4" font-size="13" font-weight="700" letter-spacing="1.2" fill="#F8D27A">PORT-STM32</text>
+<text x="32" y="76.2" font-size="24" font-weight="700" fill="#E8EDF3">Sending and receiving a CAN frame</text>
+<text x="32" y="102.7" font-size="15" fill="#9AA6B5">FDCAN (G4, H7) or bxCAN (F4, L4) in classic mode; received</text>
+<text x="32" y="124.5" font-size="15" fill="#9AA6B5">frames go into the port's ring by interrupt.</text>
+<rect x="32" y="140.4" width="516" height="1" fill="#252F3C"/>
+<path d="M122.5 214.4 L122.5 844.5" fill="none" stroke="#6C7889" stroke-width="1.2" stroke-dasharray="5 5"/>
+<path d="M300.1 214.4 L300.1 844.5" fill="none" stroke="#6C7889" stroke-width="1.2" stroke-dasharray="5 5"/>
+<path d="M470.1 214.4 L470.1 844.5" fill="none" stroke="#6C7889" stroke-width="1.2" stroke-dasharray="5 5"/>
+<path d="M126.5 294.4 L148.5 294.4 Q156.5 294.4 156.5 302.4 L156.5 302.4 Q156.5 310.4 148.5 310.4 L126.5 310.4" fill="none" stroke="#6C7889" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#can-send-receive-arrow-rail)"/>
+<path d="M126.5 346.4 L296.1 346.4" fill="none" stroke="#6C7889" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#can-send-receive-arrow-rail)"/>
+<path d="M296.1 442.4 L126.5 442.4" fill="none" stroke="#6C7889" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 5" marker-end="url(#can-send-receive-arrow-rail)"/>
+<path d="M304.1 486.4 L466.1 486.4" fill="none" stroke="#6C7889" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#can-send-receive-arrow-rail)"/>
+<path d="M466.1 530.5 L304.1 530.5" fill="none" stroke="#6C7889" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 5" marker-end="url(#can-send-receive-arrow-rail)"/>
+<path d="M466.1 574.5 L304.1 574.5" fill="none" stroke="#6C7889" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 5" marker-end="url(#can-send-receive-arrow-rail)"/>
+<path d="M296.1 618.5 L126.5 618.5" fill="none" stroke="#6C7889" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#can-send-receive-arrow-rail)"/>
+<path d="M126.5 706.5 L148.5 706.5 Q156.5 706.5 156.5 714.5 L156.5 714.5 Q156.5 722.5 148.5 722.5 L126.5 722.5" fill="none" stroke="#6C7889" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#can-send-receive-arrow-rail)"/>
+<path d="M126.5 750.5 L148.5 750.5 Q156.5 750.5 156.5 758.5 L156.5 758.5 Q156.5 766.5 148.5 766.5 L126.5 766.5" fill="none" stroke="#6C7889" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#can-send-receive-arrow-rail)"/>
+<rect x="39.7" y="158.4" width="165.4" height="52" rx="10" fill="#2C2310" stroke="#FBBF24" stroke-width="1.4"/>
+<rect x="39.7" y="166.4" width="4" height="36" rx="2" fill="#FBBF24"/>
+<rect x="235.1" y="158.4" width="130" height="52" rx="10" fill="#1B232E" stroke="#94A3B8" stroke-width="1.4"/>
+<rect x="235.1" y="166.4" width="4" height="36" rx="2" fill="#94A3B8"/>
+<rect x="399.9" y="158.4" width="140.4" height="52" rx="10" fill="#11281A" stroke="#4ADE80" stroke-width="1.4"/>
+<rect x="399.9" y="166.4" width="4" height="36" rx="2" fill="#4ADE80"/>
+<rect x="52.5" y="234.4" width="317.6" height="43" rx="10" fill="#13233A" stroke="#2B4C78" stroke-width="1"/>
+<rect x="52.5" y="374.4" width="317.6" height="43" rx="10" fill="#2C2310" stroke="#6A5220" stroke-width="1"/>
+<rect x="52.5" y="646.5" width="317.6" height="43" rx="10" fill="#13233A" stroke="#2B4C78" stroke-width="1"/>
+<rect x="52.5" y="786.5" width="317.6" height="43" rx="10" fill="#2C2310" stroke="#6A5220" stroke-width="1"/>
+<text x="125.5" y="189.5" font-size="17" font-weight="700" text-anchor="middle" fill="#FDE68A">CanController</text>
+<text x="303.1" y="189.5" font-size="17" font-weight="700" text-anchor="middle" fill="#E2E8F0">HAL CAN</text>
+<text x="473.1" y="189.5" font-size="17" font-weight="700" text-anchor="middle" fill="#BBF7D0">Other node</text>
+<text x="66.5" y="261.2" font-size="15" fill="#BFDBFE">the driver calls Send(frame, t)</text>
+<rect x="160.5" y="291.4" width="80.3" height="22" rx="11" fill="#0E131A"/>
+<text x="200.6" y="307.5" font-size="14" font-weight="500" text-anchor="middle" fill="#9AA6B5">send lock</text>
+<rect x="133.4" y="321.4" width="155.6" height="22" rx="11" fill="#0E131A"/>
+<text x="211.3" y="337.5" font-size="14" font-weight="500" text-anchor="middle" fill="#9AA6B5">add to a free TX slot</text>
+<text x="66.5" y="401.2" font-size="15" fill="#FDE68A">none free: sleep for TX complete</text>
+<rect x="164.4" y="417.4" width="93.8" height="22" rx="11" fill="#0E131A"/>
+<text x="211.3" y="433.5" font-size="14" font-weight="500" text-anchor="middle" fill="#9AA6B5">queued: Ok</text>
+<rect x="318.9" y="461.4" width="132.2" height="22" rx="11" fill="#0E131A"/>
+<text x="385.1" y="477.5" font-size="14" font-weight="500" text-anchor="middle" fill="#9AA6B5">frame on the bus</text>
+<rect x="348.4" y="505.4" width="73.3" height="22" rx="11" fill="#0E131A"/>
+<text x="385.1" y="521.5" font-size="14" font-weight="500" text-anchor="middle" fill="#9AA6B5">ACK slot</text>
+<rect x="329.4" y="549.5" width="111.2" height="22" rx="11" fill="#0E131A"/>
+<text x="385.1" y="565.5" font-size="14" font-weight="500" text-anchor="middle" fill="#9AA6B5">a frame for us</text>
+<rect x="130.5" y="593.5" width="161.6" height="22" rx="11" fill="#0E131A"/>
+<text x="211.3" y="609.5" font-size="14" font-weight="500" text-anchor="middle" fill="#9AA6B5">RX callback: into ring</text>
+<text x="66.5" y="673.2" font-size="15" fill="#BFDBFE">the driver calls Receive(frame, t)</text>
+<rect x="160.5" y="703.5" width="98.2" height="22" rx="11" fill="#0E131A"/>
+<text x="209.6" y="719.5" font-size="14" font-weight="500" text-anchor="middle" fill="#9AA6B5">receive lock</text>
+<rect x="160.5" y="747.5" width="151.4" height="22" rx="11" fill="#0E131A"/>
+<text x="236.2" y="763.5" font-size="14" font-weight="500" text-anchor="middle" fill="#9AA6B5">oldest frame of ring</text>
+<text x="66.5" y="813.2" font-size="15" fill="#FDE68A">frames lost: Overflow next time</text>
+</svg>

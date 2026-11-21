@@ -16,7 +16,8 @@ jobs:
       contents: write  # push to the gh-pages deployment branch
     with:
       mkdocs_config: _config/mkdocs.yml
-      deploy: true
+      # Only main and v* tags publish; pull requests never do, and a release/* branch only builds.
+      deploy: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
       # Links to the private organisation and the not yet published site cannot be checked from CI.
       link_check: false
       lighthouse: false

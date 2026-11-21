@@ -1,0 +1,67 @@
+---
+kind: matrix
+id: port-contracts
+title: Contracts on the STM32 port
+kicker: port-stm32
+subtitle: Which kb-core contracts each peripheral implements, over which STM32Cube HAL module.
+alt: >-
+  Matrix of the kb-core contracts the STM32 port implements for I2C, SPI, UART, CAN, ADC, PWM, GPIO, clock and log,
+  each marked native, adapted, planned or not available.
+reads: >-
+  Rows are the peripherals I2C, SPI, UART, CAN, ADC, PWM, GPIO, Clock and delay, Log and Pulse output; the columns
+  are the base contract of the peripheral and its extra contracts. Native means the contract maps onto the HAL module
+  or core peripheral named in the cell; adapted means the port adds its own logic to meet it, such as its own UART
+  interrupt handler and receive ring, or an SPI clock capped at the interrupt ceiling. Planned marks a contract or
+  form kb-core has not defined yet, and n/a one that kb-core does not have.
+profile: phone
+print: portrait
+sources:
+  - inc/kb/port/stm32/port.hpp
+  - inc/kb/port/stm32/i2c.hpp
+  - inc/kb/port/stm32/spi.hpp
+  - inc/kb/port/stm32/uart.hpp
+  - inc/kb/port/stm32/can.hpp
+  - inc/kb/port/stm32/adc.hpp
+  - inc/kb/port/stm32/pwm.hpp
+  - inc/kb/port/stm32/gpio.hpp
+  - inc/kb/port/stm32/time.hpp
+  - inc/kb/port/stm32/log.hpp
+  - src/uart.cpp
+  - src/spi.cpp
+cell_width: 200
+statuses: {ok: native, warn: adapted, planned: planned, na: n/a}
+rows:
+  - {id: i2c, label: I2C}
+  - {id: spi, label: SPI}
+  - {id: uart, label: UART}
+  - {id: can, label: CAN}
+  - {id: adc, label: ADC}
+  - {id: pwm, label: PWM}
+  - {id: gpio, label: GPIO}
+  - {id: time, label: Clock and delay}
+  - {id: log, label: Log}
+  - {id: pulse, label: Pulse output}
+cols:
+  - {id: base, label: Base contract}
+  - {id: extra, label: Extra contracts}
+cells:
+  - {row: i2c, col: base, status: ok, text: native, note: "I2cBus, HAL I2C IT"}
+  - {row: i2c, col: extra, status: planned, text: planned, note: async Start/Poll}
+  - {row: spi, col: base, status: ok, text: native, note: "SpiDevice, HAL SPI IT"}
+  - {row: spi, col: extra, status: warn, text: adapted, note: SpiClockControl}
+  - {row: uart, col: base, status: warn, text: adapted, note: "UartPort, own IRQ"}
+  - {row: uart, col: extra, status: ok, text: native, note: "BaudControl, TxDrain"}
+  - {row: can, col: base, status: ok, text: native, note: "CanBus, FDCAN, bxCAN"}
+  - {row: can, col: extra, status: na, text: n/a, note: CAN FD frames}
+  - {row: adc, col: base, status: ok, text: native, note: "AdcChannel, HAL ADC"}
+  - {row: adc, col: extra, status: na, text: n/a, note: none defined}
+  - {row: pwm, col: base, status: ok, text: native, note: "PwmOutput, TIM"}
+  - {row: pwm, col: extra, status: na, text: n/a, note: "CHxN, capture"}
+  - {row: gpio, col: base, status: ok, text: native, note: "GpioOutput, GpioInput"}
+  - {row: gpio, col: extra, status: ok, text: native, note: "GpioInterrupt, EXTI"}
+  - {row: time, col: base, status: ok, text: native, note: "MonotonicClock, TIM2/5"}
+  - {row: time, col: extra, status: ok, text: native, note: "BusyWait, DWT"}
+  - {row: log, col: base, status: ok, text: native, note: "LogSink, ITM or UART"}
+  - {row: log, col: extra, status: na, text: n/a, note: none defined}
+  - {row: pulse, col: base, status: planned, text: planned, note: PulseTx}
+  - {row: pulse, col: extra, status: na, text: n/a, note: none defined}

@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="631" height="826" viewBox="0 0 631 826" role="img" aria-labelledby="port-contracts-title port-contracts-desc" font-family="Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
+<title id="port-contracts-title">Contracts on the STM32 port</title>
+<desc id="port-contracts-desc">Matrix of the kb-core contracts the STM32 port implements for I2C, SPI, UART, CAN, ADC, PWM, GPIO, clock and log, each marked native, adapted, planned or not available.</desc>
+<rect x="0.5" y="0.5" width="630" height="825" rx="16" fill="#0E131A" stroke="#283241"/>
+<text x="32" y="44.4" font-size="13" font-weight="700" letter-spacing="1.2" fill="#F8D27A">PORT-STM32</text>
+<text x="32" y="76.2" font-size="24" font-weight="700" fill="#E8EDF3">Contracts on the STM32 port</text>
+<text x="32" y="102.7" font-size="15" fill="#9AA6B5">Which kb-core contracts each peripheral implements, over which</text>
+<text x="32" y="124.5" font-size="15" fill="#9AA6B5">STM32Cube HAL module.</text>
+<rect x="32" y="140.4" width="567" height="1" fill="#252F3C"/>
+<rect x="194.3" y="201.4" width="194" height="54" rx="10" fill="#11281A" stroke="#4ADE80" stroke-width="1.4"/>
+<path d="M249.7 225.4 L253.7 230.4 L262.7 219.4" fill="none" stroke="#4ADE80" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="394.3" y="201.4" width="194" height="54" rx="10" fill="#221A3A" stroke="#A78BFA" stroke-width="1.4"/>
+<circle cx="441.4" cy="225.4" r="1.9" fill="#A78BFA"/>
+<circle cx="448.4" cy="225.4" r="1.9" fill="#A78BFA"/>
+<circle cx="455.4" cy="225.4" r="1.9" fill="#A78BFA"/>
+<rect x="194.3" y="261.4" width="194" height="54" rx="10" fill="#11281A" stroke="#4ADE80" stroke-width="1.4"/>
+<path d="M249.7 285.4 L253.7 290.4 L262.7 279.4" fill="none" stroke="#4ADE80" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="394.3" y="261.4" width="194" height="54" rx="10" fill="#2C2310" stroke="#FBBF24" stroke-width="1.4"/>
+<path d="M447.8 278.4 L447.8 287.4" fill="none" stroke="#FBBF24" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="447.8" cy="291.4" r="1.6" fill="#FBBF24"/>
+<rect x="194.3" y="321.4" width="194" height="54" rx="10" fill="#2C2310" stroke="#FBBF24" stroke-width="1.4"/>
+<path d="M247.8 338.4 L247.8 347.4" fill="none" stroke="#FBBF24" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="247.8" cy="351.4" r="1.6" fill="#FBBF24"/>
+<rect x="394.3" y="321.4" width="194" height="54" rx="10" fill="#11281A" stroke="#4ADE80" stroke-width="1.4"/>
+<path d="M449.7 345.4 L453.7 350.4 L462.7 339.4" fill="none" stroke="#4ADE80" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="194.3" y="381.4" width="194" height="54" rx="10" fill="#11281A" stroke="#4ADE80" stroke-width="1.4"/>
+<path d="M249.7 405.4 L253.7 410.4 L262.7 399.4" fill="none" stroke="#4ADE80" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="394.3" y="381.4" width="194" height="54" rx="10" fill="#1B232E" stroke="#94A3B8" stroke-width="1.4"/>
+<path d="M460.9 405.4 L472.9 405.4" fill="none" stroke="#94A3B8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="194.3" y="441.4" width="194" height="54" rx="10" fill="#11281A" stroke="#4ADE80" stroke-width="1.4"/>
+<path d="M249.7 465.4 L253.7 470.4 L262.7 459.4" fill="none" stroke="#4ADE80" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="394.3" y="441.4" width="194" height="54" rx="10" fill="#1B232E" stroke="#94A3B8" stroke-width="1.4"/>
+<path d="M460.9 465.4 L472.9 465.4" fill="none" stroke="#94A3B8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="194.3" y="501.4" width="194" height="54" rx="10" fill="#11281A" stroke="#4ADE80" stroke-width="1.4"/>
+<path d="M249.7 525.5 L253.7 530.5 L262.7 519.5" fill="none" stroke="#4ADE80" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="394.3" y="501.4" width="194" height="54" rx="10" fill="#1B232E" stroke="#94A3B8" stroke-width="1.4"/>
+<path d="M460.9 525.5 L472.9 525.5" fill="none" stroke="#94A3B8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="194.3" y="561.5" width="194" height="54" rx="10" fill="#11281A" stroke="#4ADE80" stroke-width="1.4"/>
+<path d="M249.7 585.5 L253.7 590.5 L262.7 579.5" fill="none" stroke="#4ADE80" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="394.3" y="561.5" width="194" height="54" rx="10" fill="#11281A" stroke="#4ADE80" stroke-width="1.4"/>
+<path d="M449.7 585.5 L453.7 590.5 L462.7 579.5" fill="none" stroke="#4ADE80" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="194.3" y="621.5" width="194" height="54" rx="10" fill="#11281A" stroke="#4ADE80" stroke-width="1.4"/>
+<path d="M249.7 645.5 L253.7 650.5 L262.7 639.5" fill="none" stroke="#4ADE80" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="394.3" y="621.5" width="194" height="54" rx="10" fill="#11281A" stroke="#4ADE80" stroke-width="1.4"/>
+<path d="M449.7 645.5 L453.7 650.5 L462.7 639.5" fill="none" stroke="#4ADE80" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="194.3" y="681.5" width="194" height="54" rx="10" fill="#11281A" stroke="#4ADE80" stroke-width="1.4"/>
+<path d="M249.7 705.5 L253.7 710.5 L262.7 699.5" fill="none" stroke="#4ADE80" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="394.3" y="681.5" width="194" height="54" rx="10" fill="#1B232E" stroke="#94A3B8" stroke-width="1.4"/>
+<path d="M460.9 705.5 L472.9 705.5" fill="none" stroke="#94A3B8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="194.3" y="741.5" width="194" height="54" rx="10" fill="#221A3A" stroke="#A78BFA" stroke-width="1.4"/>
+<circle cx="241.4" cy="765.5" r="1.9" fill="#A78BFA"/>
+<circle cx="248.4" cy="765.5" r="1.9" fill="#A78BFA"/>
+<circle cx="255.4" cy="765.5" r="1.9" fill="#A78BFA"/>
+<rect x="394.3" y="741.5" width="194" height="54" rx="10" fill="#1B232E" stroke="#94A3B8" stroke-width="1.4"/>
+<path d="M460.9 765.5 L472.9 765.5" fill="none" stroke="#94A3B8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="291.3" y="186.4" font-size="15" font-weight="700" text-anchor="middle" fill="#E8EDF3">Base contract</text>
+<text x="491.3" y="186.4" font-size="15" font-weight="700" text-anchor="middle" fill="#E8EDF3">Extra contracts</text>
+<text x="43.7" y="233.4" font-size="15" font-weight="700" fill="#E8EDF3">I2C</text>
+<text x="301.3" y="230.4" font-size="15" font-weight="600" text-anchor="middle" fill="#BBF7D0">native</text>
+<text x="291.3" y="249.4" font-size="14" text-anchor="middle" fill="#BBF7D0">I2cBus, HAL I2C IT</text>
+<text x="501.3" y="230.4" font-size="15" font-weight="600" text-anchor="middle" fill="#DDD6FE">planned</text>
+<text x="491.3" y="249.4" font-size="14" text-anchor="middle" fill="#DDD6FE">async Start/Poll</text>
+<text x="43.7" y="293.4" font-size="15" font-weight="700" fill="#E8EDF3">SPI</text>
+<text x="301.3" y="290.4" font-size="15" font-weight="600" text-anchor="middle" fill="#BBF7D0">native</text>
+<text x="291.3" y="309.4" font-size="14" text-anchor="middle" fill="#BBF7D0">SpiDevice, HAL SPI IT</text>
+<text x="501.3" y="290.4" font-size="15" font-weight="600" text-anchor="middle" fill="#FDE68A">adapted</text>
+<text x="491.3" y="309.4" font-size="14" text-anchor="middle" fill="#FDE68A">SpiClockControl</text>
+<text x="43.7" y="353.4" font-size="15" font-weight="700" fill="#E8EDF3">UART</text>
+<text x="301.3" y="350.4" font-size="15" font-weight="600" text-anchor="middle" fill="#FDE68A">adapted</text>
+<text x="291.3" y="369.4" font-size="14" text-anchor="middle" fill="#FDE68A">UartPort, own IRQ</text>
+<text x="501.3" y="350.4" font-size="15" font-weight="600" text-anchor="middle" fill="#BBF7D0">native</text>
+<text x="491.3" y="369.4" font-size="14" text-anchor="middle" fill="#BBF7D0">BaudControl, TxDrain</text>
+<text x="43.7" y="413.4" font-size="15" font-weight="700" fill="#E8EDF3">CAN</text>
+<text x="301.3" y="410.4" font-size="15" font-weight="600" text-anchor="middle" fill="#BBF7D0">native</text>
+<text x="291.3" y="429.4" font-size="14" text-anchor="middle" fill="#BBF7D0">CanBus, FDCAN, bxCAN</text>
+<text x="501.3" y="410.4" font-size="15" font-weight="600" text-anchor="middle" fill="#E2E8F0">n/a</text>
+<text x="491.3" y="429.4" font-size="14" text-anchor="middle" fill="#E2E8F0">CAN FD frames</text>
+<text x="43.7" y="473.4" font-size="15" font-weight="700" fill="#E8EDF3">ADC</text>
+<text x="301.3" y="470.4" font-size="15" font-weight="600" text-anchor="middle" fill="#BBF7D0">native</text>
+<text x="291.3" y="489.4" font-size="14" text-anchor="middle" fill="#BBF7D0">AdcChannel, HAL ADC</text>
+<text x="501.3" y="470.4" font-size="15" font-weight="600" text-anchor="middle" fill="#E2E8F0">n/a</text>
+<text x="491.3" y="489.4" font-size="14" text-anchor="middle" fill="#E2E8F0">none defined</text>
+<text x="43.7" y="533.5" font-size="15" font-weight="700" fill="#E8EDF3">PWM</text>
+<text x="301.3" y="530.5" font-size="15" font-weight="600" text-anchor="middle" fill="#BBF7D0">native</text>
+<text x="291.3" y="549.5" font-size="14" text-anchor="middle" fill="#BBF7D0">PwmOutput, TIM</text>
+<text x="501.3" y="530.5" font-size="15" font-weight="600" text-anchor="middle" fill="#E2E8F0">n/a</text>
+<text x="491.3" y="549.5" font-size="14" text-anchor="middle" fill="#E2E8F0">CHxN, capture</text>
+<text x="43.7" y="593.5" font-size="15" font-weight="700" fill="#E8EDF3">GPIO</text>
+<text x="301.3" y="590.5" font-size="15" font-weight="600" text-anchor="middle" fill="#BBF7D0">native</text>
+<text x="291.3" y="609.5" font-size="14" text-anchor="middle" fill="#BBF7D0">GpioOutput, GpioInput</text>
+<text x="501.3" y="590.5" font-size="15" font-weight="600" text-anchor="middle" fill="#BBF7D0">native</text>
+<text x="491.3" y="609.5" font-size="14" text-anchor="middle" fill="#BBF7D0">GpioInterrupt, EXTI</text>
+<text x="43.7" y="653.5" font-size="15" font-weight="700" fill="#E8EDF3">Clock and delay</text>
+<text x="301.3" y="650.5" font-size="15" font-weight="600" text-anchor="middle" fill="#BBF7D0">native</text>
+<text x="291.3" y="669.5" font-size="14" text-anchor="middle" fill="#BBF7D0">MonotonicClock, TIM2/5</text>
+<text x="501.3" y="650.5" font-size="15" font-weight="600" text-anchor="middle" fill="#BBF7D0">native</text>
+<text x="491.3" y="669.5" font-size="14" text-anchor="middle" fill="#BBF7D0">BusyWait, DWT</text>
+<text x="43.7" y="713.5" font-size="15" font-weight="700" fill="#E8EDF3">Log</text>
+<text x="301.3" y="710.5" font-size="15" font-weight="600" text-anchor="middle" fill="#BBF7D0">native</text>
+<text x="291.3" y="729.5" font-size="14" text-anchor="middle" fill="#BBF7D0">LogSink, ITM or UART</text>
+<text x="501.3" y="710.5" font-size="15" font-weight="600" text-anchor="middle" fill="#E2E8F0">n/a</text>
+<text x="491.3" y="729.5" font-size="14" text-anchor="middle" fill="#E2E8F0">none defined</text>
+<text x="43.7" y="773.5" font-size="15" font-weight="700" fill="#E8EDF3">Pulse output</text>
+<text x="301.3" y="770.5" font-size="15" font-weight="600" text-anchor="middle" fill="#DDD6FE">planned</text>
+<text x="291.3" y="789.5" font-size="14" text-anchor="middle" fill="#DDD6FE">PulseTx</text>
+<text x="501.3" y="770.5" font-size="15" font-weight="600" text-anchor="middle" fill="#E2E8F0">n/a</text>
+<text x="491.3" y="789.5" font-size="14" text-anchor="middle" fill="#E2E8F0">none defined</text>
+</svg>

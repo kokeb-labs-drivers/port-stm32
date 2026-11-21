@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="553" height="868" viewBox="0 0 553 868" role="img" aria-labelledby="spi-transfer-title spi-transfer-desc" font-family="Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
+<title id="spi-transfer-title">One SPI frame</title>
+<desc id="spi-transfer-desc">Sequence of an SPI Transfer on the STM32 port, in which the device takes the bus lock, drives its chip select low, starts an interrupt-driven HAL transfer, sleeps until the completion callback, and raises chip select whatever the result.</desc>
+<defs><marker id="spi-transfer-arrow-rail" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#6C7889"/></marker></defs>
+<rect x="0.5" y="0.5" width="552" height="867" rx="16" fill="#0E131A" stroke="#283241"/>
+<text x="32" y="44.4" font-size="13" font-weight="700" letter-spacing="1.2" fill="#F8D27A">PORT-STM32</text>
+<text x="32" y="76.2" font-size="24" font-weight="700" fill="#E8EDF3">One SPI frame</text>
+<text x="32" y="102.7" font-size="15" fill="#9AA6B5">Transfer through SpiDevice and the HAL's interrupt-driven SPI,</text>
+<text x="32" y="124.5" font-size="15" fill="#9AA6B5">chip select a GPIO held low for the frame.</text>
+<rect x="32" y="140.4" width="489" height="1" fill="#252F3C"/>
+<path d="M104.9 214.4 L104.9 852.5" fill="none" stroke="#6C7889" stroke-width="1.2" stroke-dasharray="5 5"/>
+<path d="M278.5 214.4 L278.5 852.5" fill="none" stroke="#6C7889" stroke-width="1.2" stroke-dasharray="5 5"/>
+<path d="M448.5 214.4 L448.5 852.5" fill="none" stroke="#6C7889" stroke-width="1.2" stroke-dasharray="5 5"/>
+<path d="M108.9 294.4 L130.9 294.4 Q138.9 294.4 138.9 302.4 L138.9 302.4 Q138.9 310.4 130.9 310.4 L108.9 310.4" fill="none" stroke="#6C7889" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#spi-transfer-arrow-rail)"/>
+<path d="M108.9 346.4 L274.5 346.4" fill="none" stroke="#6C7889" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#spi-transfer-arrow-rail)"/>
+<path d="M108.9 442.4 L444.5 442.4" fill="none" stroke="#6C7889" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#spi-transfer-arrow-rail)"/>
+<path d="M108.9 486.4 L274.5 486.4" fill="none" stroke="#6C7889" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#spi-transfer-arrow-rail)"/>
+<path d="M282.5 582.5 L444.5 582.5" fill="none" stroke="#6C7889" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#spi-transfer-arrow-rail)"/>
+<path d="M444.5 626.5 L282.5 626.5" fill="none" stroke="#6C7889" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 5" marker-end="url(#spi-transfer-arrow-rail)"/>
+<path d="M274.5 670.5 L108.9 670.5" fill="none" stroke="#6C7889" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 5" marker-end="url(#spi-transfer-arrow-rail)"/>
+<path d="M108.9 714.5 L444.5 714.5" fill="none" stroke="#6C7889" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#spi-transfer-arrow-rail)"/>
+<rect x="39.5" y="158.4" width="130.8" height="52" rx="10" fill="#2C2310" stroke="#FBBF24" stroke-width="1.4"/>
+<rect x="39.5" y="166.4" width="4" height="36" rx="2" fill="#FBBF24"/>
+<rect x="213.5" y="158.4" width="130" height="52" rx="10" fill="#1B232E" stroke="#94A3B8" stroke-width="1.4"/>
+<rect x="213.5" y="166.4" width="4" height="36" rx="2" fill="#94A3B8"/>
+<rect x="383.5" y="158.4" width="130" height="52" rx="10" fill="#11281A" stroke="#4ADE80" stroke-width="1.4"/>
+<rect x="383.5" y="166.4" width="4" height="36" rx="2" fill="#4ADE80"/>
+<rect x="34.9" y="234.4" width="313.5" height="43" rx="10" fill="#13233A" stroke="#2B4C78" stroke-width="1"/>
+<rect x="34.9" y="374.4" width="313.5" height="43" rx="10" fill="#2C2310" stroke="#6A5220" stroke-width="1"/>
+<rect x="34.9" y="514.5" width="313.5" height="43" rx="10" fill="#2C2310" stroke="#6A5220" stroke-width="1"/>
+<rect x="34.9" y="742.5" width="313.5" height="43" rx="10" fill="#2C2310" stroke="#6A5220" stroke-width="1"/>
+<rect x="34.9" y="794.5" width="313.5" height="43" rx="10" fill="#13233A" stroke="#2B4C78" stroke-width="1"/>
+<text x="107.9" y="189.5" font-size="17" font-weight="700" text-anchor="middle" fill="#FDE68A">SpiDevice</text>
+<text x="281.5" y="189.5" font-size="17" font-weight="700" text-anchor="middle" fill="#E2E8F0">HAL SPI</text>
+<text x="451.5" y="189.5" font-size="17" font-weight="700" text-anchor="middle" fill="#BBF7D0">Device</text>
+<text x="48.9" y="261.2" font-size="15" fill="#BFDBFE">the driver calls Transfer(tx, rx)</text>
+<rect x="142.9" y="291.4" width="106.1" height="22" rx="11" fill="#0E131A"/>
+<text x="196" y="307.5" font-size="14" font-weight="500" text-anchor="middle" fill="#9AA6B5">take bus lock</text>
+<rect x="112.9" y="321.4" width="157.5" height="22" rx="11" fill="#0E131A"/>
+<text x="191.7" y="337.5" font-size="14" font-weight="500" text-anchor="middle" fill="#9AA6B5">Init: mode, prescaler</text>
+<text x="48.9" y="401.2" font-size="15" fill="#FDE68A">only when another device used it last</text>
+<rect x="220.5" y="417.4" width="112.4" height="22" rx="11" fill="#0E131A"/>
+<text x="276.7" y="433.5" font-size="14" font-weight="500" text-anchor="middle" fill="#9AA6B5">CS low (GPIO)</text>
+<rect x="115.7" y="461.4" width="151.9" height="22" rx="11" fill="#0E131A"/>
+<text x="191.7" y="477.5" font-size="14" font-weight="500" text-anchor="middle" fill="#9AA6B5">TransmitReceive_IT</text>
+<text x="48.9" y="541.2" font-size="15" fill="#FDE68A">the task sleeps, at most T</text>
+<rect x="318.6" y="557.5" width="89.7" height="22" rx="11" fill="#0E131A"/>
+<text x="363.5" y="573.5" font-size="14" font-weight="500" text-anchor="middle" fill="#9AA6B5">SCK, MOSI</text>
+<rect x="316.5" y="601.5" width="94" height="22" rx="11" fill="#0E131A"/>
+<text x="363.5" y="617.5" font-size="14" font-weight="500" text-anchor="middle" fill="#9AA6B5">MISO bytes</text>
+<rect x="114.7" y="645.5" width="153.9" height="22" rx="11" fill="#0E131A"/>
+<text x="191.7" y="661.5" font-size="14" font-weight="500" text-anchor="middle" fill="#9AA6B5">completion callback</text>
+<rect x="217.6" y="689.5" width="118.2" height="22" rx="11" fill="#0E131A"/>
+<text x="276.7" y="705.5" font-size="14" font-weight="500" text-anchor="middle" fill="#9AA6B5">CS high (GPIO)</text>
+<text x="48.9" y="769.2" font-size="15" fill="#FDE68A">timeout: abort, Init next frame</text>
+<text x="48.9" y="821.2" font-size="15" fill="#BFDBFE">kb::Status back to the driver</text>
+</svg>

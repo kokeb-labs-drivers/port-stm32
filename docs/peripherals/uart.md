@@ -16,6 +16,16 @@ handler, and every wait is on the port's clock, asleep under an RTOS ([How the p
 | `WaitTxDone(timeout)` | Done when transmit-complete is set; else waits for the transmit-complete interrupt |
 | `FlushInput()` | Empties the ring and clears latched errors |
 
+<!-- figure: uart-write-read -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../diagrams/uart-write-read.dark.svg">
+  <img src="../diagrams/uart-write-read.svg"
+    alt="Sequence of a UART Write followed by a Read on the STM32 port, in which the port's interrupt handler
+    sends the frame byte by byte, puts the reply into the port's receive ring, and wakes the Read that
+    waits for it.">
+</picture>
+<!-- /figure -->
+
 ## Pins and clock
 
 | Item | Note |
